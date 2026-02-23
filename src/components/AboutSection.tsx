@@ -1,49 +1,50 @@
-import { Users, Package } from "lucide-react";
+import { Users, Package, Star, Globe } from "lucide-react";
+
+const stats = [
+  { icon: Users, value: "1.2M+", label: "Clientes Atendidos" },
+  { icon: Package, value: "5M+", label: "Pacotes Enviados" },
+  { icon: Star, value: "4.8", label: "Avaliação Média" },
+  { icon: Globe, value: "50+", label: "Países Atendidos" },
+];
 
 const AboutSection = () => {
   return (
     <section className="py-20 bg-section-alt">
       <div className="container mx-auto px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mb-3">Sobre Nós</h2>
-            <p className="text-xl text-primary font-semibold mb-4">Seu serviço brasileiro de compras da China</p>
-            <p className="text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              A ComprasChina é um serviço brasileiro que utiliza a infraestrutura da CSSBuy para facilitar a compra de produtos nos maiores marketplaces chineses como Taobao, 1688, Weidian e TMALL. Atendimento 100% em português, suporte dedicado e foco total no cliente brasileiro.
-            </p>
-            <a href="#" className="inline-block mt-4 text-primary font-medium text-sm hover:underline">
-              Leia Mais →
-            </a>
-          </div>
-
-          <div className="text-center mb-12">
-            <p className="text-xs font-semibold text-muted-foreground tracking-widest uppercase mb-2">serviço de qualidade</p>
-            <h3 className="text-2xl font-heading font-bold text-foreground mb-3">
-              Oferecendo serviço e produtos de qualidade aos nossos clientes
-            </h3>
-            <p className="text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed">
-              Diversos métodos de pagamento, inspeção de qualidade no armazém, imagens de QC ilimitadas, divisão de pedidos e longo tempo de armazenamento gratuito. Embalamos seu pacote profissionalmente com materiais de proteção.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-lg mx-auto">
-            <div className="flex items-center gap-4 bg-background rounded-xl p-5 border border-border shadow-card">
-              <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center shrink-0">
-                <Users className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <p className="font-heading font-bold text-2xl text-foreground">1.200.000+</p>
-                <p className="text-sm text-muted-foreground">Clientes Atendidos</p>
-              </div>
+        <div className="max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
+            <div>
+              <span className="text-xs font-bold text-china-red uppercase tracking-widest">Sobre Nós</span>
+              <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mt-2 mb-4">
+                Seu serviço <span className="text-china-red">brasileiro</span> de compras da China
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-4">
+                A ComprasChina é um serviço brasileiro que utiliza a infraestrutura da CSSBuy para facilitar a compra de produtos nos maiores marketplaces chineses como Taobao, 1688, Weidian e TMALL.
+              </p>
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                Atendimento 100% em português, suporte dedicado e foco total no cliente brasileiro. Inspeção de qualidade, fotos de QC ilimitadas e embalagem profissional.
+              </p>
+              <a
+                href="#"
+                className="inline-flex items-center gap-2 bg-china-red text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-china-red/90 transition-colors shadow-md"
+              >
+                Conheça nosso serviço →
+              </a>
             </div>
-            <div className="flex items-center gap-4 bg-background rounded-xl p-5 border border-border shadow-card">
-              <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center shrink-0">
-                <Package className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <p className="font-heading font-bold text-2xl text-foreground">1M+</p>
-                <p className="text-sm text-muted-foreground">Produtos Disponíveis</p>
-              </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {stats.map((stat, i) => (
+                <div
+                  key={i}
+                  className="bg-background rounded-2xl p-6 border border-border shadow-card text-center hover:shadow-card-hover transition-shadow"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-china-red/10 to-gold/10 flex items-center justify-center mx-auto mb-3">
+                    <stat.icon className="w-6 h-6 text-china-red" />
+                  </div>
+                  <p className="font-heading font-extrabold text-2xl text-foreground">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
