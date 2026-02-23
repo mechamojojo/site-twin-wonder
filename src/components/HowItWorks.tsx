@@ -3,48 +3,62 @@ import { UserPlus, ShoppingBag, PackageCheck, Truck } from "lucide-react";
 const steps = [
   {
     icon: UserPlus,
-    title: "Torne-se um membro",
-    description: "Você pode criar sua conta e se registrar em nossa plataforma.",
+    step: "01",
+    title: "Crie sua conta",
+    description: "Cadastre-se gratuitamente em poucos minutos na nossa plataforma.",
     link: { text: "Criar uma conta", href: "#" },
   },
   {
     icon: ShoppingBag,
-    title: "Compre os itens que deseja",
-    description: "Você pode navegar pelas nossas lojas ou fazer pedidos através de links.",
+    step: "02",
+    title: "Escolha seus produtos",
+    description: "Navegue pelos marketplaces ou cole o link do produto desejado.",
     link: { text: "Ver guia do comprador", href: "#" },
   },
   {
     icon: PackageCheck,
-    title: "Verificação de qualidade feita por nós",
-    description: "Quando o item chegar ao nosso armazém, verificaremos a aparência, tamanho, etc., para você.",
+    step: "03",
+    title: "Inspeção de qualidade",
+    description: "Verificamos aparência, tamanho e qualidade quando o item chega ao armazém.",
     link: null,
   },
   {
     icon: Truck,
-    title: "Processar o envio",
-    description: "Quando tudo estiver pronto, você pode processar o envio para o Brasil.",
+    step: "04",
+    title: "Envio para o Brasil",
+    description: "Quando tudo estiver pronto, enviamos diretamente para sua casa.",
     link: { text: "Ver guias de envio", href: "#" },
   },
 ];
 
 const HowItWorks = () => {
   return (
-    <section className="py-16 bg-background">
+    <section className="py-20 bg-background">
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="text-center mb-14">
+          <span className="text-xs font-bold text-china-red uppercase tracking-widest">Passo a passo</span>
+          <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mt-2">
+            Como funciona?
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           {steps.map((step, index) => (
             <div
               key={index}
-              className="flex flex-col items-center text-center p-6 rounded-xl bg-background border border-border shadow-card hover:shadow-card-hover transition-shadow duration-300"
+              className="group relative flex flex-col items-center text-center p-8 rounded-2xl bg-background border border-border hover:border-china-red/30 shadow-card hover:shadow-card-hover transition-all duration-300 hover:-translate-y-1"
             >
-              <div className="w-16 h-16 rounded-full bg-gold-light flex items-center justify-center mb-4">
-                <step.icon className="w-7 h-7 text-china-red" />
+              <span className="absolute top-4 right-4 text-5xl font-heading font-extrabold text-muted/60 select-none">
+                {step.step}
+              </span>
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-china-red to-gold flex items-center justify-center mb-5 shadow-lg">
+                <step.icon className="w-7 h-7 text-white" />
               </div>
-              <h3 className="font-heading font-bold text-foreground mb-2">{step.title}</h3>
-              <p className="text-sm text-muted-foreground mb-3 leading-relaxed">{step.description}</p>
+              <h3 className="font-heading font-bold text-foreground text-lg mb-2">{step.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-3">{step.description}</p>
               {step.link && (
-                <a href={step.link.href} className="text-sm text-primary font-medium hover:underline">
-                  {step.link.text}
+                <a href={step.link.href} className="text-sm text-china-red font-semibold hover:underline mt-auto">
+                  {step.link.text} →
                 </a>
               )}
             </div>

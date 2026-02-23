@@ -5,37 +5,37 @@ const services = [
     icon: ShoppingCart,
     title: "Compre Por Mim",
     description: "Compramos produtos de lojas online da China em seu nome",
-    link: "#",
+    accent: "from-china-red to-china-red/70",
   },
   {
     icon: Truck,
     title: "Envie Por Mim",
-    description: "Compre nos grandes marketplaces chineses e envie para o nosso endereço de armazém!",
-    link: "#",
+    description: "Compre nos marketplaces chineses e envie para o nosso armazém!",
+    accent: "from-gold to-gold/70",
   },
   {
     icon: Package,
     title: "Drop Shipping",
-    description: "Oferecemos atendimento de pedidos diretamente da China. Envie da China para o Brasil com poucos cliques.",
-    link: "#",
+    description: "Envie da China para o Brasil com poucos cliques. Ideal para lojistas.",
+    accent: "from-china-red to-gold",
   },
   {
     icon: MessageCircleQuestion,
     title: "Fazer Perguntas",
-    description: "Podemos contatar vendedores nos grandes marketplaces chineses e fazer perguntas em seu nome.",
-    link: "#",
+    description: "Contatamos vendedores chineses e fazemos perguntas em seu nome.",
+    accent: "from-gold to-china-red",
   },
   {
     icon: Users,
     title: "FBA Para Amazon",
-    description: "Podemos ajudá-lo enviando diretamente da China para o Amazon FBA, economizando dinheiro e tempo.",
-    link: null,
+    description: "Enviamos diretamente da China para o Amazon FBA, economizando tempo.",
+    accent: "from-china-red to-china-red/70",
   },
   {
     icon: Award,
-    title: "Recompensas por Avaliações",
-    description: "Faça posts criativos e compartilhe sua experiência usando nosso serviço para ganhar recompensas",
-    link: "#",
+    title: "Recompensas",
+    description: "Compartilhe sua experiência e ganhe recompensas exclusivas.",
+    accent: "from-gold to-gold/70",
   },
 ];
 
@@ -43,27 +43,31 @@ const ServicesSection = () => {
   return (
     <section className="py-20 bg-section-alt">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mb-3">Nossos Serviços</h2>
-          <p className="text-muted-foreground text-lg">Oferecemos aos nossos clientes uma série de benefícios incríveis</p>
+        <div className="text-center mb-14">
+          <span className="text-xs font-bold text-gold uppercase tracking-widest">O que oferecemos</span>
+          <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mt-2 mb-3">Nossos Serviços</h2>
+          <p className="text-muted-foreground text-lg max-w-lg mx-auto">
+            Tudo que você precisa para comprar da China com segurança e facilidade
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {services.map((service, index) => (
             <div
               key={index}
-              className="group bg-background rounded-xl p-6 border border-border shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300"
+              className="group relative bg-background rounded-2xl p-7 border border-border shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 overflow-hidden"
             >
-              <div className="w-14 h-14 rounded-xl bg-accent flex items-center justify-center mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors duration-300">
-                <service.icon className="w-6 h-6 text-primary group-hover:text-primary-foreground transition-colors duration-300" />
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{backgroundImage: `linear-gradient(to right, var(--tw-gradient-stops))`}}
+              />
+              <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${service.accent} flex items-center justify-center mb-5 shadow-md`}>
+                <service.icon className="w-6 h-6 text-white" />
               </div>
               <h3 className="font-heading font-bold text-foreground text-lg mb-2">{service.title}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed mb-3">{service.description}</p>
-              {service.link && (
-                <a href={service.link} className="text-sm text-primary font-medium hover:underline">
-                  Saiba mais →
-                </a>
-              )}
+              <p className="text-sm text-muted-foreground leading-relaxed">{service.description}</p>
+              <a href="#" className="inline-block mt-4 text-sm text-china-red font-semibold hover:underline">
+                Saiba mais →
+              </a>
             </div>
           ))}
         </div>

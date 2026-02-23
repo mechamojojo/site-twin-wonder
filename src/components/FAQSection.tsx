@@ -14,6 +14,14 @@ const faqs = [
     question: "Por quanto tempo posso armazenar meus itens no armazém?",
     answer: "Você pode armazenar seus itens em nosso armazém por 90 dias gratuitamente, a partir do status 'No Armazém'. Para estender o armazenamento após os 90 dias, cobramos uma pequena taxa de 15 yuans por pedido por mês.",
   },
+  {
+    question: "Quais marketplaces chineses são suportados?",
+    answer: "Suportamos Taobao, 1688, Weidian, TMALL, Pinduoduo, JD.com e muitos outros. Basta colar o link do produto e nós cuidamos do resto.",
+  },
+  {
+    question: "Posso pagar em reais (BRL)?",
+    answer: "Sim! Aceitamos pagamentos em reais com diversas formas de pagamento populares no Brasil, incluindo PIX, boleto e cartão de crédito.",
+  },
 ];
 
 const FAQSection = () => {
@@ -22,23 +30,27 @@ const FAQSection = () => {
   return (
     <section className="py-20 bg-section-alt">
       <div className="container mx-auto px-4 max-w-3xl">
-        <div className="text-center mb-12">
-          <p className="text-muted-foreground text-sm mb-2">Ainda tem dúvidas? Veja nossas perguntas frequentes abaixo</p>
-          <h2 className="text-3xl font-heading font-bold text-foreground">Perguntas Frequentes</h2>
+        <div className="text-center mb-14">
+          <span className="text-xs font-bold text-gold uppercase tracking-widest">Dúvidas</span>
+          <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mt-2">Perguntas Frequentes</h2>
         </div>
 
         <div className="space-y-3">
           {faqs.map((faq, i) => (
             <div
               key={i}
-              className="bg-background rounded-xl border border-border overflow-hidden shadow-card"
+              className={`bg-background rounded-2xl border overflow-hidden shadow-card transition-all duration-300 ${
+                openIndex === i ? "border-china-red/30 shadow-card-hover" : "border-border"
+              }`}
             >
               <button
                 onClick={() => setOpenIndex(openIndex === i ? null : i)}
-                className="w-full flex items-center justify-between p-5 text-left"
+                className="w-full flex items-center justify-between p-6 text-left"
               >
-                <span className="font-medium text-foreground text-sm">
-                  <span className="text-primary font-bold mr-2">0{i + 1}.</span>
+                <span className="font-heading font-bold text-foreground text-sm">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-china-red to-gold text-white text-xs font-bold mr-3">
+                    {i + 1}
+                  </span>
                   {faq.question}
                 </span>
                 <ChevronDown
@@ -47,22 +59,20 @@ const FAQSection = () => {
                   }`}
                 />
               </button>
-              {openIndex === i && (
-                <div className="px-5 pb-5 text-sm text-muted-foreground leading-relaxed">
+              <div className={`overflow-hidden transition-all duration-300 ${openIndex === i ? "max-h-40" : "max-h-0"}`}>
+                <div className="px-6 pb-6 text-sm text-muted-foreground leading-relaxed pl-16">
                   {faq.answer}
                 </div>
-              )}
+              </div>
             </div>
           ))}
         </div>
 
-        <div className="text-center mt-10">
-          <h3 className="text-lg font-heading font-bold text-foreground mb-3">
-            Ainda tem perguntas que não foram respondidas acima?
-          </h3>
+        <div className="text-center mt-14">
+          <p className="text-muted-foreground mb-4">Ainda tem dúvidas?</p>
           <a
             href="#"
-            className="inline-block bg-primary text-primary-foreground px-6 py-2.5 rounded-full font-medium text-sm hover:opacity-90 transition-opacity"
+            className="inline-block bg-china-red text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-china-red/90 transition-colors shadow-md"
           >
             Fale conosco hoje
           </a>
