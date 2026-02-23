@@ -10,8 +10,8 @@ const Navbar = () => {
         {/* Logo */}
         <div className="flex flex-col items-start shrink-0">
           <span className="text-2xl font-heading font-bold">
-            <span className="text-foreground">CSS</span>
-            <span className="text-primary">Buy</span>
+            <span className="text-foreground">Compras</span>
+            <span className="text-primary">China</span>
           </span>
           <span className="text-[10px] text-muted-foreground -mt-1">Horário de Pequim 23/02 21:29</span>
         </div>

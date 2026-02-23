@@ -7,7 +7,7 @@ const MobileAppSection = () => {
       <div className="container mx-auto px-4">
         <div className="flex flex-col lg:flex-row items-center gap-12 max-w-5xl mx-auto">
           <div className="lg:w-1/2 flex justify-center">
-            <img src={appMockup} alt="Aplicativo CSSBuy" className="w-72 lg:w-80 drop-shadow-2xl" />
+            <img src={appMockup} alt="Aplicativo ComprasChina" className="w-72 lg:w-80 drop-shadow-2xl" />
           </div>
 
           <div className="lg:w-1/2 text-center lg:text-left">

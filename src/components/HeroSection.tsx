@@ -12,10 +12,10 @@ const HeroSection = () => {
 
       <div className="relative z-10 text-center px-4 max-w-3xl mx-auto animate-fade-in-up">
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-heading font-extrabold text-primary-foreground leading-tight mb-4">
-          Conectando o Mercado Chinês com o Brasil
+          Compre da China com facilidade, do Brasil
         </h1>
         <p className="text-primary-foreground/80 text-base md:text-lg mb-8 max-w-xl mx-auto">
-          Não importa de onde você é, nossos serviços estão aqui para ajudá-lo a comprar com segurança e eficiência do Mercado Chinês.
+          Somos um serviço brasileiro que facilita suas compras nos maiores marketplaces chineses. Atendimento em português, suporte dedicado e envio direto para o Brasil.
         </p>
 
         <div className="relative max-w-lg mx-auto flex items-center">

@@ -2,9 +2,9 @@ import { Volume2 } from "lucide-react";
 
 const newsItems = [
   "Nosso NOVO armazém está online",
-  "Feriados do Dia do Trabalho na CSSBuy",
+  "Feriados do Dia do Trabalho na ComprasChina",
   "Atualização do tempo de armazenamento gratuito",
-  "Feriado do Ano Novo Chinês 2024: Atualização Operacional da CSSBuy",
+  "Feriado do Ano Novo Chinês 2024: Atualização Operacional da ComprasChina",
   "O feriado nacional está programado da seguinte forma",
 ];
 
