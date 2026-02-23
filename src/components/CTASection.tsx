@@ -6,7 +6,7 @@ const CTASection = () => {
           Pronto para começar a explorar o Mercado Chinês?
         </h2>
         <p className="text-primary-foreground/80 text-lg mb-8 max-w-xl mx-auto">
-          Não espere mais! Cadastre-se gratuitamente hoje e comece a comprar do Mercado Chinês como milhares de outros clientes brasileiros.
+          Não espere mais! Cadastre-se gratuitamente e comece a comprar da China com atendimento em português e suporte brasileiro.
         </p>
         <a
           href="#"

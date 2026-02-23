@@ -7,9 +7,9 @@ const AboutSection = () => {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mb-3">Sobre Nós</h2>
-            <p className="text-xl text-primary font-semibold mb-4">Conectando o Mercado Chinês com o Brasil</p>
+            <p className="text-xl text-primary font-semibold mb-4">Seu serviço brasileiro de compras da China</p>
             <p className="text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              A CSSBuy oferece uma solução prática para a compra de produtos em grandes plataformas de marketplace chinesas, como JD, Taobao, TMALL, 1688 e Weidian. Esses marketplaces contêm bilhões de produtos, e você pode encontrar de tudo aqui.
+              A ComprasChina é um serviço brasileiro que utiliza a infraestrutura da CSSBuy para facilitar a compra de produtos nos maiores marketplaces chineses como Taobao, 1688, Weidian e TMALL. Atendimento 100% em português, suporte dedicado e foco total no cliente brasileiro.
             </p>
             <a href="#" className="inline-block mt-4 text-primary font-medium text-sm hover:underline">
               Leia Mais →

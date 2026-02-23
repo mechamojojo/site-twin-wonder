@@ -5,11 +5,11 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <span className="text-2xl font-heading font-bold">
-              <span className="text-background">CSS</span>
-              <span className="text-primary">Buy</span>
+              <span className="text-background">Compras</span>
+              <span className="text-primary">China</span>
             </span>
             <p className="text-background/60 text-sm mt-3 leading-relaxed">
-              Conectando o Mercado Chinês com o Brasil. Seu agente de compras confiável desde o primeiro dia.
+              Serviço brasileiro que facilita suas compras da China. Utilizamos a estrutura da CSSBuy para oferecer a melhor experiência aos brasileiros.
             </p>
           </div>
 
@@ -45,7 +45,7 @@ const Footer = () => {
         </div>
 
         <div className="border-t border-background/10 mt-10 pt-6 text-center text-sm text-background/40">
-          © 2024 CSSBuy. Todos os direitos reservados.
+          © 2024 ComprasChina. Todos os direitos reservados. Powered by CSSBuy.
         </div>
       </div>
     </footer>

@@ -3,11 +3,11 @@ import { ChevronDown } from "lucide-react";
 
 const faqs = [
   {
-    question: "Quanto tempo a CSSBuy leva para processar meus pedidos?",
+    question: "Quanto tempo a ComprasChina leva para processar meus pedidos?",
     answer: "Geralmente, processamos o pedido dentro de 24 horas após o pagamento ser confirmado.",
   },
   {
-    question: "Como a CSSBuy lida com devoluções?",
+    question: "Como a ComprasChina lida com devoluções?",
     answer: "Desde que as condições de devolução sejam atendidas (o vendedor aceita devolução, o item está no armazém há menos de 7 dias e as taxas de frete de devolução são pagas), podemos ajudá-lo a devolver o item ao vendedor.",
   },
   {
