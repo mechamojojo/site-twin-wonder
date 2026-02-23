@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Inter", "sans-serif"],
-        heading: ["Plus Jakarta Sans", "Inter", "sans-serif"],
+        sans: ["Nunito", "Inter", "sans-serif"],
+        heading: ["Nunito", "Inter", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -62,8 +62,8 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         "section-alt": "hsl(var(--section-alt))",
-        "green-dark": "hsl(var(--green-dark))",
-        "green-light": "hsl(var(--green-light))",
+        "warm-dark": "hsl(var(--warm-dark))",
+        "warm-light": "hsl(var(--warm-light))",
       },
       borderRadius: {
         lg: "var(--radius)",
