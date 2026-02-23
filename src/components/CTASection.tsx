@@ -1,6 +1,6 @@
 const CTASection = () => {
   return (
-    <section className="py-20" style={{ background: 'linear-gradient(135deg, hsl(145 65% 38%), hsl(45 90% 50%))' }}>
+    <section className="py-20" style={{ background: 'linear-gradient(135deg, hsl(0 78% 50%), hsl(45 90% 50%))' }}>
       <div className="container mx-auto px-4 text-center">
         <h2 className="text-3xl md:text-4xl font-heading font-bold text-primary-foreground mb-4">
           Pronto para começar a explorar o Mercado Chinês?

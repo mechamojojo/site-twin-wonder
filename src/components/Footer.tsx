@@ -6,7 +6,7 @@ const Footer = () => {
           <div>
             <span className="text-2xl font-heading font-bold">
               <span className="text-china-red">Compras</span>
-              <span className="text-primary">China</span>
+              <span className="text-gold">China</span>
             </span>
             <p className="text-background/60 text-sm mt-3 leading-relaxed">
               Serviço brasileiro que facilita suas compras da China. Utilizamos a estrutura da CSSBuy para oferecer a melhor experiência aos brasileiros.
