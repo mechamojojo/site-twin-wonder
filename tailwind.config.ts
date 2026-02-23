@@ -64,6 +64,10 @@ export default {
         "section-alt": "hsl(var(--section-alt))",
         "green-dark": "hsl(var(--green-dark))",
         "green-light": "hsl(var(--green-light))",
+        "gold": "hsl(var(--gold))",
+        "gold-light": "hsl(var(--gold-light))",
+        "china-red": "hsl(var(--china-red))",
+        "china-red-light": "hsl(var(--china-red-light))",
       },
       borderRadius: {
         lg: "var(--radius)",
