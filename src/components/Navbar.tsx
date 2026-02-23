@@ -11,7 +11,7 @@ const Navbar = () => {
         <div className="flex flex-col items-start shrink-0">
           <span className="text-2xl font-heading font-bold">
             <span className="text-china-red">Compras</span>
-            <span className="text-primary">China</span>
+            <span className="text-gold">China</span>
           </span>
           <span className="text-[10px] text-muted-foreground -mt-1">Horário de Pequim 23/02 21:29</span>
         </div>
