@@ -13,7 +13,7 @@ const Navbar = () => {
             <span className="text-foreground">CSS</span>
             <span className="text-primary">Buy</span>
           </span>
-          <span className="text-[10px] text-muted-foreground -mt-1">Beijing Time 02/23 21:29</span>
+          <span className="text-[10px] text-muted-foreground -mt-1">Horário de Pequim 23/02 21:29</span>
         </div>
 
         {/* Search Bar */}
@@ -22,7 +22,7 @@ const Navbar = () => {
             <Search className="absolute left-3 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search Bar - Website URLs or Keywords"
+              placeholder="Cole o link do produto ou pesquise por palavras-chave"
               className="w-full py-2 pl-10 pr-12 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -36,13 +36,13 @@ const Navbar = () => {
         {/* Nav Links */}
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium text-foreground">
           <button className="flex items-center gap-1 hover:text-primary transition-colors">
-            Services <ChevronDown className="w-3.5 h-3.5" />
+            Serviços <ChevronDown className="w-3.5 h-3.5" />
           </button>
           <button className="flex items-center gap-1 hover:text-primary transition-colors">
-            Resources <ChevronDown className="w-3.5 h-3.5" />
+            Recursos <ChevronDown className="w-3.5 h-3.5" />
           </button>
           <button className="flex items-center gap-1 hover:text-primary transition-colors">
-            Company <ChevronDown className="w-3.5 h-3.5" />
+            Empresa <ChevronDown className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -50,7 +50,7 @@ const Navbar = () => {
         <div className="flex items-center gap-3 ml-4">
           <button className="hidden sm:flex items-center gap-1.5 text-xs border border-border rounded-full px-3 py-1.5 hover:bg-muted transition-colors">
             <Globe className="w-3.5 h-3.5" />
-            English - USD
+            Português - BRL
           </button>
           <button className="p-2 rounded-full hover:bg-muted transition-colors text-primary">
             <span className="text-lg">🌙</span>

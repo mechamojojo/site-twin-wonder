@@ -3,16 +3,16 @@ import { ChevronDown } from "lucide-react";
 
 const faqs = [
   {
-    question: "How long does CSSBuy take to handle my orders?",
-    answer: "Usually, we fulfill the order within 24 hours after you have paid for the order.",
+    question: "Quanto tempo a CSSBuy leva para processar meus pedidos?",
+    answer: "Geralmente, processamos o pedido dentro de 24 horas após o pagamento ser confirmado.",
   },
   {
-    question: "How does CSSBuy handle returns?",
-    answer: "As long as the return conditions are met (select accepts return, item is in warehouse for less than 7 days, return shipping fees are paid), we can help you return the item to the seller.",
+    question: "Como a CSSBuy lida com devoluções?",
+    answer: "Desde que as condições de devolução sejam atendidas (o vendedor aceita devolução, o item está no armazém há menos de 7 dias e as taxas de frete de devolução são pagas), podemos ajudá-lo a devolver o item ao vendedor.",
   },
   {
-    question: "How long can I store my items in your warehouse?",
-    answer: "You can store your items in our warehouse for 90 days for free, starting from the order status 'In Warehouse'. To extend your warehouse storage after the 90 days, we charge a small fee of 15 yuan per order per month.",
+    question: "Por quanto tempo posso armazenar meus itens no armazém?",
+    answer: "Você pode armazenar seus itens em nosso armazém por 90 dias gratuitamente, a partir do status 'No Armazém'. Para estender o armazenamento após os 90 dias, cobramos uma pequena taxa de 15 yuans por pedido por mês.",
   },
 ];
 
@@ -23,8 +23,8 @@ const FAQSection = () => {
     <section className="py-20 bg-section-alt">
       <div className="container mx-auto px-4 max-w-3xl">
         <div className="text-center mb-12">
-          <p className="text-muted-foreground text-sm mb-2">Still have questions? View our Q&A below</p>
-          <h2 className="text-3xl font-heading font-bold text-foreground">Q&A</h2>
+          <p className="text-muted-foreground text-sm mb-2">Ainda tem dúvidas? Veja nossas perguntas frequentes abaixo</p>
+          <h2 className="text-3xl font-heading font-bold text-foreground">Perguntas Frequentes</h2>
         </div>
 
         <div className="space-y-3">
@@ -58,13 +58,13 @@ const FAQSection = () => {
 
         <div className="text-center mt-10">
           <h3 className="text-lg font-heading font-bold text-foreground mb-3">
-            Still have questions that aren't answered above?
+            Ainda tem perguntas que não foram respondidas acima?
           </h3>
           <a
             href="#"
             className="inline-block bg-primary text-primary-foreground px-6 py-2.5 rounded-full font-medium text-sm hover:opacity-90 transition-opacity"
           >
-            Contact us today
+            Fale conosco hoje
           </a>
         </div>
       </div>

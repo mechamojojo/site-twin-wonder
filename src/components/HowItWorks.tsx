@@ -3,27 +3,27 @@ import { UserPlus, ShoppingBag, PackageCheck, Truck } from "lucide-react";
 const steps = [
   {
     icon: UserPlus,
-    title: "Become a member",
-    description: "You can create your account and register on our platform.",
-    link: { text: "Create an account", href: "#" },
+    title: "Torne-se um membro",
+    description: "Você pode criar sua conta e se registrar em nossa plataforma.",
+    link: { text: "Criar uma conta", href: "#" },
   },
   {
     icon: ShoppingBag,
-    title: "Buy The Items You Want",
-    description: "You can browse through our stores or order through links.",
-    link: { text: "View buyers guide", href: "#" },
+    title: "Compre os itens que deseja",
+    description: "Você pode navegar pelas nossas lojas ou fazer pedidos através de links.",
+    link: { text: "Ver guia do comprador", href: "#" },
   },
   {
     icon: PackageCheck,
-    title: "SKU verification conducted by us",
-    description: "Once the item arrives at our location, we will verify its appearance, size, etc., for you.",
+    title: "Verificação de qualidade feita por nós",
+    description: "Quando o item chegar ao nosso armazém, verificaremos a aparência, tamanho, etc., para você.",
     link: null,
   },
   {
     icon: Truck,
-    title: "Process The Shipment",
-    description: "Once everything done you can process for the shipping.",
-    link: { text: "View shipping guides", href: "#" },
+    title: "Processar o envio",
+    description: "Quando tudo estiver pronto, você pode processar o envio para o Brasil.",
+    link: { text: "Ver guias de envio", href: "#" },
   },
 ];
 
