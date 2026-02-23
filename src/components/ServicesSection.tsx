@@ -3,38 +3,38 @@ import { ShoppingCart, Truck, Package, MessageCircleQuestion, Users, Award } fro
 const services = [
   {
     icon: ShoppingCart,
-    title: "Buy For Me",
-    description: "We purchase products from China online stores on behalf of you",
+    title: "Compre Por Mim",
+    description: "Compramos produtos de lojas online da China em seu nome",
     link: "#",
   },
   {
     icon: Truck,
-    title: "Ship For Me",
-    description: "Shop with the massive Chinese marketplaces you desire and send to our Warehouse address yourself!",
+    title: "Envie Por Mim",
+    description: "Compre nos grandes marketplaces chineses e envie para o nosso endereço de armazém!",
     link: "#",
   },
   {
     icon: Package,
     title: "Drop Shipping",
-    description: "We offer order fulfilment directly from China. Ship from China to all over the world in a click of a few buttons.",
+    description: "Oferecemos atendimento de pedidos diretamente da China. Envie da China para o Brasil com poucos cliques.",
     link: "#",
   },
   {
     icon: MessageCircleQuestion,
-    title: "Asking Question",
-    description: "We can contact sellers on massive Chinese based marketplaces, and ask them questions on your behalf.",
+    title: "Fazer Perguntas",
+    description: "Podemos contatar vendedores nos grandes marketplaces chineses e fazer perguntas em seu nome.",
     link: "#",
   },
   {
     icon: Users,
-    title: "FBA To Amazon",
-    description: "We can assist you by shipping directly from China to Amazon FBA, saving you money and time.",
+    title: "FBA Para Amazon",
+    description: "Podemos ajudá-lo enviando diretamente da China para o Amazon FBA, economizando dinheiro e tempo.",
     link: null,
   },
   {
     icon: Award,
-    title: "Reviews Rewards",
-    description: "Make creative posts and share your experience using our service to get rewards",
+    title: "Recompensas por Avaliações",
+    description: "Faça posts criativos e compartilhe sua experiência usando nosso serviço para ganhar recompensas",
     link: "#",
   },
 ];
@@ -44,8 +44,8 @@ const ServicesSection = () => {
     <section className="py-20 bg-section-alt">
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mb-3">Our Services</h2>
-          <p className="text-muted-foreground text-lg">We offer our customers a range of amazing benefits</p>
+          <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mb-3">Nossos Serviços</h2>
+          <p className="text-muted-foreground text-lg">Oferecemos aos nossos clientes uma série de benefícios incríveis</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
@@ -61,7 +61,7 @@ const ServicesSection = () => {
               <p className="text-sm text-muted-foreground leading-relaxed mb-3">{service.description}</p>
               {service.link && (
                 <a href={service.link} className="text-sm text-primary font-medium hover:underline">
-                  Learn more →
+                  Saiba mais →
                 </a>
               )}
             </div>

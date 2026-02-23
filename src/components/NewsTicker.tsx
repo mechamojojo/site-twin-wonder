@@ -1,11 +1,11 @@
 import { Volume2 } from "lucide-react";
 
 const newsItems = [
-  "Our NEW warehouse is online",
-  "Labour Day Holidays for CSSBuy",
-  "Free warehousing time update notification",
-  "2024 Chinese New Year Holiday Closure: CSSBuy Operational Update",
-  "The National Day holiday is arranged as follows",
+  "Nosso NOVO armazém está online",
+  "Feriados do Dia do Trabalho na CSSBuy",
+  "Atualização do tempo de armazenamento gratuito",
+  "Feriado do Ano Novo Chinês 2024: Atualização Operacional da CSSBuy",
+  "O feriado nacional está programado da seguinte forma",
 ];
 
 const NewsTicker = () => {
@@ -23,7 +23,7 @@ const NewsTicker = () => {
           </div>
         </div>
         <a href="#" className="text-primary text-sm font-medium shrink-0 hover:underline">
-          More &gt;&gt;
+          Mais &gt;&gt;
         </a>
       </div>
     </div>
