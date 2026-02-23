@@ -1,30 +1,29 @@
-import { Volume2 } from "lucide-react";
+import { Megaphone } from "lucide-react";
 
 const newsItems = [
-  "Nosso NOVO armazém está online",
-  "Feriados do Dia do Trabalho na ComprasChina",
-  "Atualização do tempo de armazenamento gratuito",
-  "Feriado do Ano Novo Chinês 2024: Atualização Operacional da ComprasChina",
-  "O feriado nacional está programado da seguinte forma",
+  "🔥 Frete grátis para compras acima de ¥500",
+  "📦 Nosso NOVO armazém está online",
+  "🎉 Promoção: Taxa de serviço reduzida este mês",
+  "⏰ Feriado do Ano Novo Chinês 2024: Atualização Operacional",
+  "✅ Novo método de envio FJ-BR-EXP disponível",
 ];
 
 const NewsTicker = () => {
   return (
-    <div className="bg-background border-b border-border py-3 overflow-hidden">
-      <div className="container mx-auto flex items-center gap-4 px-4">
-        <Volume2 className="w-5 h-5 text-primary shrink-0" />
+    <div className="bg-accent border-b border-border py-2.5 overflow-hidden">
+      <div className="container mx-auto flex items-center gap-3 px-4">
+        <div className="bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded shrink-0 uppercase tracking-wide">
+          Novidades
+        </div>
         <div className="overflow-hidden flex-1">
           <div className="flex gap-12 animate-scroll-left whitespace-nowrap">
             {[...newsItems, ...newsItems].map((item, i) => (
-              <span key={i} className="text-sm text-muted-foreground hover:text-primary cursor-pointer transition-colors">
+              <span key={i} className="text-xs text-foreground/70 hover:text-primary cursor-pointer transition-colors">
                 {item}
               </span>
             ))}
           </div>
         </div>
-        <a href="#" className="text-primary text-sm font-medium shrink-0 hover:underline">
-          Mais &gt;&gt;
-        </a>
       </div>
     </div>
   );
