@@ -1,5 +1,62 @@
 # Welcome to your Lovable project
 
+## Rodar o site localmente (frontend + backend)
+
+Para testar tudo **in loco** (frontend + API + banco), faça o seguinte.
+
+### 1. Subir o banco (PostgreSQL)
+
+Na **raiz do projeto**:
+
+```bash
+docker compose up -d
+```
+
+Isso sobe o Postgres na porta 5432 (usuário/senha/db: `postgres`/`postgres`/`compraschina`).
+
+### 2. Backend (API na porta 4000)
+
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run dev
+```
+
+- O `.env` já vem com `DATABASE_URL` apontando para o Postgres do Docker.
+- Para o **preview de produto** (imagens, preço, variantes ao colar um link) funcionar, instale o Chromium do Playwright uma vez:
+
+```bash
+npm run scraper:install
+```
+
+A API fica em **http://localhost:4000**.
+
+### 3. Frontend (Vite na porta 8080)
+
+Em **outro terminal**, na **raiz do projeto**:
+
+```bash
+npm install
+npm run dev
+```
+
+O site abre em **http://localhost:8080**. As chamadas para `/api/*` são repassadas pelo Vite para o backend (localhost:4000).
+
+### Resumo rápido
+
+| O quê        | Onde      | Comando           | URL              |
+|-------------|-----------|-------------------|------------------|
+| Banco       | Raiz      | `docker compose up -d` | —                |
+| Backend API | `backend/`| `npm run dev`     | http://localhost:4000 |
+| Frontend    | Raiz      | `npm run dev`     | http://localhost:8080 |
+
+**Sem o backend:** o frontend sobe só com `npm run dev` na raiz, mas a home, o carrinho e a navegação funcionam; **não** funcionam: colar link de produto (preview/preço), criar pedido pela API. Para isso, é preciso rodar o backend (e o banco).
+
+---
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID

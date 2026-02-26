@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { Users, Package, Star, Globe } from "lucide-react";
 
 const stats = [
@@ -9,7 +10,7 @@ const stats = [
 
 const AboutSection = () => {
   return (
-    <section className="py-20 bg-section-alt">
+    <section id="about" className="py-20 bg-section-alt">
       <div className="container mx-auto px-4">
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
@@ -24,12 +25,12 @@ const AboutSection = () => {
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Atendimento 100% em português, suporte dedicado e foco total no cliente brasileiro. Inspeção de qualidade, fotos de QC ilimitadas e embalagem profissional.
               </p>
-              <a
-                href="#"
+              <Link
+                to="/servicos"
                 className="inline-flex items-center gap-2 bg-china-red text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-china-red/90 transition-colors shadow-md"
               >
                 Conheça nosso serviço →
-              </a>
+              </Link>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

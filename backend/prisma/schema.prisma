@@ -1,0 +1,160 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+
+  // Dados para envio (obrigatórios no cadastro)
+  customerCpf        String?
+  customerWhatsapp   String?
+  cep                String?
+  addressStreet      String?
+  addressNumber      String?
+  addressComplement  String?
+  addressNeighborhood String?
+  addressCity        String?
+  addressState       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  originalUrl String   @unique
+  title       String
+  titlePt     String?
+  description String?
+  image       String?
+  images      String?  // JSON array de URLs
+  priceCny    Decimal?
+  priceBrl    Decimal?
+  source      String   // Taobao, Weidian, 1688, etc.
+  category    String   // eletronicos, moda, acessorios, casa, beleza, outros
+  slug        String   @unique
+  featured    Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Order {
+  id                 String        @id @default(cuid())
+  user               User?         @relation(fields: [userId], references: [id])
+  userId             String?
+  originalUrl        String
+  status             OrderStatus   @default(AGUARDANDO_COTACAO)
+  shippingMethod     ShippingMethod?
+  productDescription String
+  productTitle       String?       // Título do produto (para barra "O que estão comprando")
+  productImage       String?       // URL da imagem (para barra "O que estão comprando")
+  productColor       String?       // Cor selecionada (para CSSBuy)
+  productSize        String?       // Tamanho selecionado (para CSSBuy)
+  productVariation   String?       // Outra variante: estilo, versão etc (para CSSBuy)
+  quantity           Int
+  cep                String
+  customerName       String?
+  customerEmail      String?
+  customerWhatsapp   String?
+  customerCpf        String?       // CPF (obrigatório para alfândega BR)
+  addressStreet      String?       // Rua
+  addressNumber      String?      // Número
+  addressComplement  String?       // Complemento (apt, bloco)
+  addressNeighborhood String?     // Bairro
+  addressCity        String?      // Cidade
+  addressState       String?      // Estado (UF)
+  notes              String?
+  cssbuyOrderId      String?      // ID do pedido no CSSBuy (para link direto)
+  internalNotes      String?      // Notas internas (só admin)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  quote    OrderQuote?
+  payment  Payment?
+  shipment Shipment?
+}
+
+model OrderQuote {
+  id                    String   @id @default(cuid())
+  order                 Order    @relation(fields: [orderId], references: [id])
+  orderId               String   @unique
+  productsCny           Decimal
+  freightCny            Decimal
+  serviceFeeBrl         Decimal
+  taxesEstimatedBrl     Decimal
+  currencyRateCnyToBrl  Decimal
+  totalBrl              Decimal
+  createdAt             DateTime @default(now())
+}
+
+model Payment {
+  id                String         @id @default(cuid())
+  order             Order          @relation(fields: [orderId], references: [id])
+  orderId           String         @unique
+  provider          PaymentProvider
+  providerPaymentId String         @unique
+  status            PaymentStatus  @default(PENDENTE)
+  amountBrl         Decimal
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+model Shipment {
+  id           String          @id @default(cuid())
+  order        Order           @relation(fields: [orderId], references: [id])
+  orderId      String          @unique
+  trackingCode String?
+  carrier      String?
+  status       ShipmentStatus  @default(PENDENTE)
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
+}
+
+enum OrderStatus {
+  AGUARDANDO_COTACAO
+  AGUARDANDO_PAGAMENTO
+  PAGO
+  ENVIADO_PARA_CSSBUY
+  COMPRADO
+  NO_ESTOQUE
+  AGUARDANDO_ENVIO
+  EM_ENVIO
+  CONCLUIDO
+  CANCELADO
+}
+
+enum ShippingMethod {
+  FJ_BR_EXP
+  BR_EMS
+  BR_SEA
+}
+
+enum PaymentProvider {
+  MERCADO_PAGO
+  PAGARME
+}
+
+enum PaymentStatus {
+  PENDENTE
+  PAGO
+  FALHOU
+  ESTORNADO
+}
+
+enum ShipmentStatus {
+  PENDENTE
+  EM_TRANSITO
+  ENTREGUE
+}
+

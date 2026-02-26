@@ -1,6 +1,8 @@
-import { Search, Camera, Shield, Headphones, Package } from "lucide-react";
+import { Search, Shield, Headphones, Package } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import heroBg from "@/assets/hero-bg.jpg";
+import { looksLikeUrl } from "@/lib/urlValidation";
 
 const trustBadges = [
   { icon: Shield, label: "Compra Segura" },
@@ -10,9 +12,20 @@ const trustBadges = [
 
 const HeroSection = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
+
+  const handleSearch = () => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+    if (looksLikeUrl(trimmed)) {
+      navigate(`/pedido?url=${encodeURIComponent(trimmed)}`);
+    } else {
+      navigate(`/explorar?q=${encodeURIComponent(trimmed)}`);
+    }
+  };
 
   return (
-    <section className="relative min-h-[540px] flex items-center justify-center overflow-hidden">
+    <section id="hero" className="relative min-h-[540px] flex items-center justify-center overflow-hidden">
       <img src={heroBg} alt="Produtos do mercado chinês" className="absolute inset-0 w-full h-full object-cover scale-105" />
       <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-china-red/30" />
 
@@ -41,7 +54,11 @@ const HeroSection = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <button className="bg-china-red hover:bg-china-red/90 text-white px-5 py-2.5 rounded-full mr-1.5 text-sm font-bold transition-colors">
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="bg-china-red hover:bg-china-red/90 text-white px-5 py-2.5 rounded-full mr-1.5 text-sm font-bold transition-colors"
+            >
               Buscar
             </button>
           </div>

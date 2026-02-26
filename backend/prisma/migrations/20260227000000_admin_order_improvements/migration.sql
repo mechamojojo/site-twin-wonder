@@ -1,0 +1,9 @@
+-- AlterTable
+ALTER TABLE "Order" ADD COLUMN "cssbuyOrderId" TEXT;
+ALTER TABLE "Order" ADD COLUMN "internalNotes" TEXT;
+
+-- AlterEnum
+ALTER TYPE "OrderStatus" ADD VALUE 'ENVIADO_PARA_CSSBUY';
+ALTER TYPE "OrderStatus" ADD VALUE 'COMPRADO';
+ALTER TYPE "OrderStatus" ADD VALUE 'NO_ESTOQUE';
+ALTER TYPE "OrderStatus" ADD VALUE 'AGUARDANDO_ENVIO';

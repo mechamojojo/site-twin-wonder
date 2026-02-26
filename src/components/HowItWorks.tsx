@@ -33,7 +33,7 @@ const steps = [
 
 const HowItWorks = () => {
   return (
-    <section className="py-20 bg-background">
+    <section id="how-it-works" className="py-20 bg-background">
       <div className="container mx-auto px-4">
         <div className="text-center mb-14">
           <span className="text-xs font-bold text-china-red uppercase tracking-widest">Passo a passo</span>

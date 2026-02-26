@@ -1,4 +1,5 @@
-import { ShoppingCart, Truck, Package, MessageCircleQuestion, Users, Award } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ShoppingCart, Truck, MessageCircleQuestion } from "lucide-react";
 
 const services = [
   {
@@ -6,42 +7,27 @@ const services = [
     title: "Compre Por Mim",
     description: "Compramos produtos de lojas online da China em seu nome",
     accent: "from-china-red to-china-red/70",
+    href: "/servicos#compre-por-mim",
   },
   {
     icon: Truck,
     title: "Envie Por Mim",
     description: "Compre nos marketplaces chineses e envie para o nosso armazém!",
     accent: "from-gold to-gold/70",
-  },
-  {
-    icon: Package,
-    title: "Drop Shipping",
-    description: "Envie da China para o Brasil com poucos cliques. Ideal para lojistas.",
-    accent: "from-china-red to-gold",
+    href: "/servicos#envie-por-mim",
   },
   {
     icon: MessageCircleQuestion,
     title: "Fazer Perguntas",
     description: "Contatamos vendedores chineses e fazemos perguntas em seu nome.",
     accent: "from-gold to-china-red",
-  },
-  {
-    icon: Users,
-    title: "FBA Para Amazon",
-    description: "Enviamos diretamente da China para o Amazon FBA, economizando tempo.",
-    accent: "from-china-red to-china-red/70",
-  },
-  {
-    icon: Award,
-    title: "Recompensas",
-    description: "Compartilhe sua experiência e ganhe recompensas exclusivas.",
-    accent: "from-gold to-gold/70",
+    href: "/#contact",
   },
 ];
 
 const ServicesSection = () => {
   return (
-    <section className="py-20 bg-section-alt">
+    <section id="services" className="py-20 bg-section-alt">
       <div className="container mx-auto px-4">
         <div className="text-center mb-14">
           <span className="text-xs font-bold text-gold uppercase tracking-widest">O que oferecemos</span>
@@ -65,9 +51,9 @@ const ServicesSection = () => {
               </div>
               <h3 className="font-heading font-bold text-foreground text-lg mb-2">{service.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">{service.description}</p>
-              <a href="#" className="inline-block mt-4 text-sm text-china-red font-semibold hover:underline">
+              <Link to={service.href} className="inline-block mt-4 text-sm text-china-red font-semibold hover:underline">
                 Saiba mais →
-              </a>
+              </Link>
             </div>
           ))}
         </div>

@@ -1,4 +1,4 @@
-import { Calculator, Zap, Truck, Ship } from "lucide-react";
+import { Zap, Truck, Ship } from "lucide-react";
 
 const methods = [
   {
@@ -32,7 +32,7 @@ const methods = [
 
 const ShippingRates = () => {
   return (
-    <section className="py-20 bg-background">
+    <section id="shipping" className="py-20 bg-background">
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
           <span className="text-xs font-bold text-gold uppercase tracking-widest">Logística</span>
@@ -42,13 +42,6 @@ const ShippingRates = () => {
           <p className="text-muted-foreground text-lg mb-6">
             Diversas opções de frete da China para o Brasil com rastreamento completo
           </p>
-          <a
-            href="#"
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-china-red to-gold text-white px-6 py-3 rounded-full font-bold text-sm hover:opacity-90 transition-opacity shadow-md"
-          >
-            <Calculator className="w-4 h-4" />
-            Calculadora de Custos
-          </a>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">

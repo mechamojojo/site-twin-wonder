@@ -28,7 +28,7 @@ const FAQSection = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="py-20 bg-section-alt">
+    <section id="faq" className="py-20 bg-section-alt">
       <div className="container mx-auto px-4 max-w-3xl">
         <div className="text-center mb-14">
           <span className="text-xs font-bold text-gold uppercase tracking-widest">Dúvidas</span>
