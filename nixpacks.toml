@@ -1,0 +1,3 @@
+# Forçar npm (evitar Bun)
+[phases.install]
+cmds = ["npm install"]
