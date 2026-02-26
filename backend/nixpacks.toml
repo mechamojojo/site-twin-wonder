@@ -1,0 +1,3 @@
+# Forçar npm em vez de Bun no deploy
+[phases.install]
+cmds = ["npm install"]
