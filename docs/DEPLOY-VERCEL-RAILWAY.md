@@ -48,7 +48,7 @@ Em **Variables** do serviço backend, configure:
 | `NODE_ENV` | — | `production` | Railway define automaticamente |
 | `TELEGRAM_BOT_TOKEN` | Opcional | Token do @BotFather | Notificações de novos pedidos |
 | `TELEGRAM_CHAT_ID` | Opcional | Seu chat_id | Obtido via getUpdates |
-| `PORT` | — | `4000` | Opcional — Railway preenche |
+| `PORT` | ✅ | `8080` | **Obrigatório para 502**: Railway usa 8080. Defina e configure o domínio Target Port = 8080 |
 
 ### 1.4 Domínio no Railway
 
@@ -155,7 +155,7 @@ Veja [MERCADO-PAGO.md](MERCADO-PAGO.md) e [TELEGRAM-E-WEBHOOK.md](TELEGRAM-E-WEB
 
 | Problema | Possível causa |
 |----------|----------------|
-| **Application failed to respond** / 502 | 1) **Target Port**: Settings → Networking → domínio. Se tiver Target Port manual, remova ou use o valor que o Railway injeta (geralmente 8080). O app usa `process.env.PORT`. 2) Confira os Deploy Logs — o app deve mostrar "Backend rodando na porta X". |
+| **Application failed to respond** / 502 | 1) **Variables**: adicione `PORT=8080`. 2) **Target Port**: Settings → Networking → clique no domínio → **Target Port = 8080** (obrigatório). 3) Se ainda falhar, remova o domínio e gere novamente. |
 | Erro de CORS | `CORS_ORIGINS` não inclui o domínio do frontend |
 | 404 nas rotas | Vercel não está usando o `vercel.json`; confira o rewrite para `/index.html` |
 | API não responde | Verifique `VITE_API_URL` e se o backend está rodando no Railway |

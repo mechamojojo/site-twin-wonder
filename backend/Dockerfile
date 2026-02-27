@@ -11,7 +11,7 @@ COPY . .
 RUN npx prisma generate && npm run build
 
 ENV NODE_ENV=production
-ENV PORT=4000
-EXPOSE 4000
+# Railway injeta PORT em runtime (geralmente 8080). Não sobrescrever aqui.
+EXPOSE 8080
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
