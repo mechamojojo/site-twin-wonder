@@ -1,4 +1,17 @@
 import "dotenv/config";
+
+// Log startup immediately so we see if Node runs before any crash
+console.log("[startup] index.ts loaded");
+
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL] uncaughtException:", err);
+  process.exit(1);
+});
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[FATAL] unhandledRejection:", reason, promise);
+  process.exit(1);
+});
+
 import crypto from "crypto";
 import express from "express";
 import { sendTelegram } from "./telegram";
@@ -1150,7 +1163,11 @@ async function processWebhookPayment(paymentId: string) {
   ).catch(() => {});
 }
 
+console.log("[startup] binding to port", PORT);
 app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(isProduction ? `Backend rodando na porta ${PORT}` : `Backend rodando em http://localhost:${PORT}`);
+}).on("error", (err) => {
+  console.error("[FATAL] app.listen error:", err);
+  process.exit(1);
 });
 
