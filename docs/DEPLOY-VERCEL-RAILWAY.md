@@ -155,6 +155,7 @@ Veja [MERCADO-PAGO.md](MERCADO-PAGO.md) e [TELEGRAM-E-WEBHOOK.md](TELEGRAM-E-WEB
 
 | Problema | Possível causa |
 |----------|----------------|
+| **Application failed to respond** / 502 | 1) **Target Port**: Settings → Networking → domínio. Se tiver Target Port manual, remova ou use o valor que o Railway injeta (geralmente 8080). O app usa `process.env.PORT`. 2) Confira os Deploy Logs — o app deve mostrar "Backend rodando na porta X". |
 | Erro de CORS | `CORS_ORIGINS` não inclui o domínio do frontend |
 | 404 nas rotas | Vercel não está usando o `vercel.json`; confira o rewrite para `/index.html` |
 | API não responde | Verifique `VITE_API_URL` e se o backend está rodando no Railway |
