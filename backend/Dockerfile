@@ -13,4 +13,4 @@ RUN npx prisma generate && npm run build
 ENV NODE_ENV=production
 EXPOSE 4000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && echo '[railway] post-prisma' && node -e \"console.log('node-ok')\" && node dist/index.js"]
