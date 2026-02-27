@@ -4,6 +4,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { FEATURED_PRODUCTS, CATEGORY_LABELS as FEATURED_CATEGORY_LABELS, type FeaturedCategory, type FeaturedProduct } from "@/data/featuredProducts";
 import { CATEGORY_LABELS as CATALOG_CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { apiUrl } from "@/lib/api";
+import { ensureHttpsImage } from "@/lib/utils";
 import { ShoppingBag, Sparkles } from "lucide-react";
 
 const PLACEHOLDER_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext fill='%2394a3b8' font-family='sans-serif' font-size='18' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3EProduto%3C/text%3E%3C/svg%3E";
@@ -12,7 +13,7 @@ type CatalogProduct = { id: string; originalUrl: string; title: string; titlePt:
 
 function ProductCard({ product, useSlug = false }: { product: FeaturedProduct | CatalogProduct; useSlug?: boolean }) {
   const url = "originalUrl" in product ? product.originalUrl : (product as FeaturedProduct).url;
-  const imgSrc = product.image || PLACEHOLDER_IMAGE;
+  const imgSrc = product.image ? ensureHttpsImage(product.image) : PLACEHOLDER_IMAGE;
   const priceStr = product.priceBrl != null ? `R$ ${Number(product.priceBrl).toFixed(2)}` : product.priceCny != null ? `CNY ¥ ${Number(product.priceCny)}` : "Consultar";
   const to = useSlug && "slug" in product ? `/produto/${product.slug}` : `/pedido?url=${encodeURIComponent(url)}`;
 

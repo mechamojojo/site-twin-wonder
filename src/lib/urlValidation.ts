@@ -1,6 +1,7 @@
 const SUPPORTED_HOSTS = [
   "taobao", "1688", "weidian", "tmall", "jd.com", "pinduoduo", "goofish", "dangdang",
   "vip.com", "vipshop", "alicdn", "tbcdn", "geilicdn", "jdimg",
+  "cssbuy", // aceita links CSSBuy com ?url= ou ?link= (o scraper extrai o link interno)
 ];
 
 /** Verifica se o texto parece uma URL (http/https) */

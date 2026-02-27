@@ -67,7 +67,7 @@ export const FEATURED_PRODUCTS: FeaturedProduct[] = [
     id: "goofish-store",
     url: "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.f3293da6gcutDG&userId=3252814831",
     title: "Loja Goofish (闲鱼) — marketplace de usados",
-    image: "http://img.alicdn.com/bao/uploaded/i3/O1CN01VRlRnd1lYeGNISpl4_!!0-mtopupload.jpg",
+    image: "https://img.alicdn.com/bao/uploaded/i3/O1CN01VRlRnd1lYeGNISpl4_!!0-mtopupload.jpg",
     category: "destaques",
     source: "Goofish",
   },

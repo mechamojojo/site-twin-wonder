@@ -1,3 +1,6 @@
-# Forçar npm em vez de Bun no deploy
+# Forçar npm no deploy
 [phases.install]
-cmds = ["npm install"]
+cmds = ["npm install", "NODE_OPTIONS='--dns-result-order=ipv4first' npx playwright install chromium"]
+
+[phases.build]
+cmds = ["npm run build"]

@@ -1,5 +1,6 @@
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
+import { ensureHttpsImage } from "@/lib/utils";
 import { isValidProductUrl } from "@/lib/urlValidation";
 import { ExternalLink, ShoppingCart, ArrowLeft, RefreshCw, AlertCircle, Search } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -249,7 +250,7 @@ const Order = () => {
                         {/* Imagem principal — estilo CSSBuy: fundo claro, produto em destaque */}
                         <div className="aspect-square sm:aspect-[4/3] max-h-[420px] flex items-center justify-center p-4 sm:p-6 bg-white border-b border-[#e8e8e8]">
                           <img
-                            src={productPreview.images[Math.min(selectedImageIndex, productPreview.images.length - 1)]}
+                            src={ensureHttpsImage(productPreview.images[Math.min(selectedImageIndex, productPreview.images.length - 1)])}
                             alt=""
                             className="max-w-full max-h-full w-auto h-auto object-contain"
                             loading="lazy"
@@ -271,7 +272,7 @@ const Order = () => {
                               }`}
                             >
                               <img
-                                src={src}
+                                src={ensureHttpsImage(src)}
                                 alt=""
                                 className="w-full h-full object-cover"
                                 loading="lazy"
@@ -424,7 +425,7 @@ const Order = () => {
                                   title={value}
                                 >
                                   {thumb ? (
-                                    <img src={thumb} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                                    <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
                                   ) : null}
                                   <span className={thumb ? "hidden" : ""}>{value.slice(0, 2)}</span>
                                 </button>
@@ -467,7 +468,7 @@ const Order = () => {
                                   title={c}
                                 >
                                   {thumb ? (
-                                    <img src={thumb} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                                    <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
                                   ) : null}
                                   <span className={thumb ? "hidden" : ""}>{c.slice(0, 2)}</span>
                                 </button>
