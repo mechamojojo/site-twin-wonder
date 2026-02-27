@@ -14,4 +14,4 @@ ENV NODE_ENV=production
 # Railway injeta PORT em runtime (geralmente 8080). Não sobrescrever aqui.
 EXPOSE 8080
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node minimal-server.js"]
