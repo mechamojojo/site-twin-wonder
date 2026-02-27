@@ -72,6 +72,9 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
   next();
 }
 
+// Root (alguns proxies fazem healthcheck em /)
+app.get("/", (_req, res) => res.json({ status: "ok", service: "compraschina-backend" }));
+
 // Healthcheck
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "compraschina-backend" });
