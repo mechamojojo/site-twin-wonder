@@ -789,8 +789,9 @@ const emptyProductPreview = {
 
 // Preview do produto (scraping): título, preço, imagens, variantes
 app.get("/api/product/preview", async (req, res) => {
+  const url = (req.query.url as string)?.trim() || "";
+  console.log("[preview] request received", url.slice(0, 80));
   try {
-    const url = (req.query.url as string)?.trim() || "";
     if (!url) {
       return res.status(400).json({ error: "Parâmetro 'url' é obrigatório." });
     }
@@ -812,7 +813,7 @@ app.get("/api/product/preview", async (req, res) => {
     // Scrape falhou: retorna 200 com dados vazios para a página não quebrar
     return res.json({ ...emptyProductPreview, rawUrl: url });
   } catch (err) {
-    console.error(err);
+    console.error("[preview] ERROR", err);
     res.status(500).json({ error: "Erro ao buscar preview do produto." });
   }
 });
