@@ -10,7 +10,16 @@ import { PrismaClient, OrderStatus } from "@prisma/client";
 const prisma = new PrismaClient();
 const app = express();
 
-const corsOrigins = process.env.CORS_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) || true;
+const defaultOrigins = [
+  "https://compraschinatest.vercel.app",
+  "https://compraschina.com.br",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+];
+const envOrigins = process.env.CORS_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean);
+const corsOrigins = envOrigins?.length ? [...new Set([...defaultOrigins, ...envOrigins])] : defaultOrigins;
 app.use(cors({ origin: corsOrigins }));
 app.use(json());
 
