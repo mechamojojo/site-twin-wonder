@@ -1,6 +1,11 @@
-# Forçar npm no deploy
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
 [phases.install]
-cmds = ["npm install", "NODE_OPTIONS='--dns-result-order=ipv4first' npx playwright install chromium"]
+cmds = ["npm ci", "npx playwright install chromium"]
 
 [phases.build]
-cmds = ["npm run build"]
+cmds = ["npx prisma generate", "npm run build"]
+
+[phases.run]
+cmd = "npx prisma migrate deploy && node dist/index.js"
