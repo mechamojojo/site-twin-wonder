@@ -371,6 +371,7 @@ app.get("/api/products", async (req, res) => {
         { title: { contains: q, mode: "insensitive" } },
         { titlePt: { contains: q, mode: "insensitive" } },
         { description: { contains: q, mode: "insensitive" } },
+        { originalUrl: { contains: q, mode: "insensitive" } },
       ];
     }
 
