@@ -30,6 +30,8 @@ CREATE TABLE "Order" (
     "id" TEXT NOT NULL,
     "userId" TEXT,
     "originalUrl" TEXT NOT NULL,
+    "productTitle" TEXT,
+    "productImage" TEXT,
     "status" "OrderStatus" NOT NULL DEFAULT 'AGUARDANDO_COTACAO',
     "shippingMethod" "ShippingMethod",
     "productDescription" TEXT NOT NULL,
