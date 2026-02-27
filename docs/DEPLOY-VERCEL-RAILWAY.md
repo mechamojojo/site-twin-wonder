@@ -13,6 +13,10 @@ Guia para publicar o site em **compraschina.com.br** usando Vercel (frontend) e 
 
 O frontend chama a API pela URL do Railway configurada em `VITE_API_URL`.
 
+**URLs atuais (teste):**
+- Frontend: https://compraschinatest.vercel.app
+- Backend: https://site-twin-wonder-production.up.railway.app
+
 ---
 
 ## 1. Backend no Railway

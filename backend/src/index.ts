@@ -18,7 +18,7 @@ const defaultOrigins = [
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5173",
 ];
-const envOrigins = process.env.CORS_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean);
+const envOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
 const corsOrigins = envOrigins?.length ? [...new Set([...defaultOrigins, ...envOrigins])] : defaultOrigins;
 app.use(cors({ origin: corsOrigins }));
 app.use(json());
@@ -1150,7 +1150,7 @@ async function processWebhookPayment(paymentId: string) {
   ).catch(() => {});
 }
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(isProduction ? `Backend rodando na porta ${PORT}` : `Backend rodando em http://localhost:${PORT}`);
 });
 
