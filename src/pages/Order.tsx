@@ -308,6 +308,7 @@ const Order = () => {
                       src={url}
                       title="Produto"
                       className="absolute inset-0 w-full h-full border-0"
+                      sandbox="allow-scripts allow-same-origin allow-forms"
                     />
                     <div className="absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-t from-black/70 to-transparent flex items-end justify-end p-3">
                       <a
