@@ -1,7 +1,5 @@
+import "./startup";
 import "dotenv/config";
-
-// Log startup immediately so we see if Node runs before any crash
-console.log("[startup] index.ts loaded");
 
 process.on("uncaughtException", (err) => {
   console.error("[FATAL] uncaughtException:", err);
