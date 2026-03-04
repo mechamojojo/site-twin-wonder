@@ -1,14 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
 import { apiUrl } from "@/lib/api";
+import { ensureHttpsImage, referrerPolicyForImage } from "@/lib/utils";
 import { ShoppingBag, Search, Loader2 } from "lucide-react";
 
 type Product = {
   id: string;
-  originalUrl: string;
+  originalUrl?: string;
+  url?: string;
   title: string;
   titlePt: string | null;
   image: string | null;
@@ -34,29 +37,40 @@ const PLACEHOLDER =
 
 const Explorar = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const q = searchParams.get("q") ?? "";
+  const q = (searchParams.get("q") ?? "").toLowerCase().trim();
   const category = searchParams.get("category") ?? "all";
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [total, setTotal] = useState(0);
+  const [apiProducts, setApiProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState(q);
+  useEffect(() => setSearchInput(q), [q]);
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (category !== "all") params.set("category", category);
-    const url = apiUrl(`/api/products?${params.toString()}`);
-    setLoading(true);
-    fetch(url)
+    fetch(apiUrl("/api/products?limit=100"))
       .then((r) => r.json())
       .then((data) => {
-        setProducts(data.products ?? []);
-        setTotal(data.total ?? 0);
+        const list = data.products ?? [];
+        setApiProducts(Array.isArray(list) ? list : []);
       })
-      .catch(() => setProducts([]))
+      .catch(() => setApiProducts([]))
       .finally(() => setLoading(false));
-  }, [q, category]);
+  }, []);
+
+  const sourceList = apiProducts.length > 0 ? apiProducts : EXPLORAR_PRODUCTS;
+
+  const { products, total } = useMemo(() => {
+    let list = sourceList;
+    if (category !== "all") list = list.filter((p) => p.category === category);
+    if (q.length >= 2) {
+      list = list.filter(
+        (p) =>
+          (p.titlePt?.toLowerCase().includes(q)) ||
+          (p.title?.toLowerCase().includes(q)) ||
+          (p.category?.toLowerCase().includes(q))
+      );
+    }
+    return { products: list, total: list.length };
+  }, [sourceList, q, category]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,13 +85,8 @@ const Explorar = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="mb-8">
-          <h1 className="text-2xl font-heading font-bold text-foreground mb-2">Explorar produtos</h1>
-          <p className="text-muted-foreground text-sm mb-4">
-            Tudo da China em um só lugar. Pesquise e encontre o que você precisa.
-          </p>
-
+      <main className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8">
           <form onSubmit={handleSearch} className="flex gap-2 mb-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -86,26 +95,26 @@ const Explorar = () => {
                 placeholder="Buscar produtos..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
+                className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-background text-sm outline-none focus:border-foreground/30"
               />
             </div>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-china-red text-white font-semibold text-sm hover:bg-china-red/90"
+              className="px-5 py-2.5 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90"
             >
               Buscar
             </button>
           </form>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {CATEGORIES.map((c) => (
               <button
                 key={c.id}
                 onClick={() => handleCategory(c.id)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  (c.id === "all" && !category) || category === c.id
-                    ? "bg-china-red text-white"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  (c.id === "all" && category === "all") || category === c.id
+                    ? "bg-foreground text-background"
+                    : "bg-muted/70 text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {c.label}
@@ -124,13 +133,13 @@ const Explorar = () => {
               {q || category !== "all" ? "Nenhum produto encontrado. Tente outros termos." : "Catálogo em construção. Em breve mais produtos!"}
             </p>
             <Link to="/pedido" className="text-china-red font-medium hover:underline">
-              Ou cole o link de um produto para comprar →
+              Informe o link do produto na página inicial para comprar →
             </Link>
           </div>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground mb-4">{total} produto(s) encontrado(s)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <p className="text-sm text-muted-foreground mb-5">{total} produto(s)</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
               {products.map((p) => {
                 const displayTitle = p.titlePt || p.title;
                 const priceStr =
@@ -138,29 +147,26 @@ const Explorar = () => {
                 return (
                   <Link
                     key={p.id}
-                    to={`/produto/${p.slug}`}
-                    className="group rounded-xl border border-border bg-card overflow-hidden hover:border-china-red/40 transition-colors flex flex-col"
+                    to={apiProducts.length > 0 && p.slug ? `/produto/${p.slug}` : `/pedido?url=${encodeURIComponent(p.originalUrl ?? p.url ?? "")}`}
+                    className="group flex flex-col bg-transparent"
                   >
-                    <div className="aspect-square bg-muted relative overflow-hidden">
+                    <div className="aspect-[3/4] bg-muted/30 relative overflow-hidden rounded-sm">
                       <img
-                        src={p.image || PLACEHOLDER}
+                        src={p.image ? ensureHttpsImage(p.image) : PLACEHOLDER}
                         alt=""
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        referrerPolicy={referrerPolicyForImage(p.image ?? PLACEHOLDER)}
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = PLACEHOLDER;
                         }}
                       />
                     </div>
-                    <div className="p-4 flex-1 flex flex-col">
-                      <p className="text-xs font-medium text-china-red uppercase tracking-wider">{p.source}</p>
-                      <h3 className="font-semibold text-foreground line-clamp-2 mt-1">{displayTitle}</h3>
-                      <div className="mt-auto pt-3 flex items-center justify-between">
-                        <span className="text-lg font-bold text-china-red">{priceStr}</span>
-                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                          Ver <ShoppingBag className="w-4 h-4" />
-                        </span>
-                      </div>
+                    <div className="pt-2.5 flex flex-col min-h-0">
+                      <h3 className="text-sm text-foreground line-clamp-2 font-normal leading-snug">{displayTitle}</h3>
+                      <p className="mt-1 text-sm font-semibold text-china-red">{priceStr}</p>
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Ver produto <ShoppingBag className="w-3 h-3" />
+                      </span>
                     </div>
                   </Link>
                 );

@@ -105,7 +105,9 @@ const Checkout = () => {
       customerName: user.name,
       customerEmail: user.email,
       customerCpf: user.customerCpf ? formatCpf(user.customerCpf) : "",
-      customerWhatsapp: user.customerWhatsapp ? formatPhone(user.customerWhatsapp) : "",
+      customerWhatsapp: user.customerWhatsapp
+        ? formatPhone(user.customerWhatsapp)
+        : "",
       cep: user.cep ? formatCep(user.cep) : "",
       addressStreet: user.addressStreet || "",
       addressNumber: user.addressNumber || "",
@@ -116,7 +118,9 @@ const Checkout = () => {
     }));
   }, [user?.id]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
@@ -134,7 +138,9 @@ const Checkout = () => {
     }
     const cpf = form.customerCpf.replace(/\D/g, "");
     if (cpf.length !== 11) {
-      toast.error("CPF inválido. Use 11 dígitos (obrigatório para envio internacional).");
+      toast.error(
+        "CPF inválido. Use 11 dígitos (obrigatório para envio internacional).",
+      );
       return;
     }
     if (!form.addressStreet.trim()) {
@@ -164,14 +170,24 @@ const Checkout = () => {
     const freightPerItem = 45 / items.length;
     try {
       for (const item of items) {
-        const unitBrl = item.priceBrl ?? (item.priceCny != null ? item.priceCny * 0.75 * 1.25 : 100);
+        const unitBrl =
+          item.priceBrl ??
+          (item.priceCny != null ? item.priceCny * 0.75 * 1.25 : 100);
         const productTotal = unitBrl * item.quantity;
-        const estimatedTotalBrl = Math.round((productTotal + freightPerItem) * 100) / 100;
+        const estimatedTotalBrl =
+          Math.round((productTotal + freightPerItem) * 100) / 100;
 
-        const productDescription = [item.titlePt || item.title || "Produto", item.variation, item.color, item.size]
+        const productDescription = [
+          item.titlePt || item.title || "Produto",
+          item.variation,
+          item.color,
+          item.size,
+        ]
           .filter(Boolean)
           .join(" | ");
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
         const token = getAuthToken();
         if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -208,10 +224,20 @@ const Checkout = () => {
         if (!firstOrderId) firstOrderId = data.id;
       }
       clearCart();
-      toast.success(items.length > 1 ? "Pedidos enviados com sucesso!" : "Pedido enviado com sucesso!");
-      navigate(firstOrderId ? `/pedido-confirmado/${firstOrderId}` : "/", { replace: true });
+      toast.success(
+        items.length > 1
+          ? "Pedidos enviados com sucesso!"
+          : "Pedido enviado com sucesso!",
+      );
+      navigate(firstOrderId ? `/pedido-confirmado/${firstOrderId}` : "/", {
+        replace: true,
+      });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao enviar pedido. Tente novamente.");
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Erro ao enviar pedido. Tente novamente.",
+      );
     } finally {
       setLoading(false);
     }
@@ -222,9 +248,16 @@ const Checkout = () => {
       <div className="min-h-screen bg-background">
         <Navbar />
         <main className="container mx-auto px-4 py-12 max-w-xl">
-          <h1 className="text-xl font-heading font-bold text-foreground mb-4">Finalizar pedido</h1>
-          <p className="text-muted-foreground mb-6">Seu carrinho está vazio. Adicione produtos para continuar.</p>
-          <Link to="/" className="inline-flex bg-china-red text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-china-red/90">
+          <h1 className="text-xl font-heading font-bold text-foreground mb-4">
+            Finalizar pedido
+          </h1>
+          <p className="text-muted-foreground mb-6">
+            Seu carrinho está vazio. Adicione produtos para continuar.
+          </p>
+          <Link
+            to="/"
+            className="inline-flex bg-china-red text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-china-red/90"
+          >
             Ir para a página inicial
           </Link>
         </main>
@@ -237,9 +270,13 @@ const Checkout = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-12 max-w-xl">
-        <h1 className="text-xl font-heading font-bold text-foreground mb-2">Finalizar pedido</h1>
+        <h1 className="text-xl font-heading font-bold text-foreground mb-2">
+          Finalizar pedido
+        </h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Preencha seus dados. O CPF e endereço são necessários para envio internacional. Entraremos em contato com o orçamento final em reais (produto + frete).
+          Preencha seus dados. O CPF e endereço são necessários para envio
+          internacional. Entraremos em contato com o orçamento final em reais
+          (produto + frete).
         </p>
 
         <div className="rounded-xl border border-border bg-card p-4 mb-6">
@@ -251,9 +288,13 @@ const Checkout = () => {
               <li key={i.id}>
                 {i.titlePt || i.title || "Produto"}
                 {(i.color || i.size || i.variation) && (
-                  <span className="text-muted-foreground"> — {[i.color, i.size, i.variation].filter(Boolean).join(", ")}</span>
-                )}
-                {" "}× {i.quantity}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    —{" "}
+                    {[i.color, i.size, i.variation].filter(Boolean).join(", ")}
+                  </span>
+                )}{" "}
+                × {i.quantity}
               </li>
             ))}
           </ul>
@@ -267,11 +308,20 @@ const Checkout = () => {
               name="cep"
               placeholder="00000-000"
               value={form.cep}
-              onChange={(e) => setForm((p) => ({ ...p, cep: e.target.value.replace(/\D/g, "").slice(0, 8) }))}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  cep: e.target.value.replace(/\D/g, "").slice(0, 8),
+                }))
+              }
               maxLength={8}
               required
             />
-            {cepLoading && <p className="text-xs text-muted-foreground">Buscando endereço...</p>}
+            {cepLoading && (
+              <p className="text-xs text-muted-foreground">
+                Buscando endereço...
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -340,7 +390,12 @@ const Checkout = () => {
                 name="addressState"
                 placeholder="SP"
                 value={form.addressState}
-                onChange={(e) => setForm((p) => ({ ...p, addressState: e.target.value.toUpperCase().slice(0, 2) }))}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    addressState: e.target.value.toUpperCase().slice(0, 2),
+                  }))
+                }
                 maxLength={2}
                 required
               />
@@ -354,20 +409,42 @@ const Checkout = () => {
               name="customerCpf"
               placeholder="000.000.000-00"
               value={form.customerCpf}
-              onChange={(e) => setForm((p) => ({ ...p, customerCpf: e.target.value.replace(/\D/g, "").slice(0, 11) }))}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  customerCpf: e.target.value.replace(/\D/g, "").slice(0, 11),
+                }))
+              }
               maxLength={14}
               required
             />
-            <p className="text-xs text-muted-foreground mt-1">Obrigatório para envios internacionais (alfândega brasileira)</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Obrigatório para envios internacionais (alfândega brasileira)
+            </p>
           </div>
 
           <div>
             <Label htmlFor="customerName">Nome completo *</Label>
-            <Input id="customerName" name="customerName" placeholder="Seu nome" value={form.customerName} onChange={handleChange} required />
+            <Input
+              id="customerName"
+              name="customerName"
+              placeholder="Seu nome"
+              value={form.customerName}
+              onChange={handleChange}
+              required
+            />
           </div>
           <div>
             <Label htmlFor="customerEmail">E-mail *</Label>
-            <Input id="customerEmail" name="customerEmail" type="email" placeholder="seu@email.com" value={form.customerEmail} onChange={handleChange} required />
+            <Input
+              id="customerEmail"
+              name="customerEmail"
+              type="email"
+              placeholder="seu@email.com"
+              value={form.customerEmail}
+              onChange={handleChange}
+              required
+            />
           </div>
           <div>
             <Label htmlFor="customerWhatsapp">WhatsApp *</Label>
@@ -376,18 +453,32 @@ const Checkout = () => {
               name="customerWhatsapp"
               placeholder="(11) 99999-9999"
               value={form.customerWhatsapp}
-              onChange={(e) => setForm((p) => ({ ...p, customerWhatsapp: e.target.value.replace(/\D/g, "").slice(0, 15) }))}
+              onChange={(e) =>
+                setForm((p) => ({
+                  ...p,
+                  customerWhatsapp: e.target.value
+                    .replace(/\D/g, "")
+                    .slice(0, 15),
+                }))
+              }
               required
             />
           </div>
           <div>
             <Label htmlFor="shippingMethod">Método de envio (opcional)</Label>
-            <Select value={form.shippingMethod} onValueChange={(v) => setForm((p) => ({ ...p, shippingMethod: v }))}>
+            <Select
+              value={form.shippingMethod}
+              onValueChange={(v) =>
+                setForm((p) => ({ ...p, shippingMethod: v }))
+              }
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Escolha na cotação" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="FJ_BR_EXP">FJ-BR-EXP (12-30 dias)</SelectItem>
+                <SelectItem value="FJ_BR_EXP">
+                  FJ-BR-EXP (12-30 dias)
+                </SelectItem>
                 <SelectItem value="BR_EMS">BR-EMS (15-40 dias)</SelectItem>
                 <SelectItem value="BR_SEA">BR-SEA (40-60 dias)</SelectItem>
               </SelectContent>
@@ -395,10 +486,21 @@ const Checkout = () => {
           </div>
           <div>
             <Label htmlFor="notes">Observações (opcional)</Label>
-            <Textarea id="notes" name="notes" placeholder="Instruções adicionais..." value={form.notes} onChange={handleChange} rows={3} className="resize-none" />
+            <Textarea
+              id="notes"
+              name="notes"
+              placeholder="Instruções adicionais..."
+              value={form.notes}
+              onChange={handleChange}
+              rows={3}
+              className="resize-none"
+            />
           </div>
           <div className="flex gap-3 pt-4">
-            <Link to="/carrinho" className="flex-1 inline-flex justify-center border border-border px-4 py-3 rounded-xl text-sm font-medium hover:bg-muted">
+            <Link
+              to="/carrinho"
+              className="flex-1 inline-flex justify-center border border-border px-4 py-3 rounded-xl text-sm font-medium hover:bg-muted"
+            >
               Voltar ao carrinho
             </Link>
             <button

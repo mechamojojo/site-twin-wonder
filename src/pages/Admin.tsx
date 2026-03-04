@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Lock, LogOut, Package, Pencil, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, GripVertical, Lock, LogOut, Package, Pencil, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ type OrderWithDetails = {
   originalUrl: string;
   productDescription: string;
   productTitle: string | null;
+  productImage: string | null;
   productColor: string | null;
   productSize: string | null;
   productVariation: string | null;
@@ -57,10 +58,12 @@ function formatAddress(o: OrderWithDetails): string {
 }
 
 function buildCssBuyCopyText(o: OrderWithDetails): string {
-  const variantParts = [o.productColor, o.productSize, o.productVariation].filter(Boolean);
-  const noteParts = [...variantParts];
-  if (o.notes) noteParts.push(o.notes);
-  const nota = noteParts.length ? noteParts.join(" | ") : o.productDescription;
+  const parts: string[] = [];
+  if (o.productColor) parts.push(`Cor: ${o.productColor}`);
+  if (o.productSize) parts.push(o.productSize.includes(" x") ? `Tamanhos: ${o.productSize}` : `Tamanho: ${o.productSize}`);
+  if (o.productVariation) parts.push(o.productVariation);
+  if (o.notes) parts.push(o.notes);
+  const nota = parts.length ? parts.join(" | ") : o.productDescription;
 
   return [
     "--- COMPRASCHINA → CSSBuy ---",
@@ -127,6 +130,24 @@ type CatalogProduct = {
   featured: boolean;
 };
 
+function toCatalogProduct(p: Record<string, unknown>): CatalogProduct {
+  return {
+    id: String(p.id ?? ""),
+    originalUrl: String(p.originalUrl ?? ""),
+    title: String(p.title ?? ""),
+    titlePt: p.titlePt != null ? String(p.titlePt) : null,
+    description: p.description != null ? String(p.description) : null,
+    image: p.image != null ? String(p.image) : null,
+    images: p.images != null ? String(p.images) : null,
+    priceCny: typeof p.priceCny === "number" ? p.priceCny : p.priceCny != null ? Number(p.priceCny) : null,
+    priceBrl: p.priceBrl != null ? String(p.priceBrl) : null,
+    source: String(p.source ?? ""),
+    category: String(p.category ?? "outros"),
+    slug: String(p.slug ?? ""),
+    featured: Boolean(p.featured),
+  };
+}
+
 const Admin = () => {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(ADMIN_TOKEN_KEY));
   const [password, setPassword] = useState("");
@@ -144,6 +165,7 @@ const Admin = () => {
   const [addSuccess, setAddSuccess] = useState("");
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
   const [editForm, setEditForm] = useState({ title: "", titlePt: "", category: "outros", featured: false, image: "", images: "" });
 
@@ -173,21 +195,47 @@ const Admin = () => {
       .finally(() => setLoading(false));
   }, [token, filter]);
 
-  const fetchCatalogProducts = useCallback(() => {
-    if (!token) return;
+  const fetchCatalogProducts = useCallback((options?: { mergeWithPrevious?: boolean }) => {
+    if (!token) return Promise.resolve();
     setCatalogLoading(true);
-    fetch(apiUrl("/api/admin/products"), {
+    const mergeWithPrevious = options?.mergeWithPrevious ?? false;
+    return fetch(apiUrl("/api/admin/products?limit=2000"), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : { products: [] }))
-      .then((data) => setCatalogProducts(data.products ?? []))
-      .catch(() => setCatalogProducts([]))
+      .then((data) => {
+        const fromServer = data.products ?? [];
+        if (mergeWithPrevious) {
+          setCatalogProducts((prev) => {
+            const serverIds = new Set(fromServer.map((p: { id: string }) => p.id));
+            const missingFromServer = prev.filter((p) => !serverIds.has(p.id));
+            return [...fromServer, ...missingFromServer];
+          });
+        } else {
+          setCatalogProducts(fromServer);
+        }
+        return fromServer;
+      })
+      .catch(() => {
+        setCatalogProducts([]);
+        return [];
+      })
       .finally(() => setCatalogLoading(false));
   }, [token]);
 
   useEffect(() => {
     if (token && activeTab === "catálogo") fetchCatalogProducts();
   }, [token, activeTab, fetchCatalogProducts]);
+
+  useEffect(() => {
+    setPositionDrafts((prev) => {
+      const next = { ...prev };
+      for (let i = 0; i < catalogProducts.length; i++) {
+        next[catalogProducts[i].id] = String(i + 1);
+      }
+      return next;
+    });
+  }, [catalogProducts]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,12 +269,28 @@ const Admin = () => {
     toast.success("Sessão encerrada");
   };
 
-  const handleCopy = (o: OrderWithDetails) => {
-    const text = buildCssBuyCopyText(o);
-    navigator.clipboard.writeText(text).then(
-      () => toast.success("Copiado! Cole no formulário do CSSBuy."),
-      () => toast.error("Não foi possível copiar")
-    );
+  const [processarCssBuyId, setProcessarCssBuyId] = useState<string | null>(null);
+
+  const handleProcessarCssBuy = async (o: OrderWithDetails) => {
+    if (!token) return;
+    setProcessarCssBuyId(o.id);
+    try {
+      const res = await fetch(apiUrl(`/api/admin/orders/${o.id}/cssbuy-url`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      const url = data?.url;
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer");
+        toast.success("Abrindo produto no CSSBuy.");
+      } else {
+        toast.info("Este marketplace não tem link direto no CSSBuy. Abra o link do produto.");
+      }
+    } catch {
+      toast.error("Erro ao obter link CSSBuy");
+    } finally {
+      setProcessarCssBuyId(null);
+    }
   };
 
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -255,8 +319,12 @@ const Admin = () => {
       }
       setAddSuccess(`Produto adicionado: ${data.titlePt || data.title}`);
       setAddUrl("");
-      fetchCatalogProducts();
-      toast.success("Produto adicionado ao catálogo!");
+      const newProduct = toCatalogProduct(data as Record<string, unknown>);
+      if (newProduct.id) {
+        setCatalogProducts((prev) => [...prev, newProduct]);
+      }
+      await fetchCatalogProducts({ mergeWithPrevious: true });
+      toast.success("Produto adicionado ao catálogo! Você já pode alterar a posição na lista abaixo.");
     } catch {
       setAddError("Erro de conexão. Tente novamente.");
 } finally {
@@ -316,6 +384,102 @@ const Admin = () => {
     } catch {
       toast.error("Erro de conexão");
     }
+  };
+
+  const handleReorder = useCallback(
+    async (orderedIds: string[]) => {
+      if (!token || orderedIds.length === 0) return;
+      const ids = orderedIds.map((id) => String(id)).filter((id) => id.length > 0 && id !== "undefined");
+      if (ids.length !== orderedIds.length) {
+        toast.error("Lista de produtos incompleta. Recarregue a página e tente novamente.");
+        return;
+      }
+      try {
+        const res = await fetch(apiUrl("/api/admin/products/reorder"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ order: ids }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(data.error || "Erro ao reordenar");
+          return;
+        }
+        await fetchCatalogProducts({ mergeWithPrevious: true });
+        toast.success("Ordem atualizada");
+      } catch {
+        toast.error("Erro de conexão");
+      }
+    },
+    [token, fetchCatalogProducts]
+  );
+
+  const moveProduct = (index: number, direction: "up" | "down") => {
+    const list = [...catalogProducts];
+    const next = direction === "up" ? index - 1 : index + 1;
+    if (next < 0 || next >= list.length) return;
+    [list[index], list[next]] = [list[next], list[index]];
+    setCatalogProducts(list);
+    const ids = list.map((p) => p.id).filter((id) => id && id !== "undefined");
+    if (ids.length !== list.length) {
+      toast.error("Algum produto sem id. Recarregue a página.");
+      return;
+    }
+    handleReorder(ids);
+  };
+
+  const moveProductToIndex = (fromIndex: number, toIndex: number) => {
+    const list = [...catalogProducts];
+    if (fromIndex < 0 || fromIndex >= list.length) return;
+    const clamped = Math.max(0, Math.min(list.length - 1, toIndex));
+    if (clamped === fromIndex) return;
+    const [removed] = list.splice(fromIndex, 1);
+    list.splice(clamped, 0, removed);
+    setCatalogProducts(list);
+    const ids = list.map((p) => p.id).filter((id) => id && id !== "undefined");
+    if (ids.length !== list.length) {
+      toast.error("Algum produto sem id. Recarregue a página.");
+      return;
+    }
+    handleReorder(ids);
+  };
+
+  const commitPosition = (productId: string) => {
+    const fromIndex = catalogProducts.findIndex((p) => p.id === productId);
+    if (fromIndex === -1) {
+      toast.error("Produto não encontrado na lista. Recarregando...");
+      fetchCatalogProducts({ mergeWithPrevious: true });
+      return;
+    }
+    const raw = positionDrafts[productId];
+    const desired = Number(raw);
+    if (!Number.isFinite(desired)) {
+      setPositionDrafts((prev) => ({ ...prev, [productId]: String(fromIndex + 1) }));
+      return;
+    }
+    const toIndex = Math.max(0, Math.min(catalogProducts.length - 1, Math.floor(desired) - 1));
+    setPositionDrafts((prev) => ({ ...prev, [productId]: String(toIndex + 1) }));
+    moveProductToIndex(fromIndex, toIndex);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    const dragIndex = Number(e.dataTransfer.getData("text/plain"));
+    if (Number.isNaN(dragIndex) || dragIndex === dropIndex) return;
+    const list = [...catalogProducts];
+    const [removed] = list.splice(dragIndex, 1);
+    list.splice(dropIndex, 0, removed);
+    setCatalogProducts(list);
+    const ids = list.map((p) => p.id).filter((id) => id && id !== "undefined");
+    if (ids.length !== list.length) {
+      toast.error("Algum produto sem id. Recarregue a página.");
+      return;
+    }
+    handleReorder(ids);
   };
 
   const handleDeleteProduct = async (p: CatalogProduct) => {
@@ -450,9 +614,9 @@ const Admin = () => {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
-        <main className="container mx-auto px-4 py-12 max-w-md">
+        <main className="flex-1 container mx-auto px-4 py-12 max-w-md">
           <div className="rounded-xl border border-border bg-card p-6">
             <h1 className="text-lg font-heading font-bold text-foreground flex items-center gap-2 mb-2">
               <Lock className="w-5 h-5 text-china-red" />
@@ -493,9 +657,9 @@ const Admin = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
         <div className="flex flex-col gap-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -569,6 +733,7 @@ const Admin = () => {
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Cole o link de um produto (Taobao, 1688, Weidian, TMALL, etc.) para importá-lo automaticamente.
+                Marque &quot;Em destaque na home&quot; para o produto aparecer na página inicial e no Explorar. Use &quot;Excluir&quot; abaixo para remover itens da lista.
               </p>
               <form onSubmit={handleAddProduct} className="space-y-4">
                 <div>
@@ -625,18 +790,32 @@ const Admin = () => {
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold text-foreground mb-4">Produtos no catálogo</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-4">Produtos no catálogo (home e Explorar)</h2>
+              <p className="text-xs text-muted-foreground mb-2">
+                Arraste o ícone ≡ para reordenar ou use Subir/Descer. A ordem define a exibição em &quot;Todos&quot; e nas categorias.
+              </p>
+              <p className="text-xs text-muted-foreground mb-4">
+                Para levar alterações para o código: <code className="bg-muted px-1 rounded">cd backend &amp;&amp; npm run export-explorar-to-code</code>
+                {" "}e commite <code className="bg-muted px-1 rounded">src/data/explorarProducts.export.json</code>.
+              </p>
               {catalogLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando...</p>
               ) : catalogProducts.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhum produto ainda. Adicione um acima.</p>
               ) : (
                 <div className="space-y-3">
-                  {catalogProducts.map((p) => (
+                  {catalogProducts.map((p, index) => (
                     <div
-                      key={p.id}
-                      className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border border-border bg-background/50"
+                      key={p.id || `product-${index}`}
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData("text/plain", String(index))}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, index)}
+                      className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border border-border bg-background/50 group hover:border-china-red/20 transition-colors"
                     >
+                      <div className="flex items-center gap-2 shrink-0 cursor-grab active:cursor-grabbing" title="Arrastar para reordenar">
+                        <GripVertical className="w-4 h-4 text-muted-foreground" />
+                      </div>
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div className="w-12 h-12 rounded-lg bg-muted shrink-0 overflow-hidden">
                           {p.image ? (
@@ -647,18 +826,40 @@ const Admin = () => {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-foreground truncate">{p.titlePt || p.title}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                          <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5 flex-wrap">
                             <span>{p.source}</span>
                             <span>·</span>
                             <span>{CATEGORY_LABELS[p.category] ?? p.category}</span>
                             {p.featured && <Badge className="text-[10px] py-0">Destaque</Badge>}
-                          </p>
+                          </div>
                           <a href={p.originalUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-china-red truncate block mt-0.5 hover:underline">
                             {p.originalUrl}
                           </a>
                         </div>
                       </div>
-                      <div className="flex gap-2 shrink-0">
+                      <div className="flex items-center gap-1 sm:gap-2 shrink-0 flex-wrap">
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => moveProduct(index, "up")} disabled={index === 0} title="Subir">
+                          <ChevronUp className="w-4 h-4" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => moveProduct(index, "down")} disabled={index === catalogProducts.length - 1} title="Descer">
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={catalogProducts.length}
+                          value={positionDrafts[p.id] ?? String(index + 1)}
+                          onChange={(e) => setPositionDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              (e.currentTarget as HTMLInputElement).blur();
+                              commitPosition(p.id);
+                            }
+                          }}
+                          onBlur={() => commitPosition(p.id)}
+                          className="w-14 h-8 rounded-md border border-border bg-background text-xs text-center outline-none focus:ring-1 focus:ring-china-red/40"
+                          title="Posição (1 = topo)"
+                        />
                         <Button size="sm" variant="outline" className="gap-1" onClick={() => openEditModal(p)}>
                           <Pencil className="w-3.5 h-3.5" />
                           Editar
@@ -680,26 +881,58 @@ const Admin = () => {
               )}
             </div>
 
-            {editingProduct && (
+            {editingProduct && (() => {
+              const allImageUrls = [
+                editForm.image,
+                ...(editForm.images.trim() ? editForm.images.trim().split(/\n/).map((u) => u.trim()).filter((u) => u.startsWith("http")) : []),
+              ].filter(Boolean) as string[];
+              const setMainImage = (url: string) => {
+                const rest = allImageUrls.filter((u) => u !== url);
+                setEditForm((f) => ({
+                  ...f,
+                  image: url,
+                  images: rest.join("\n"),
+                }));
+              };
+              return (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setEditingProduct(null)}>
-                <div className="bg-card rounded-xl border border-border p-6 max-w-md w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-card rounded-xl border border-border p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
                   <h3 className="text-lg font-semibold text-foreground mb-4">Editar produto</h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-1">Imagem principal (URL)</label>
+                      <label className="block text-sm font-medium text-foreground mb-1.5">Imagem de preview (home e Explorar)</label>
+                      <p className="text-xs text-muted-foreground mb-2">Escolha qual imagem aparece no card da página inicial. Clique em &quot;Usar na home&quot; na que preferir.</p>
+                      {allImageUrls.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {allImageUrls.map((url) => (
+                            <div key={url} className="relative group">
+                              <div className="w-20 h-20 rounded-lg border-2 overflow-hidden bg-muted border-border">
+                                <img src={url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} />
+                              </div>
+                              {editForm.image === url && (
+                                <span className="absolute top-0 left-0 right-0 bg-china-red text-white text-[10px] font-bold text-center py-0.5">Preview</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setMainImage(url)}
+                                className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] font-medium py-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                {editForm.image === url ? "Principal" : "Usar na home"}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                       <input
                         type="url"
                         value={editForm.image}
                         onChange={(e) => setEditForm((f) => ({ ...f, image: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
-                        placeholder="https://..."
+                        className="mt-2 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
+                        placeholder="URL da imagem principal"
                       />
-                      {editForm.image && (
-                        <img src={editForm.image} alt="" className="mt-1.5 h-20 w-20 object-cover rounded border border-border" referrerPolicy="no-referrer" onError={(e) => (e.currentTarget.style.display = "none")} />
-                      )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-1">Imagens adicionais (URLs, uma por linha)</label>
+                      <label className="block text-sm font-medium text-foreground mb-1">Outras imagens (URLs, uma por linha)</label>
                       <textarea
                         value={editForm.images}
                         onChange={(e) => setEditForm((f) => ({ ...f, images: e.target.value }))}
@@ -758,7 +991,8 @@ const Admin = () => {
                   </div>
                 </div>
               </div>
-            )}
+            );
+            })()}
           </div>
         ) : loading ? (
           <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
@@ -780,7 +1014,21 @@ const Admin = () => {
                 }`}
               >
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                  <div className="flex-1 min-w-0">
+                  <div className="flex flex-1 min-w-0 gap-3">
+                    {o.productImage && (
+                      <div className="shrink-0 w-14 h-14 rounded-lg border border-border bg-muted overflow-hidden">
+                        <img
+                          src={o.productImage}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       <span className="text-xs font-mono text-muted-foreground">{o.id.slice(0, 8)}</span>
                       <Badge className={STATUS_COLORS[o.status] || "bg-muted text-muted-foreground"}>
@@ -804,6 +1052,7 @@ const Admin = () => {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {o.customerName} · {o.addressCity}
                     </p>
+                    </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <Button size="sm" variant="outline" asChild>
@@ -824,10 +1073,11 @@ const Admin = () => {
                     <Button
                       size="sm"
                       className="gap-1.5 bg-china-red hover:bg-china-red/90"
-                      onClick={() => handleCopy(o)}
+                      onClick={() => handleProcessarCssBuy(o)}
+                      disabled={processarCssBuyId === o.id}
                     >
-                      <Copy className="w-3.5 h-3.5" />
-                      Copiar para CSSBuy
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      {processarCssBuyId === o.id ? "Abrindo…" : "Processar no CSSBuy"}
                     </Button>
                   </div>
                 </div>

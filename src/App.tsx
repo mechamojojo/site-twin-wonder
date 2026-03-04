@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { SavedProductsProvider } from "@/context/SavedProductsContext";
 
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -11,6 +12,9 @@ const Order = lazy(() => import("./pages/Order"));
 const OrderConfirmed = lazy(() => import("./pages/OrderConfirmed"));
 const Login = lazy(() => import("./pages/Login"));
 const Cadastro = lazy(() => import("./pages/Cadastro"));
+const EsqueciSenha = lazy(() => import("./pages/EsqueciSenha"));
+const RedefinirSenha = lazy(() => import("./pages/RedefinirSenha"));
+const ConfirmarEmail = lazy(() => import("./pages/ConfirmarEmail"));
 const MeusPedidos = lazy(() => import("./pages/MeusPedidos"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
@@ -22,6 +26,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const AdminPedido = lazy(() => import("./pages/AdminPedido"));
 const Explorar = lazy(() => import("./pages/Explorar"));
 const Produto = lazy(() => import("./pages/Produto"));
+const ProdutosSalvos = lazy(() => import("./pages/ProdutosSalvos"));
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -34,6 +39,7 @@ const App = () => (
     <Sonner />
     <BrowserRouter>
       <AuthProvider>
+        <SavedProductsProvider>
         <CartProvider>
         <Suspense fallback={<PageFallback />}>
           <Routes>
@@ -41,6 +47,9 @@ const App = () => (
             <Route path="/pedido" element={<Order />} />
             <Route path="/pedido-confirmado/:id" element={<OrderConfirmed />} />
             <Route path="/entrar" element={<Login />} />
+            <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+            <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+            <Route path="/confirmar-email" element={<ConfirmarEmail />} />
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/meus-pedidos" element={<MeusPedidos />} />
             <Route path="/carrinho" element={<Cart />} />
@@ -53,10 +62,12 @@ const App = () => (
             <Route path="/admin/pedido/:id" element={<AdminPedido />} />
             <Route path="/explorar" element={<Explorar />} />
             <Route path="/produto/:slug" element={<Produto />} />
+            <Route path="/produtos-salvos" element={<ProdutosSalvos />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </CartProvider>
+      </SavedProductsProvider>
       </AuthProvider>
     </BrowserRouter>
   </TooltipProvider>

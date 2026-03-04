@@ -3,7 +3,7 @@ import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
 import { isValidProductUrl } from "@/lib/urlValidation";
 import { ExternalLink, ShoppingCart, ArrowLeft, RefreshCw, AlertCircle, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
@@ -13,6 +13,21 @@ const getQueryParam = (search: string, key: string) => {
   return params.get(key) ?? "";
 };
 
+/** Valores que parecem tamanhos (M, L, XL, números 36-46 para calçados, etc.) */
+const SIZE_LIKE = /^(M|L|XL|XXL|2XL|3XL|4XL|S|XS|均码|自由|Free|Large|Medium|Small|One\s*Size)$/i;
+const SIZE_NUM = /^(3[4-9]|4[0-6])(\.5)?(码|号)?$|^\d{2,3}\s*(men|women|男|女)?$/i;
+const SIZE_SPEC = /^C\d+\/\d+cm$|^J\d+\/\d+cm$|^M\d+m?\d*\/[\d-]+ code$|^M\d+\/[\d-]+ code$|^M\d+ code$/i;
+
+/** Detecta se o grupo é de tamanho (para UX quantidade por tamanho). Usa valores quando o nome é ambíguo. */
+const isSizeGroup = (name: string, values?: string[]) => {
+  if (/cor|color|颜色|色彩|estilo|款式|modelo|型号|style/i.test(name)) return false;
+  if (values && values.length > 0) {
+    const allLookLikeSizes = values.every((v) => SIZE_LIKE.test(v.trim()) || SIZE_NUM.test(v.trim()) || SIZE_SPEC.test(v.trim()));
+    if (allLookLikeSizes) return true;
+  }
+  return /tamanho|size|尺码|尺寸|尺码选择/i.test(name);
+};
+
 const getSourceLabel = (url: string) => {
   try {
     const host = new URL(url).hostname.toLowerCase();
@@ -20,11 +35,13 @@ const getSourceLabel = (url: string) => {
     if (host.includes("1688")) return "1688";
     if (host.includes("weidian")) return "Weidian";
     if (host.includes("tmall")) return "TMALL";
-    if (host.includes("jd.com")) return "JD.com";
-    if (host.includes("pinduoduo")) return "Pinduoduo";
+    if (host.includes("jd.com") || host.includes("jd.")) return "JD.com";
+    if (host.includes("pinduoduo") || host.includes("yangkeduo")) return "Pinduoduo";
     if (host.includes("goofish")) return "Goofish";
     if (host.includes("dangdang")) return "Dangdang";
     if (host.includes("vip.com") || host.includes("vipshop")) return "VIP Shop";
+    if (host.includes("yupoo")) return "Yupoo";
+    if (host.includes("cssbuy")) return "CSSBuy";
     return "Loja chinesa";
   } catch {
     return "Loja chinesa";
@@ -59,48 +76,79 @@ const Order = () => {
     priceCny: number | null;
     images: string[];
     variants: { color?: string[]; size?: string[]; colorImages?: string[] };
-    optionGroups: { name: string; values: string[]; images: string[] }[];
+    optionGroups: {
+      name: string;
+      values: string[];
+      images: string[];
+      inventoryByValue?: Record<string, number>;
+      inventoryByColorAndValue?: Record<string, Record<string, number>>;
+    }[];
     specs: { key: string; value: string }[];
     description: string | null;
   } | null>(null);
   const [selectedOptionByGroup, setSelectedOptionByGroup] = useState<Record<string, string>>({});
+  /** Quantidade por tamanho (estilo CSSBuy): M: 2, L: 1 */
+  const [quantityBySize, setQuantityBySize] = useState<Record<string, number>>({});
   const [productPreviewLoading, setProductPreviewLoading] = useState(false);
   const [productPreviewError, setProductPreviewError] = useState<string | null>(null);
 
   const sourceLabel = url ? getSourceLabel(url) : "";
 
-  useEffect(() => {
-    const fetchProductPreview = async () => {
-      if (!url) return;
-      try {
-        setProductPreviewLoading(true);
-        setProductPreviewError(null);
-        const res = await fetch(apiUrl(`/api/product/preview?url=${encodeURIComponent(url)}`));
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Preview indisponível");
-        }
-        const data = await res.json();
-        setProductPreview({
-          title: data.title ?? null,
-          titlePt: data.titlePt ?? null,
-          priceCny: data.priceCny ?? null,
-          images: Array.isArray(data.images) ? data.images : [],
-          variants: data.variants ?? {},
-          optionGroups: Array.isArray(data.optionGroups) ? data.optionGroups : [],
-          specs: Array.isArray(data.specs) ? data.specs : [],
-          description: data.description ?? null,
-        });
-        setSelectedImageIndex(0);
-        setSelectedOptionByGroup({});
-      } catch {
-        setProductPreview(null);
-      } finally {
-        setProductPreviewLoading(false);
+  const fetchProductPreview = useCallback(async (forceRefresh = false) => {
+    if (!url) return;
+    try {
+      setProductPreviewLoading(true);
+      setProductPreviewError(null);
+      const nocache = forceRefresh ? "&nocache=1" : "";
+      const res = await fetch(apiUrl(`/api/product/preview?url=${encodeURIComponent(url)}${nocache}`));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Preview indisponível");
       }
-    };
-    fetchProductPreview();
+      const data = await res.json();
+      let optionGroups = Array.isArray(data.optionGroups) ? data.optionGroups : [];
+      const variants = data.variants ?? {};
+      if (optionGroups.length === 0 && (variants.color?.length || variants.size?.length)) {
+        optionGroups = [];
+        if (variants.color?.length) {
+          const imgs = variants.colorImages ?? [];
+          optionGroups.push({
+            name: "Cor",
+            values: variants.color,
+            images: imgs.slice(0, variants.color.length),
+          });
+        }
+        if (variants.size?.length) {
+          optionGroups.push({
+            name: "Tamanho",
+            values: variants.size,
+            images: [],
+          });
+        }
+      }
+      setProductPreview({
+        title: data.title ?? null,
+        titlePt: data.titlePt ?? null,
+        priceCny: data.priceCny ?? null,
+        images: Array.isArray(data.images) ? data.images : [],
+        variants,
+        optionGroups,
+        specs: Array.isArray(data.specs) ? data.specs : [],
+        description: data.description ?? null,
+      });
+      setSelectedImageIndex(0);
+      setSelectedOptionByGroup({});
+      setQuantityBySize({});
+    } catch {
+      setProductPreview(null);
+    } finally {
+      setProductPreviewLoading(false);
+    }
   }, [url]);
+
+  useEffect(() => {
+    fetchProductPreview();
+  }, [fetchProductPreview]);
 
   useEffect(() => {
     const fetchPreview = async () => {
@@ -149,19 +197,6 @@ const Order = () => {
     return () => { cancelled = true; };
   }, [url, productPreview?.priceCny, productPreviewLoading]);
 
-  // Em desenvolvimento: se a API não retornar preço, usa valor de teste para você ver a tela
-  useEffect(() => {
-    if (import.meta.env.DEV && url && !productPreviewLoading && !previewLoading && preview == null && productPreview?.priceCny == null) {
-      const t = setTimeout(() => {
-        setPreview({
-          productPriceCny: 100,
-          rateCnyToBrl: 0.75,
-          totalProductBrl: 101.25,
-        });
-      }, 1500);
-      return () => clearTimeout(t);
-    }
-  }, [url, productPreviewLoading, previewLoading, preview, productPreview?.priceCny]);
 
   if (!url) {
     return (
@@ -169,7 +204,7 @@ const Order = () => {
         <Navbar />
         <main className="container mx-auto px-4 py-20 text-center">
           <p className="text-muted-foreground mb-6">
-            Nenhum produto selecionado. Cole o link do produto ou pesquise por palavras-chave na página inicial.
+            Nenhum produto selecionado. Informe o link do produto na página inicial ou pesquise por palavras-chave.
           </p>
           <Link
             to="/"
@@ -230,27 +265,51 @@ const Order = () => {
             Continuar comprando
           </Link>
           <span aria-hidden>·</span>
-          <span className="text-foreground/80">Produto</span>
+          <span className="text-foreground/80">
+            {productPreviewLoading ? (
+              <span className="inline-flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                Buscando informações do produto...
+              </span>
+            ) : (
+              "Produto"
+            )}
+          </span>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-10 items-start">
           {/* Coluna esquerda: galeria do produto */}
           <div className="lg:col-span-3">
             <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-card sticky top-[4.5rem]">
               {productPreviewLoading && (
-                <div className="aspect-[4/3] bg-muted/50 flex items-center justify-center min-h-[280px]">
-                  <p className="text-sm text-muted-foreground">Carregando dados do produto...</p>
+                <div className="animate-pulse">
+                  <div className="aspect-[4/3] bg-muted/60 min-h-[280px]" />
+                  <div className="p-3 flex gap-2 border-t border-border">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="w-16 h-16 sm:w-20 sm:h-20 rounded bg-muted/60 shrink-0" />
+                    ))}
+                  </div>
                 </div>
               )}
 
               {!productPreviewLoading && productPreview && (productPreview.images.length > 0 || productPreview.title || productPreview.titlePt || (productPreview.specs?.length ?? 0) > 0 || productPreview.description) && (
                 <>
                   <div className="bg-[#f5f5f5] overflow-hidden">
-                    {productPreview.images.length > 0 ? (
+                    {(productPreview.images.length > 0 || productPreview.optionGroups?.some((g) => /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name) && g.images?.some(Boolean))) ? (
                       <>
-                        {/* Imagem principal — estilo CSSBuy: fundo claro, produto em destaque */}
+                        {/* Imagem principal — atualiza quando usuário escolhe cor (com imagem); senão usa galeria */}
                         <div className="aspect-square sm:aspect-[4/3] max-h-[420px] flex items-center justify-center p-4 sm:p-6 bg-white border-b border-[#e8e8e8]">
                           <img
-                            src={ensureHttpsImage(productPreview.images[Math.min(selectedImageIndex, productPreview.images.length - 1)])}
+                            src={ensureHttpsImage((() => {
+                              const colorGroup = productPreview.optionGroups?.find((g) => /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name) && g.images?.some(Boolean));
+                              const selectedColorVal = colorGroup ? selectedOptionByGroup[colorGroup.name] : undefined;
+                              const colorImgIdx = selectedColorVal && colorGroup ? colorGroup.values.indexOf(selectedColorVal) : -1;
+                              const selectedColorImg = colorGroup && colorImgIdx >= 0 ? colorGroup.images?.[colorImgIdx] : null;
+                              if (selectedColorImg) return selectedColorImg;
+                              if (productPreview.images.length > 0) {
+                                return productPreview.images[Math.min(selectedImageIndex, productPreview.images.length - 1)];
+                              }
+                              return colorGroup?.images?.[0] || "";
+                            })())}
                             alt=""
                             className="max-w-full max-h-full w-auto h-auto object-contain"
                             loading="lazy"
@@ -258,29 +317,40 @@ const Order = () => {
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
                         </div>
-                        {/* Galeria de miniaturas — fila horizontal com borda cinza (estilo CSSBuy) */}
+                        {/* Galeria de miniaturas — cores (se houver) ou imagens do produto */}
                         <div className="p-3 flex gap-2 overflow-x-auto border-t border-[#e8e8e8] bg-white">
-                          {productPreview.images.slice(0, 12).map((src, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => setSelectedImageIndex(i)}
-                              className={`shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border-2 overflow-hidden bg-[#fafafa] transition-colors ${
-                                selectedImageIndex === i
-                                  ? "border-china-red ring-2 ring-china-red/30"
-                                  : "border-[#e0e0e0] hover:border-[#bdbdbd]"
-                              }`}
-                            >
-                              <img
-                                src={ensureHttpsImage(src)}
-                                alt=""
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                              />
-                            </button>
-                          ))}
+                          {(() => {
+                            const colorGroup = productPreview.optionGroups?.find((g) => /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name) && g.images?.some(Boolean));
+                            if (colorGroup && colorGroup.images?.some(Boolean)) {
+                              return colorGroup.values.map((value, i) => {
+                                const thumb = colorGroup.images?.[i];
+                                const isSelected = selectedOptionByGroup[colorGroup.name] === value;
+                                return (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setSelectedOptionByGroup((prev) => ({ ...prev, [colorGroup.name]: prev[colorGroup.name] === value ? "" : value }))}
+                                    className={`shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border-2 overflow-hidden bg-[#fafafa] transition-colors ${isSelected ? "border-china-red ring-2 ring-china-red/30" : "border-[#e0e0e0] hover:border-[#bdbdbd]"}`}
+                                    title={value}
+                                  >
+                                    {thumb && <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+                                  </button>
+                                );
+                              });
+                            }
+                            return productPreview.images.slice(0, 12).map((src, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setSelectedImageIndex(i)}
+                                className={`shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border-2 overflow-hidden bg-[#fafafa] transition-colors ${
+                                  selectedImageIndex === i ? "border-china-red ring-2 ring-china-red/30" : "border-[#e0e0e0] hover:border-[#bdbdbd]"
+                                }`}
+                              >
+                                <img src={ensureHttpsImage(src)} alt="" className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                              </button>
+                            ));
+                          })()}
                         </div>
                       </>
                     ) : (
@@ -289,11 +359,23 @@ const Order = () => {
                       </div>
                     )}
                   </div>
-                  <div className="p-3 border-t border-border flex items-center justify-between">
+                  <div className="p-3 border-t border-border flex items-center justify-between flex-wrap gap-2">
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{sourceLabel}</span>
-                    <a href={url} target="_blank" rel="noreferrer" className="text-xs text-china-red font-medium hover:underline inline-flex items-center gap-1">
-                      Abrir em nova aba <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => fetchProductPreview(true)}
+                        disabled={productPreviewLoading}
+                        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 disabled:opacity-50"
+                        title="Recarregar dados do produto"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${productPreviewLoading ? "animate-spin" : ""}`} />
+                        Atualizar
+                      </button>
+                      <a href={url} target="_blank" rel="noreferrer" className="text-xs text-china-red font-medium hover:underline inline-flex items-center gap-1">
+                        Abrir em nova aba <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
                   </div>
                 </>
               )}
@@ -335,21 +417,57 @@ const Order = () => {
           {/* Coluna direita: experiência de compra ComprasChina */}
           <div className="lg:col-span-2">
             <div className="lg:sticky lg:top-[4.5rem] rounded-2xl border border-border bg-card p-6 shadow-card space-y-5">
+              {productPreviewLoading ? (
+                /* Skeleton do conteúdo — estilo CSSBuy */
+                <div className="animate-pulse space-y-5">
+                  <div className="h-7 w-4/5 max-w-[280px] rounded bg-muted/60" />
+                  <div className="h-4 w-full rounded bg-muted/60" />
+                  <div className="h-4 w-3/4 max-w-[200px] rounded bg-muted/60" />
+                  <div className="pb-4 border-b border-border space-y-3">
+                    <div className="h-10 w-32 rounded bg-muted/60" />
+                    <div className="h-3 w-full rounded bg-muted/50" />
+                    <div className="h-3 w-2/3 rounded bg-muted/50" />
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="h-4 w-24 rounded bg-muted/50" />
+                    <div className="h-4 w-24 rounded bg-muted/50" />
+                    <div className="h-4 w-28 rounded bg-muted/50" />
+                  </div>
+                  <div className="rounded-lg bg-muted/30 p-3 space-y-2">
+                    <div className="h-3 w-20 rounded bg-muted/50" />
+                    <div className="h-3 w-full rounded bg-muted/50" />
+                    <div className="h-3 w-1/2 rounded bg-muted/50" />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="h-3 w-28 rounded bg-muted/50" />
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="h-14 w-14 rounded-lg bg-muted/60" />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="pt-4 space-y-2">
+                    <div className="h-12 w-full rounded-xl bg-muted/60" />
+                    <div className="h-11 w-full rounded-xl bg-muted/50" />
+                  </div>
+                </div>
+              ) : (
+                <>
               {/* Título do produto — como em qualquer e-commerce */}
               {(productPreview?.titlePt || productPreview?.title) && (
                 <h1 className="font-heading font-bold text-foreground text-xl leading-snug">
                   {productPreview.titlePt || productPreview.title}
                 </h1>
               )}
-              {!(productPreview?.titlePt || productPreview?.title) && (
+              {!(productPreview?.titlePt || productPreview?.title) && productPreview && (
                 <h1 className="font-heading font-bold text-foreground text-xl leading-snug">
                   Produto
                 </h1>
               )}
 
-              {/* Preço direto em reais — você paga aqui, pela comunidade */}
+              {/* Preço direto em reais — sem valor fake enquanto carrega */}
               <div className="pb-4 border-b border-border">
-                {preview && (
+                {preview?.totalProductBrl != null ? (
                   <>
                     <div className="flex flex-wrap items-baseline gap-2">
                       <span className="text-3xl font-heading font-bold text-china-red">
@@ -368,18 +486,15 @@ const Order = () => {
                       </p>
                     )}
                   </>
-                )}
-                {!preview && productPreview?.priceCny != null && (
+                ) : productPreview?.priceCny != null ? (
                   <div className="flex flex-wrap items-baseline gap-2">
                     <span className="text-2xl font-heading font-bold text-china-red">
                       CNY ¥ {productPreview.priceCny.toFixed(2)}
                     </span>
                   </div>
-                )}
-                {!preview && !productPreview?.priceCny && previewLoading && (
-                  <p className="text-sm text-muted-foreground">Calculando preço...</p>
-                )}
-                {!preview && !productPreview?.priceCny && !previewLoading && null}
+                ) : (productPreviewLoading || previewLoading) ? (
+                  <div className="animate-pulse h-10 w-28 rounded bg-muted/50" />
+                ) : null}
               </div>
 
               {/* Mensagem de confiança */}
@@ -407,103 +522,202 @@ const Order = () => {
                 </p>
                 {productPreview?.optionGroups && productPreview.optionGroups.length > 0 ? (
                   <>
-                    {productPreview.optionGroups.map((group, gIdx) => (
-                      <div key={gIdx}>
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">{group.name}:</p>
-                        <ul className="space-y-3">
-                          {group.values.map((value, i) => {
-                            const isSelected = selectedOptionByGroup[group.name] === value;
-                            const thumb = group.images?.[i] || "";
-                            const priceStr = preview ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—";
-                            return (
-                              <li key={i} className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-3 last:border-0 last:pb-0">
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedOptionByGroup((prev) => ({ ...prev, [group.name]: prev[group.name] === value ? "" : value }))}
-                                  className={`shrink-0 w-12 h-12 rounded-lg border-2 overflow-hidden bg-muted flex items-center justify-center text-[10px] font-medium transition-colors ${
-                                    isSelected ? "border-china-red ring-1 ring-china-red" : "border-border hover:border-muted-foreground/50"
-                                  }`}
-                                  title={value}
-                                >
-                                  {thumb ? (
-                                    <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
-                                  ) : null}
-                                  <span className={thumb ? "hidden" : ""}>{value.slice(0, 2)}</span>
-                                </button>
-                                <span className="text-sm font-medium text-foreground min-w-[80px]">{value}</span>
-                                <span className="text-sm font-medium text-china-red">{priceStr}</span>
-                                <span className="text-[11px] text-muted-foreground">Inventário: consultar</span>
-                              </li>
-                            );
-                          })}
-                        </ul>
+                    {productPreview.optionGroups.map((group, gIdx) =>
+                      isSizeGroup(group.name, group.values) ? (
+                        /* Estilo CSSBuy: quantidade por tamanho */
+                        <div key={gIdx}>
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">{group.name}:</p>
+                          <ul className="space-y-3">
+                            {group.values.map((value) => {
+                              const qty = quantityBySize[value] ?? 0;
+                              const colorGroup = productPreview.optionGroups.find((g) => /cor|color|estilo|style/i.test(g.name));
+                              const selectedColor = colorGroup ? selectedOptionByGroup[colorGroup.name] : "";
+                              const stock = group.inventoryByColorAndValue?.[selectedColor]?.[value] ?? group.inventoryByValue?.[value];
+                              const maxQty = stock != null ? Math.min(99, stock) : 99;
+                              const priceStr = preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—";
+                              return (
+                                <li key={value} className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-3 last:border-0 last:pb-0">
+                                  <span className="text-sm font-medium text-foreground min-w-[64px]">{value}</span>
+                                  <span className="text-sm font-medium text-china-red">{priceStr}</span>
+                                  <span className="text-[11px] text-muted-foreground">
+                                    Estoque: {stock != null ? stock : "consultar"}
+                                  </span>
+                                  <div className="flex items-center gap-0 ml-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, (prev[value] ?? 0) - 1) }))}
+                                      className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
+                                    >
+                                      −
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={maxQty}
+                                      className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
+                                      value={qty}
+                                      onChange={(e) => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, Math.min(maxQty, Number(e.target.value) || 0)) }))}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.min(maxQty, (prev[value] ?? 0) + 1) }))}
+                                      className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                          {(() => {
+                            const total = Object.values(quantityBySize).reduce((a, b) => a + b, 0);
+                            return total > 0 ? (
+                              <p className="text-sm font-semibold text-green-600 mt-2">Quantidade: {total}</p>
+                            ) : null;
+                          })()}
+                        </div>
+                      ) : (
+                        /* Grupos não-tamanho: grid com miniaturas (cor) ou pills (Fabric etc) */
+                        <div key={gIdx}>
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">{group.name}:</p>
+                          {group.images?.some(Boolean) ? (
+                            <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 gap-2">
+                              {group.values.map((value, i) => {
+                                const isSelected = selectedOptionByGroup[group.name] === value;
+                                const thumb = group.images?.[i] || "";
+                                return (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setSelectedOptionByGroup((prev) => ({ ...prev, [group.name]: prev[group.name] === value ? "" : value }))}
+                                    className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border-2 overflow-hidden transition-colors ${
+                                      isSelected ? "border-china-red ring-1 ring-china-red bg-china-red/5" : "border-border hover:border-muted-foreground/50 bg-muted/30"
+                                    }`}
+                                    title={value}
+                                  >
+                                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
+                                      {thumb ? (
+                                        <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                                      ) : (
+                                        <span className="text-[10px] font-medium text-muted-foreground">{value.slice(0, 4)}</span>
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {group.values.map((value, i) => {
+                                const isSelected = selectedOptionByGroup[group.name] === value;
+                                return (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setSelectedOptionByGroup((prev) => ({ ...prev, [group.name]: prev[group.name] === value ? "" : value }))}
+                                    className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                                      isSelected ? "border-china-red bg-china-red/5 text-foreground" : "border-border bg-muted/30 hover:border-muted-foreground/50 text-foreground"
+                                    }`}
+                                    title={value}
+                                  >
+                                    {value}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <p className="text-[11px] text-muted-foreground mt-2">
+                            {preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—"} · Inventário: consultar
+                          </p>
+                        </div>
+                      )
+                    )}
+                    {!productPreview.optionGroups.some((g) => isSizeGroup(g.name, g.values)) && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground mb-1.5">Quantidade:</p>
+                        <div className="flex items-center gap-0 w-fit">
+                          <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
+                          <input type="number" min={1} max={99} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
+                          <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
+                        </div>
                       </div>
-                    ))}
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">Quantidade:</p>
-                      <div className="flex items-center gap-0 w-fit">
-                        <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
-                        <input type="number" min={1} max={99} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
-                        <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
-                      </div>
-                    </div>
+                    )}
                   </>
                 ) : (productPreview?.variants?.color?.length || productPreview?.variants?.size?.length) ? (
                   <>
                     {productPreview.variants.color?.length ? (
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">cor / estilo:</p>
-                        <ul className="space-y-3">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">Cor / estilo:</p>
+                        <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 gap-2">
                           {productPreview.variants.color.map((c, i) => {
                             const isSelected = selectedColor === c;
-                            const thumb = productPreview.variants?.colorImages?.[i] ?? productPreview.images[i];
-                            const priceStr = preview ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—";
+                            const thumb = productPreview.variants?.colorImages?.[i] ?? productPreview.images?.[i];
                             return (
-                              <li key={i} className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-3 last:border-0 last:pb-0">
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
-                                  className={`shrink-0 w-12 h-12 rounded-lg border-2 overflow-hidden bg-muted flex items-center justify-center text-[10px] font-medium transition-colors ${
-                                    isSelected ? "border-china-red ring-1 ring-china-red" : "border-border hover:border-muted-foreground/50"
-                                  }`}
-                                  title={c}
-                                >
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
+                                className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border-2 overflow-hidden transition-colors ${
+                                  isSelected ? "border-china-red ring-1 ring-china-red bg-china-red/5" : "border-border hover:border-muted-foreground/50 bg-muted/30"
+                                }`}
+                                title={c}
+                              >
+                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
                                   {thumb ? (
                                     <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
-                                  ) : null}
-                                  <span className={thumb ? "hidden" : ""}>{c.slice(0, 2)}</span>
-                                </button>
-                                <span className="text-sm font-medium text-foreground min-w-[80px]">{c}</span>
+                                  ) : (
+                                    <span className="text-[10px] font-medium text-muted-foreground">{c.slice(0, 4)}</span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-2">
+                          {preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—"} · Inventário: consultar
+                        </p>
+                        {!productPreview.variants.size?.length && (
+                          <div className="flex items-center gap-0 mt-2">
+                            <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
+                            <input type="number" min={1} max={99} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
+                            <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                    {productPreview.variants.size?.length ? (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">Tamanho (quantidade por tamanho):</p>
+                        <ul className="space-y-3">
+                          {productPreview.variants.size.map((value) => {
+                            const sizeGroup = productPreview.optionGroups?.find((g) => isSizeGroup(g.name, g.values));
+                            const colorGroup = productPreview.optionGroups?.find((g) => /cor|color|estilo|style/i.test(g.name));
+                            const selectedColor = colorGroup ? selectedOptionByGroup[colorGroup.name] : "";
+                            const stock = sizeGroup?.inventoryByColorAndValue?.[selectedColor]?.[value] ?? sizeGroup?.inventoryByValue?.[value];
+                            const maxQty = stock != null ? Math.min(99, stock) : 99;
+                            const qty = quantityBySize[value] ?? 0;
+                            const priceStr = preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—";
+                            return (
+                              <li key={value} className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-3 last:border-0 last:pb-0">
+                                <span className="text-sm font-medium text-foreground min-w-[64px]">{value}</span>
                                 <span className="text-sm font-medium text-china-red">{priceStr}</span>
-                                <span className="text-[11px] text-muted-foreground">Inventário: consultar</span>
+                                <span className="text-[11px] text-muted-foreground">
+                                  Estoque: {stock != null ? stock : "consultar"}
+                                </span>
                                 <div className="flex items-center gap-0 ml-auto">
-                                  <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-8 h-8 rounded-l border border-border bg-background flex items-center justify-center text-sm font-bold hover:bg-muted">−</button>
-                                  <input type="number" min={1} max={99} className="w-10 h-8 text-center border-y border-border bg-background text-xs font-semibold outline-none focus:ring-1 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
-                                  <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="w-8 h-8 rounded-r border border-border bg-background flex items-center justify-center text-sm font-bold hover:bg-muted">+</button>
+                                  <button type="button" onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, (prev[value] ?? 0) - 1) }))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
+                                  <input type="number" min={0} max={maxQty} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={qty} onChange={(e) => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, Math.min(maxQty, Number(e.target.value) || 0)) }))} />
+                                  <button type="button" onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.min(maxQty, (prev[value] ?? 0) + 1) }))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
                                 </div>
                               </li>
                             );
                           })}
                         </ul>
-                      </div>
-                    ) : null}
-                    {productPreview.variants.size?.length ? (
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-2">Tamanho:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {productPreview.variants.size.map((s, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => setSelectedSize(selectedSize === s ? "" : s)}
-                              className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                                selectedSize === s ? "border-china-red bg-china-red/10 text-china-red" : "border-border bg-background hover:border-china-red/50"
-                              }`}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                        </div>
+                        {(() => {
+                          const total = Object.values(quantityBySize).reduce((a, b) => a + b, 0);
+                          return total > 0 ? <p className="text-sm font-semibold text-green-600 mt-2">Quantidade: {total}</p> : null;
+                        })()}
                       </div>
                     ) : null}
                     {!productPreview.variants.color?.length && (
@@ -573,63 +787,99 @@ const Order = () => {
 
                 {/* CTAs no estilo e-commerce: Comprar agora em destaque */}
                 <div className="flex flex-col gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
+                  {(() => {
+                    const hasQuantityBySize = Object.values(quantityBySize).some((q) => q > 0);
+                    const effectiveQuantity = hasQuantityBySize
+                      ? Object.values(quantityBySize).reduce((a, b) => a + b, 0)
+                      : quantity;
+                    const sizeBreakdown = Object.entries(quantityBySize)
+                      .filter(([, q]) => q > 0)
+                      .map(([s, q]) => `${s} x${q}`)
+                      .join(", ");
+                    const colorGroup = productPreview?.optionGroups?.find((g) => /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name));
+                    const selectedColorValue = selectedColor || (colorGroup ? selectedOptionByGroup[colorGroup.name] : undefined);
+                    const colorImgIdx = selectedColorValue && colorGroup ? colorGroup.values.indexOf(selectedColorValue) : -1;
+                    const selectedVariantImage =
+                      (colorGroup && colorImgIdx >= 0 && colorGroup.images?.[colorImgIdx])
+                        ? colorGroup.images[colorImgIdx]
+                        : productPreview?.images?.[Math.min(selectedImageIndex, (productPreview?.images?.length ?? 1) - 1)]
+                          ?? colorGroup?.images?.[0]
+                          ?? productPreview?.images?.[0];
+                    const otherOptions = Object.entries(selectedOptionByGroup)
+                      .filter(([, v]) => v)
+                      .map(([k, v]) => `${k}: ${v}`)
+                      .join("; ");
+                    const colorPart = selectedColorValue ? `Cor: ${selectedColorValue}` : "";
+                    const optsAndSize =
+                      productPreview?.optionGroups?.length
+                        ? [otherOptions, sizeBreakdown]
+                        : [colorPart, sizeBreakdown];
+                    const variationStr =
+                      productPreview?.optionGroups?.length || productPreview?.variants?.size?.length || productPreview?.variants?.color?.length
+                        ? optsAndSize.filter(Boolean).join("; ")
+                        : variation.trim();
+
+                    const handleAddToCart = () => {
                       if (!url) return;
                       if (!disclaimerAccepted) {
                         alert("Por favor, abra \"Isenção de responsabilidade\" e aceite para continuar.");
                         return;
                       }
-                      const variationStr = productPreview?.optionGroups?.length
-                        ? Object.entries(selectedOptionByGroup).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join("; ")
-                        : variation.trim();
+                      if (effectiveQuantity < 1) {
+                        alert("Selecione pelo menos 1 unidade.");
+                        return;
+                      }
                       addItem({
                         url,
-                        quantity,
-                        color: selectedColor || undefined,
-                        size: selectedSize || undefined,
+                        quantity: effectiveQuantity,
+                        color: selectedColorValue || undefined,
+                        size: hasQuantityBySize ? sizeBreakdown : selectedSize || undefined,
                         variation: variationStr || undefined,
                         notes: notes.trim() || undefined,
                         title: productPreview?.title ?? undefined,
                         titlePt: productPreview?.titlePt ?? undefined,
                         priceCny: productPreview?.priceCny ?? undefined,
                         priceBrl: preview?.totalProductBrl ?? undefined,
-                        image: productPreview?.images?.[0] ?? undefined,
+                        image: selectedVariantImage ?? productPreview?.images?.[0] ?? undefined,
                       });
                       navigate("/carrinho");
-                    }}
-                    className="w-full inline-flex items-center justify-center gap-2 bg-china-red text-white px-5 py-4 rounded-xl text-base font-heading font-bold hover:bg-china-red/90 transition-colors shadow-md"
-                  >
-                    Comprar agora
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!url) return;
-                      const variationStr = productPreview?.optionGroups?.length
-                        ? Object.entries(selectedOptionByGroup).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join("; ")
-                        : variation.trim();
-                      addItem({
-                        url,
-                        quantity,
-                        color: selectedColor || undefined,
-                        size: selectedSize || undefined,
-                        variation: variationStr || undefined,
-                        notes: notes.trim() || undefined,
-                        title: productPreview?.title ?? undefined,
-                        titlePt: productPreview?.titlePt ?? undefined,
-                        priceCny: productPreview?.priceCny ?? undefined,
-                        priceBrl: preview?.totalProductBrl ?? undefined,
-                        image: productPreview?.images?.[0] ?? undefined,
-                      });
-                      navigate("/carrinho");
-                    }}
-                    className="w-full inline-flex items-center justify-center gap-2 border-2 border-border text-foreground px-4 py-3 rounded-xl text-sm font-heading font-semibold hover:bg-muted/50 transition-colors"
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                    Adicionar ao carrinho
-                  </button>
+                    };
+                    return (
+                      <>
+                        <button type="button" onClick={handleAddToCart} className="w-full inline-flex items-center justify-center gap-2 bg-china-red text-white px-5 py-4 rounded-xl text-base font-heading font-bold hover:bg-china-red/90 transition-colors shadow-md">
+                          Comprar agora
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!url) return;
+                            if (effectiveQuantity < 1) {
+                              alert("Selecione pelo menos 1 unidade.");
+                              return;
+                            }
+                            addItem({
+                              url,
+                              quantity: effectiveQuantity,
+                              color: selectedColorValue || undefined,
+                              size: hasQuantityBySize ? sizeBreakdown : selectedSize || undefined,
+                              variation: variationStr || undefined,
+                              notes: notes.trim() || undefined,
+                              title: productPreview?.title ?? undefined,
+                              titlePt: productPreview?.titlePt ?? undefined,
+                              priceCny: productPreview?.priceCny ?? undefined,
+                              priceBrl: preview?.totalProductBrl ?? undefined,
+                              image: selectedVariantImage ?? productPreview?.images?.[0] ?? undefined,
+                            });
+                            navigate("/carrinho");
+                          }}
+                          className="w-full inline-flex items-center justify-center gap-2 border-2 border-border text-foreground px-4 py-3 rounded-xl text-sm font-heading font-semibold hover:bg-muted/50 transition-colors"
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                          Adicionar ao carrinho
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <p className="text-[11px] text-muted-foreground text-center pt-2 border-t border-border">
@@ -657,6 +907,8 @@ const Order = () => {
                     {productPreview.description && <p className="text-muted-foreground whitespace-pre-wrap line-clamp-6">{productPreview.description}</p>}
                   </div>
                 </details>
+              )}
+                </>
               )}
             </div>
           </div>

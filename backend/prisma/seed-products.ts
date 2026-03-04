@@ -12,7 +12,7 @@ export const SEED_PRODUCTS = [
     source: "Weidian",
     category: "acessorios",
     slug: "carteira-770-weidian",
-    featured: true,
+    featured: false,
     sortOrder: 0,
   },
   {
@@ -25,7 +25,7 @@ export const SEED_PRODUCTS = [
     source: "Weidian",
     category: "eletronicos",
     slug: "fones-jenny-tws-weidian",
-    featured: true,
+    featured: false,
     sortOrder: 1,
   },
   {
@@ -38,7 +38,7 @@ export const SEED_PRODUCTS = [
     source: "Weidian",
     category: "acessorios",
     slug: "relogio-arf-1008-weidian",
-    featured: true,
+    featured: false,
     sortOrder: 2,
   },
   {
@@ -51,7 +51,7 @@ export const SEED_PRODUCTS = [
     source: "Goofish",
     category: "outros",
     slug: "loja-goofish-xianyu",
-    featured: true,
+    featured: false,
     sortOrder: 3,
   },
 ];

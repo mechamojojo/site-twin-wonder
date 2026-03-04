@@ -1,10 +1,10 @@
 const marketplaces = [
-  { name: "Taobao", color: "text-china-red" },
-  { name: "1688", color: "text-gold" },
-  { name: "Weidian", color: "text-china-red" },
-  { name: "TMALL", color: "text-primary" },
-  { name: "Pinduoduo", color: "text-gold" },
-  { name: "JD.com", color: "text-china-red" },
+  { name: "Taobao", color: "text-china-red", url: "https://www.taobao.com" },
+  { name: "1688", color: "text-gold", url: "https://www.1688.com" },
+  { name: "Weidian", color: "text-china-red", url: "https://www.weidian.com" },
+  { name: "TMALL", color: "text-primary", url: "https://www.tmall.com" },
+  { name: "Pinduoduo", color: "text-gold", url: "https://www.pinduoduo.com" },
+  { name: "JD.com", color: "text-china-red", url: "https://www.jd.com" },
 ];
 
 const MarketplaceBanner = () => {
@@ -15,12 +15,16 @@ const MarketplaceBanner = () => {
           Marketplaces suportados
         </span>
         {marketplaces.map((mp, i) => (
-          <span
+          <a
             key={i}
+            href={mp.url}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-lg md:text-xl font-heading font-extrabold text-background/70 hover:text-background transition-colors cursor-pointer"
+            title={`Visitar ${mp.name}`}
           >
             {mp.name}
-          </span>
+          </a>
         ))}
       </div>
     </div>

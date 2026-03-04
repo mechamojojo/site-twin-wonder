@@ -8,6 +8,7 @@ export type AuthUser = {
   id: string;
   email: string;
   name: string;
+  emailVerified?: boolean;
   customerCpf: string | null;
   customerWhatsapp: string | null;
   cep: string | null;
@@ -27,6 +28,7 @@ type AuthContextValue = {
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
   fetchMe: () => Promise<void>;
+  resendVerification: () => Promise<void>;
 };
 
 export type RegisterData = {
@@ -42,6 +44,8 @@ export type RegisterData = {
   addressNeighborhood: string;
   addressCity: string;
   addressState: string;
+  termsAccepted: boolean;
+  turnstileToken?: string;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -141,6 +145,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       addressNeighborhood: data.addressNeighborhood.trim(),
       addressCity: data.addressCity.trim(),
       addressState: data.addressState.trim(),
+      termsAccepted: data.termsAccepted,
+      turnstileToken: data.turnstileToken || undefined,
     };
 
     const res = await fetch(apiUrl("/api/auth/register"), {
@@ -154,6 +160,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     saveStored(resData.token, resData.user);
     setToken(resData.token);
     setUser(resData.user);
+  }, []);
+
+  const resendVerification = useCallback(async () => {
+    const t = getAuthToken();
+    if (!t) return;
+    const res = await fetch(apiUrl("/api/auth/resend-verification"), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Erro ao reenviar e-mail");
   }, []);
 
   const logout = useCallback(() => {
@@ -170,6 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     register,
     logout,
     fetchMe,
+    resendVerification,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

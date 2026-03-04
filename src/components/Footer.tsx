@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Mail, MessageCircle } from "lucide-react";
-import { CONTACT_EMAIL, WHATSAPP_NUMBER } from "@/data/siteConfig";
+import { CONTACT_EMAIL, whatsAppUrl, WHATSAPP_DEFAULT_MESSAGE } from "@/data/siteConfig";
 
 const Footer = () => {
   return (
@@ -13,7 +13,7 @@ const Footer = () => {
               <span className="text-gold">China</span>
             </Link>
             <p className="text-background/50 text-sm mt-4 leading-relaxed">
-              Serviço brasileiro que facilita suas compras da China. Utilizamos a estrutura da CSSBuy para oferecer a melhor experiência aos brasileiros.
+              Serviço brasileiro que facilita suas compras da China. Atendimento em português e envio direto para o Brasil.
             </p>
             <div className="flex flex-col gap-2 mt-5">
               <a
@@ -24,7 +24,7 @@ const Footer = () => {
                 {CONTACT_EMAIL}
               </a>
               <a
-                href={`https://wa.me/${WHATSAPP_NUMBER}`}
+                href={whatsAppUrl(WHATSAPP_DEFAULT_MESSAGE)}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 text-sm text-background/70 hover:text-gold transition-colors"
@@ -66,7 +66,6 @@ const Footer = () => {
 
         <div className="border-t border-background/10 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-background/30">
           <span>© {new Date().getFullYear()} ComprasChina. Todos os direitos reservados.</span>
-          <span>Powered by CSSBuy</span>
         </div>
       </div>
     </footer>

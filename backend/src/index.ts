@@ -12,11 +12,15 @@ process.on("unhandledRejection", (reason, promise) => {
 
 import crypto from "crypto";
 import express from "express";
+import { rateLimit } from "express-rate-limit";
 import { sendTelegram } from "./telegram";
+import { sendVerificationEmail, sendPasswordResetEmail } from "./email";
+import { verifyTurnstile } from "./turnstile";
 import { hashPassword, verifyPassword, signToken, requireUser, optionalUser } from "./auth";
 import cors from "cors";
 import { json } from "body-parser";
 import { PrismaClient, OrderStatus } from "@prisma/client";
+import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -33,6 +37,14 @@ const envOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((o) => o.trim
 const corsOrigins = envOrigins?.length ? [...new Set([...defaultOrigins, ...envOrigins])] : defaultOrigins;
 app.use(cors({ origin: corsOrigins }));
 app.use(json());
+
+// Rate limit para rotas de auth (cadastro, login, esqueci senha)
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: "Muitas tentativas. Tente novamente em alguns minutos." },
+  standardHeaders: true,
+});
 
 const PORT = process.env.PORT || 4000;
 const isProduction = process.env.NODE_ENV === "production";
@@ -83,7 +95,7 @@ app.get("/api/health", (_req, res) => {
 // ========== Auth (clientes) ==========
 
 // Cadastro
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", authRateLimiter, async (req, res) => {
   try {
     const {
       email,
@@ -98,11 +110,17 @@ app.post("/api/auth/register", async (req, res) => {
       addressNeighborhood,
       addressCity,
       addressState,
+      termsAccepted,
+      turnstileToken,
     } = req.body ?? {};
 
     if (!email?.trim()) return res.status(400).json({ error: "E-mail obrigatório" });
     if (!password || String(password).length < 6) return res.status(400).json({ error: "Senha deve ter pelo menos 6 caracteres" });
     if (!name?.trim()) return res.status(400).json({ error: "Nome obrigatório" });
+    if (!termsAccepted) return res.status(400).json({ error: "Você precisa aceitar os Termos de Serviço e a Política de Privacidade" });
+
+    const turnstileOk = await verifyTurnstile(turnstileToken, req.ip || req.socket?.remoteAddress);
+    if (!turnstileOk) return res.status(400).json({ error: "Verificação de segurança falhou. Atualize a página e tente novamente." });
 
     const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (existing) return res.status(400).json({ error: "E-mail já cadastrado" });
@@ -118,11 +136,18 @@ app.post("/api/auth/register", async (req, res) => {
     if (!addressCity?.trim()) return res.status(400).json({ error: "Cidade obrigatória" });
     if (!addressState?.trim()) return res.status(400).json({ error: "Estado obrigatório" });
 
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     const user = await prisma.user.create({
       data: {
         email: email.trim().toLowerCase(),
         password: hashPassword(String(password)),
         name: name.trim(),
+        emailVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationTokenExpires: verificationExpires,
+        termsAcceptedAt: new Date(),
         customerCpf: cpf,
         customerWhatsapp: wa,
         cep: cepClean,
@@ -135,6 +160,8 @@ app.post("/api/auth/register", async (req, res) => {
       },
     });
 
+    await sendVerificationEmail(user.email, user.name, verificationToken);
+
     const token = signToken({ userId: user.id });
     res.status(201).json({
       token,
@@ -142,6 +169,7 @@ app.post("/api/auth/register", async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
+        emailVerified: user.emailVerified,
         customerCpf: user.customerCpf,
         customerWhatsapp: user.customerWhatsapp,
         cep: user.cep,
@@ -154,13 +182,14 @@ app.post("/api/auth/register", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro ao criar conta" });
+    console.error("[register]", err);
+    const message = !isProduction && err instanceof Error ? err.message : "Erro ao criar conta";
+    res.status(500).json({ error: message });
   }
 });
 
 // Login
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body ?? {};
     if (!email?.trim() || !password) return res.status(400).json({ error: "E-mail e senha obrigatórios" });
@@ -177,6 +206,7 @@ app.post("/api/auth/login", async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
+        emailVerified: user.emailVerified,
         customerCpf: user.customerCpf,
         customerWhatsapp: user.customerWhatsapp,
         cep: user.cep,
@@ -194,6 +224,138 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+// Esqueci minha senha (envia e-mail com link)
+app.post("/api/auth/forgot-password", authRateLimiter, async (req, res) => {
+  try {
+    const { email, turnstileToken } = req.body ?? {};
+    if (!email?.trim()) return res.status(400).json({ error: "E-mail obrigatório" });
+
+    const turnstileOk = await verifyTurnstile(turnstileToken, req.ip || req.socket?.remoteAddress);
+    if (!turnstileOk) return res.status(400).json({ error: "Verificação de segurança falhou. Atualize a página e tente novamente." });
+
+    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordResetToken: resetToken, passwordResetExpires: resetExpires },
+      });
+      await sendPasswordResetEmail(user.email, user.name, resetToken);
+    }
+    res.json({ message: "Se esse e-mail estiver cadastrado, você receberá um link para redefinir sua senha." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao processar solicitação" });
+  }
+});
+
+// Redefinir senha (com token do e-mail)
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { token, newPassword } = req.body ?? {};
+    if (!token?.trim() || !newPassword || String(newPassword).length < 6) {
+      return res.status(400).json({ error: "Token e nova senha (mín. 6 caracteres) obrigatórios" });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        passwordResetToken: token,
+        passwordResetExpires: { gt: new Date() },
+      },
+    });
+    if (!user) return res.status(400).json({ error: "Link inválido ou expirado. Solicite uma nova redefinição de senha." });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashPassword(String(newPassword)),
+        passwordResetToken: null,
+        passwordResetExpires: null,
+      },
+    });
+    res.json({ message: "Senha alterada com sucesso. Faça login." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao redefinir senha" });
+  }
+});
+
+// Confirmar e-mail (link clicado no e-mail)
+app.post("/api/auth/verify-email", async (req, res) => {
+  try {
+    const rawToken = req.body?.token;
+    const token = typeof rawToken === "string" ? rawToken.trim() : "";
+    if (!token) return res.status(400).json({ error: "Token obrigatório" });
+
+    const user = await prisma.user.findFirst({
+      where: {
+        emailVerificationToken: token,
+        emailVerificationTokenExpires: { gt: new Date() },
+      },
+    });
+    if (!user) return res.status(400).json({ error: "Link inválido ou expirado. Solicite um novo e-mail de confirmação." });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationTokenExpires: null,
+      },
+    });
+
+    const jwt = signToken({ userId: user.id });
+    res.json({
+      token: jwt,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        emailVerified: true,
+        customerCpf: user.customerCpf,
+        customerWhatsapp: user.customerWhatsapp,
+        cep: user.cep,
+        addressStreet: user.addressStreet,
+        addressNumber: user.addressNumber,
+        addressComplement: user.addressComplement,
+        addressNeighborhood: user.addressNeighborhood,
+        addressCity: user.addressCity,
+        addressState: user.addressState,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao confirmar e-mail" });
+  }
+});
+
+// Reenviar e-mail de confirmação (usuário logado)
+app.post("/api/auth/resend-verification", requireUser, async (req, res) => {
+  try {
+    const userId = (req as express.Request & { userId: string }).userId;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+    if (user.emailVerified) return res.status(400).json({ error: "E-mail já confirmado" });
+
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationToken: verificationToken,
+        emailVerificationTokenExpires: verificationExpires,
+      },
+    });
+    await sendVerificationEmail(user.email, user.name, verificationToken);
+    res.json({ message: "E-mail de confirmação reenviado. Verifique sua caixa de entrada." });
+  } catch (err) {
+    console.error("[resend-verification]", err);
+    const message = !isProduction && err instanceof Error ? err.message : "Erro ao reenviar e-mail";
+    res.status(500).json({ error: message });
+  }
+});
+
 // Me (dados do usuário logado)
 app.get("/api/auth/me", requireUser, async (req, res) => {
   try {
@@ -205,6 +367,7 @@ app.get("/api/auth/me", requireUser, async (req, res) => {
       id: user.id,
       email: user.email,
       name: user.name,
+      emailVerified: user.emailVerified,
       customerCpf: user.customerCpf,
       customerWhatsapp: user.customerWhatsapp,
       cep: user.cep,
@@ -234,6 +397,79 @@ app.get("/api/auth/me/orders", requireUser, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao listar pedidos" });
+  }
+});
+
+// Produtos salvos (lista)
+app.get("/api/auth/me/saved-products", requireUser, async (req, res) => {
+  try {
+    const userId = (req as express.Request & { userId: string }).userId;
+    const saved = await prisma.savedProduct.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+    });
+    const slugs = saved.map((s) => s.productSlug);
+    if (slugs.length === 0) return res.json({ products: [] });
+    const products = await prisma.product.findMany({
+      where: { slug: { in: slugs } },
+    });
+    const bySlug = new Map(products.map((p) => [p.slug, p]));
+    const ordered = slugs.map((slug) => bySlug.get(slug)).filter(Boolean);
+    res.json({ products: ordered });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao listar produtos salvos" });
+  }
+});
+
+// Adicionar produto aos salvos
+app.post("/api/auth/me/saved-products", requireUser, async (req, res) => {
+  try {
+    const userId = (req as express.Request & { userId: string }).userId;
+    const slug = typeof req.body?.slug === "string" ? req.body.slug.trim() : "";
+    if (!slug) return res.status(400).json({ error: "Slug do produto obrigatório" });
+    const product = await prisma.product.findUnique({ where: { slug } });
+    if (!product) return res.status(404).json({ error: "Produto não encontrado" });
+    await prisma.savedProduct.upsert({
+      where: { userId_productSlug: { userId, productSlug: slug } },
+      create: { userId, productSlug: slug },
+      update: {},
+    });
+    res.status(201).json({ slug, message: "Produto salvo" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao salvar produto" });
+  }
+});
+
+// Remover dos salvos
+app.delete("/api/auth/me/saved-products/:slug", requireUser, async (req, res) => {
+  try {
+    const userId = (req as express.Request & { userId: string }).userId;
+    const slug = decodeURIComponent(req.params.slug ?? "").trim();
+    if (!slug) return res.status(400).json({ error: "Slug obrigatório" });
+    await prisma.savedProduct.deleteMany({
+      where: { userId, productSlug: slug },
+    });
+    res.json({ message: "Removido dos salvos" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao remover" });
+  }
+});
+
+// Verificar se um slug está salvo (para UI)
+app.get("/api/auth/me/saved-products/check/:slug", requireUser, async (req, res) => {
+  try {
+    const userId = (req as express.Request & { userId: string }).userId;
+    const slug = decodeURIComponent(req.params.slug ?? "").trim();
+    const saved = await prisma.savedProduct.findUnique({
+      where: { userId_productSlug: { userId, productSlug: slug } },
+    });
+    res.json({ saved: !!saved });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao verificar" });
   }
 });
 
@@ -283,6 +519,19 @@ app.get("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao buscar pedido" });
+  }
+});
+
+// Admin: URL do produto no CSSBuy (para botão "Processar compra")
+app.get("/api/admin/orders/:id/cssbuy-url", requireAdmin, async (req, res) => {
+  try {
+    const order = await prisma.order.findUnique({ where: { id: req.params.id }, select: { originalUrl: true } });
+    if (!order?.originalUrl) return res.status(404).json({ error: "Pedido ou URL não encontrado" });
+    const cssbuyUrl = marketplaceToCssbuyUrl(order.originalUrl);
+    res.json({ url: cssbuyUrl });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao obter URL CSSBuy" });
   }
 });
 
@@ -408,10 +657,55 @@ app.get("/api/products", async (req, res) => {
       prisma.product.count({ where }),
     ]);
 
-    res.json({ products, total });
+    const withImageFallback = products.map((p) => {
+      if (p.image) return p;
+      try {
+        const parsed = p.images ? JSON.parse(p.images) : null;
+        const first = Array.isArray(parsed) ? parsed.find((x) => typeof x === "string" && x.startsWith("http")) : null;
+        return { ...p, image: first ?? null };
+      } catch {
+        return p;
+      }
+    });
+
+    res.json({ products: withImageFallback, total });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao buscar produtos" });
+  }
+});
+
+// Produtos mais salvos (por quantidade de usuários que salvaram) — para "Mais salvos" no site ou admin
+app.get("/api/products/most-saved", async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    const grouped = await prisma.$queryRaw<{ productSlug: string; saveCount: bigint }[]>`
+      SELECT "productSlug", COUNT(*)::int AS "saveCount"
+      FROM "SavedProduct"
+      GROUP BY "productSlug"
+      ORDER BY "saveCount" DESC
+      LIMIT ${limit}
+    `;
+    const slugs = grouped.map((g) => g.productSlug);
+    const countBySlug = new Map(grouped.map((g) => [g.productSlug, Number(g.saveCount)]));
+    if (slugs.length === 0) return res.json({ items: [], total: 0 });
+
+    const products = await prisma.product.findMany({
+      where: { slug: { in: slugs } },
+    });
+    const bySlug = new Map(products.map((p) => [p.slug, p]));
+    const items = slugs
+      .map((slug) => {
+        const product = bySlug.get(slug);
+        if (!product) return null;
+        return { product, saveCount: countBySlug.get(slug) ?? 0 };
+      })
+      .filter((x): x is { product: (typeof products)[number]; saveCount: number } => x !== null);
+
+    res.json({ items, total: items.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao buscar produtos mais salvos" });
   }
 });
 
@@ -422,7 +716,22 @@ app.get("/api/products/:idOrSlug", async (req, res) => {
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
     });
     if (!product) return res.status(404).json({ error: "Produto não encontrado" });
-    res.json(product);
+
+    const saveCount = await prisma.savedProduct.count({
+      where: { productSlug: product.slug },
+    });
+
+    let withImage = product;
+    if (!product.image) {
+      try {
+        const parsed = product.images ? JSON.parse(product.images) : null;
+        const first = Array.isArray(parsed) ? parsed.find((x) => typeof x === "string" && x.startsWith("http")) : null;
+        withImage = { ...product, image: first ?? null };
+      } catch {
+        // keep product
+      }
+    }
+    return res.json({ ...withImage, saveCount });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao buscar produto" });
@@ -445,11 +754,12 @@ function getSourceFromUrl(url: string): string {
   if (host.includes("taobao")) return "Taobao";
   if (host.includes("weidian")) return "Weidian";
   if (host.includes("tmall")) return "TMALL";
-  if (host.includes("jd.com")) return "JD.com";
-  if (host.includes("pinduoduo")) return "Pinduoduo";
+  if (host.includes("jd.com") || host.includes("jd.")) return "JD.com";
+  if (host.includes("pinduoduo") || host.includes("yangkeduo")) return "Pinduoduo";
   if (host.includes("goofish")) return "Goofish";
   if (host.includes("dangdang")) return "Dangdang";
   if (host.includes("vip.com") || host.includes("vipshop")) return "VIP Shop";
+  if (host.includes("yupoo")) return "Yupoo";
   return "China";
 }
 
@@ -489,13 +799,13 @@ async function ensureProductFromOrder(order: {
   });
 }
 
-// Admin: listar produtos do catálogo (protegido)
+// Admin: listar produtos do catálogo (protegido) — ordenação só por sortOrder para reordenar em qualquer posição
 app.get("/api/admin/products", requireAdmin, async (req, res) => {
   try {
-    const limit = Math.min(Number(req.query.limit) || 100, 200);
+    const limit = Math.min(Number(req.query.limit) || 500, 2000);
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const products = await prisma.product.findMany({
-      orderBy: [{ featured: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       take: limit,
       skip: offset,
     });
@@ -543,6 +853,30 @@ app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
     }
     console.error("Admin update product:", err);
     res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar produto") });
+  }
+});
+
+// Admin: reordenar produtos (protegido) — order = array de ids na ordem desejada
+app.post("/api/admin/products/reorder", requireAdmin, async (req, res) => {
+  try {
+    const order = req.body?.order;
+    if (!Array.isArray(order) || order.length === 0) {
+      return res.status(400).json({ error: "Envie { order: string[] } com os ids na ordem desejada" });
+    }
+    const ids = order.filter((id: unknown) => id != null && String(id).length > 0).map((id: unknown) => String(id));
+    if (ids.length !== order.length) {
+      return res.status(400).json({ error: "Array 'order' contém ids inválidos" });
+    }
+    await prisma.$transaction(
+      ids.map((id, index) => prisma.product.update({ where: { id }, data: { sortOrder: index } }))
+    );
+    res.json({ ok: true, count: ids.length });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2025") {
+      return res.status(404).json({ error: "Produto não encontrado" });
+    }
+    console.error("Admin reorder products:", err);
+    res.status(500).json({ error: safeErrorMessage(err, "Erro ao reordenar") });
   }
 });
 
@@ -595,6 +929,9 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
       priceBrl = Math.round(costBrl * (1 + margin) * 100) / 100;
     }
 
+    const maxSort = await prisma.product.aggregate({ _max: { sortOrder: true } }).then((r) => r._max.sortOrder ?? -1);
+    const sortOrder = maxSort + 1;
+
     const product = await prisma.product.create({
       data: {
         originalUrl: u,
@@ -609,6 +946,7 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
         category: (category as string) || "outros",
         slug,
         featured: !!featured,
+        sortOrder,
       },
     });
 
@@ -795,7 +1133,7 @@ const productPreviewCache = new Map<
   string,
   { data: Awaited<ReturnType<typeof import("./scraper/productPreview").getProductPreview>>; expires: number }
 >();
-const PRODUCT_PREVIEW_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
+const PRODUCT_PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min (permite re-scrape após ajustes)
 
 // Resposta vazia quando o scrape não consegue dados (frontend ainda mostra a página)
 const emptyProductPreview = {
@@ -823,7 +1161,8 @@ app.get("/api/product/preview", async (req, res) => {
       return res.status(400).json({ error: "URL inválida." });
     }
 
-    const cached = productPreviewCache.get(url);
+    const nocache = (req.query.nocache as string) === "1";
+    const cached = nocache ? null : productPreviewCache.get(url);
     if (cached && cached.expires > Date.now()) {
       return res.json(cached.data);
     }
@@ -856,15 +1195,22 @@ app.get("/api/price/preview", async (req, res) => {
       return res.status(400).json({ error: "Parâmetro 'url' é obrigatório." });
     }
 
-    let productPriceCny: number;
     const cached = productPreviewCache.get(url);
-    if (cached?.data?.priceCny != null && typeof cached.data.priceCny === "number") {
-      productPriceCny = cached.data.priceCny;
-    } else {
-      productPriceCny = 128;
+    const productPriceCny = cached?.data?.priceCny != null && typeof cached.data.priceCny === "number"
+      ? cached.data.priceCny
+      : null;
+
+    if (productPriceCny == null) {
+      return res.json({
+        originalUrl: url,
+        productPriceCny: null,
+        rateCnyToBrl: RATE_CNY_TO_BRL,
+        costBrl: null,
+        marginPercent: null,
+        totalProductBrl: null,
+      });
     }
 
-    // Custo em reais (nosso custo com o produto em yuan convertido)
     const costBrl = productPriceCny * RATE_CNY_TO_BRL;
     const marginPercent = costBrl < MARGEM_THRESHOLD_BRL ? MARGEM_BAIXA_PERCENT : MARGEM_ALTA_PERCENT;
     const totalProductBrl = costBrl * (1 + marginPercent / 100);

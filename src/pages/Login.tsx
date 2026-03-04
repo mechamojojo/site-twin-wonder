@@ -65,6 +65,11 @@ const Login = () => {
               required
               className="mt-1"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              <Link to="/esqueci-senha" className="text-china-red hover:underline">
+                Esqueci minha senha
+              </Link>
+            </p>
           </div>
 
           <button

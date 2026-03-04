@@ -6,11 +6,16 @@
  */
 
 import { translateToPortuguese } from "./translate";
+import { normalizeProductTitle } from "./normalizeProductTitle";
 
 export interface OptionGroup {
   name: string;
   values: string[];
   images: string[];
+  /** Inventory per value (e.g. size "M" -> 10). Used when no color selection needed. */
+  inventoryByValue?: Record<string, number>;
+  /** When product has color+size: inventory per (color, size). Outer key = color value. */
+  inventoryByColorAndValue?: Record<string, Record<string, number>>;
 }
 
 export interface ProductPreviewResult {
@@ -120,13 +125,15 @@ function isGoofishUrl(url: string): boolean {
 /** Nomes comuns de opções (1688/Taobao) em chinês → português */
 const OPTION_NAME_ZH_TO_PT: Record<string, string> = {
   "颜色": "Cor",
+  "颜色分类": "Cor / Modelo",
   "色彩": "Cor",
   "尺码": "Tamanho",
   "尺寸": "Tamanho",
   "规格": "Especificação",
-  "款式": "Estilo",
+  "款式": "Modelo / Estilo",
   "风格": "Estilo",
   "型号": "Modelo",
+  "版型": "Modelo",
   "版本": "Versão",
   "套餐": "Kit / Opção",
   "容量": "Capacidade",
@@ -141,26 +148,140 @@ const OPTION_NAME_ZH_TO_PT: Record<string, string> = {
   "适用": "Uso",
 };
 
-/** CSSBuy aceita links Taobao/1688/Weidian — não scrapamos cssbuy.com; se houver ?url= no link, extraímos. */
+const CSSBUY_BASE = "https://www.cssbuy.com";
+
+/** Mapeamento CSSBuy item-{source}-{id}.html → URL original do marketplace */
+const CSSBUY_ITEM_TO_MARKETPLACE: Record<string, (id: string) => string> = {
+  "1688": (id) => `https://detail.1688.com/offer/${id}.html`,
+  "taobao": (id) => `https://item.taobao.com/item.htm?id=${id}`,
+  "tmall": (id) => `https://detail.tmall.com/item.htm?id=${id}`,
+  "weidian": (id) => `https://weidian.com/item.html?itemID=${id}`,
+  "jd": (id) => `https://item.jd.com/${id}.html`,
+  "pinduoduo": (id) => `https://mobile.yangkeduo.com/goods.html?goods_id=${id}`,
+  "vip": (id) => `https://detail.vip.com/detail-${id}.html`,
+  "dangdang": (id) => `https://product.dangdang.com/${id}.html`,
+};
+
+/** Converte URL de marketplace para URL CSSBuy (formato suportado pelo CSSBuy). Retorna null se não conseguir. */
+export function marketplaceToCssbuyUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+
+    if (host.includes("1688")) {
+      const pathId = parsed.pathname.match(/\/offer\/(\d+)\.html/)?.[1] || parsed.pathname.match(/\/(\d+)\.html/)?.[1];
+      const queryId = parsed.searchParams.get("offerId");
+      const id = pathId || (queryId && /^\d+$/.test(queryId) ? queryId : null);
+      if (id) return `${CSSBUY_BASE}/item-1688-${id}.html`;
+    }
+    if (host.includes("taobao.com") && !host.includes("tmall")) {
+      const id = parsed.searchParams.get("id") || parsed.pathname.match(/\/item\.htm\?.*[?&]id=(\d+)/)?.[1];
+      if (id && /^\d+$/.test(id)) return `${CSSBUY_BASE}/item-taobao-${id}.html`;
+    }
+    if (host.includes("tmall")) {
+      const id = parsed.searchParams.get("id");
+      if (id && /^\d+$/.test(id)) return `${CSSBUY_BASE}/item-tmall-${id}.html`;
+    }
+    if (host.includes("weidian")) {
+      const id = parsed.searchParams.get("itemID") || parsed.searchParams.get("itemId") || parsed.pathname.match(/\/item\/(\d+)/)?.[1];
+      if (id && /^\d+$/.test(id)) return `${CSSBUY_BASE}/item-micro-${id}.html`;
+    }
+    if (host.includes("jd.com") || host.includes("jd.")) {
+      const id = parsed.pathname.match(/\/(\d{8,15})\.html/)?.[1] || parsed.searchParams.get("sku");
+      if (id && /^\d+$/.test(id)) return `${CSSBUY_BASE}/item-jd-${id}.html`;
+    }
+    if (host.includes("pinduoduo") || host.includes("yangkeduo")) {
+      const id = parsed.searchParams.get("goods_id") || parsed.searchParams.get("goodsId") || parsed.pathname.match(/goods_id=(\d+)/)?.[1];
+      if (id && /^\d+$/.test(id)) return `${CSSBUY_BASE}/item-pinduoduo-${id}.html`;
+    }
+    if (host.includes("vip.com") || host.includes("vipshop")) {
+      const pathMatch = parsed.pathname.match(/\/detail-([\d\-]+)\.html/);
+      const id = pathMatch?.[1] || parsed.searchParams.get("product_id");
+      if (id && /^[\d\-]+$/.test(id)) return `${CSSBUY_BASE}/item-vip-${id}.html`;
+    }
+    if (host.includes("dangdang")) {
+      const id = parsed.pathname.match(/\/(\d+)\.html/)?.[1] || parsed.searchParams.get("product_id");
+      if (id && /^\d+$/.test(id)) return `${CSSBUY_BASE}/item-dangdang-${id}.html`;
+    }
+  } catch (_) {}
+  return null;
+}
+
+/** CSSBuy aceita links Taobao/1688/Weidian. Converte URLs CSSBuy (item-X-ID.html) para URL original ou extrai ?url=/?link= */
 function resolveProductUrl(url: string): string {
   try {
     const parsed = new URL(url);
-    if (parsed.hostname.toLowerCase().includes("cssbuy")) {
-      const inner = parsed.searchParams.get("url") || parsed.searchParams.get("link") || parsed.searchParams.get("target");
-      if (inner && (inner.startsWith("http://") || inner.startsWith("https://"))) return inner;
+    if (!parsed.hostname.toLowerCase().includes("cssbuy")) return url;
+
+    const inner = parsed.searchParams.get("url") || parsed.searchParams.get("link") || parsed.searchParams.get("target");
+    if (inner && (inner.startsWith("http://") || inner.startsWith("https://"))) return inner;
+
+    // Formato: /item-1688-xxx.html, /item-taobao-xxx.html, /item-micro-xxx.html, /item-jd-xxx.html, etc.
+    const match = parsed.pathname.match(/\/item-(1688|taobao|tmall|weidian|micro|jd|pinduoduo|vip|dangdang)-([\d\-]+)\.html$/i);
+    if (match) {
+      const [, source, id] = match;
+      const key = source!.toLowerCase() === "micro" ? "weidian" : source!.toLowerCase();
+      const toUrl = CSSBUY_ITEM_TO_MARKETPLACE[key];
+      if (toUrl && id) return toUrl(id);
     }
   } catch (_) {}
   return url;
 }
 
+/** Verifica se é URL de produto CSSBuy (item-1688-xxx, item-micro-xxx, item-taobao-xxx, item-jd-xxx, etc.) */
+function isCssbuyProductPage(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.toLowerCase().includes("cssbuy") && /\/item-[a-z0-9]+-[\d\-]+\.html/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fluxo: SEMPRE passar pelo CSSBuy.
+ * 1. Se o link já é CSSBuy → scrape CSSBuy
+ * 2. Se o link é 1688/Taobao/TMall/Weidian → converte para CSSBuy → scrape CSSBuy
+ * 3. Se conversão falhar (marketplace não suportado) → fallback: scrape direto do marketplace
+ */
 export async function getProductPreview(productUrl: string): Promise<ProductPreviewResult | null> {
-  const urlToScrape = resolveProductUrl(productUrl);
+  let cssbuyUrl: string | null = null;
+
+  if (isCssbuyProductPage(productUrl)) {
+    cssbuyUrl = productUrl;
+  } else {
+    cssbuyUrl = marketplaceToCssbuyUrl(productUrl);
+    if (cssbuyUrl) {
+      console.log("[scraper] Converted to CSSBuy:", productUrl.slice(0, 60), "→", cssbuyUrl);
+    }
+  }
+
+  if (cssbuyUrl) {
+    for (let attempt = 0; attempt <= SCRAPE_RETRY_COUNT; attempt++) {
+      if (attempt > 0) {
+        console.warn("[scraper] retry attempt", attempt, "for", cssbuyUrl);
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      try {
+        const { getCssbuyProductPreview } = await import("./cssbuyProductPreview");
+        const cssbuyResult = await getCssbuyProductPreview(cssbuyUrl);
+        if (cssbuyResult) {
+          return { ...cssbuyResult, rawUrl: productUrl };
+        }
+      } catch (err) {
+        console.warn("[scraper] CSSBuy scrape failed:", err);
+      }
+    }
+    return null;
+  }
+
+  // Fallback: marketplace não suporta conversão para CSSBuy (ex.: Goofish, outros) → scrape direto
+  console.log("[scraper] No CSSBuy conversion, scraping marketplace directly:", productUrl.slice(0, 60));
   for (let attempt = 0; attempt <= SCRAPE_RETRY_COUNT; attempt++) {
     if (attempt > 0) {
-      console.warn("[scraper] retry attempt", attempt, "for", productUrl);
       await new Promise((r) => setTimeout(r, 1500));
     }
-    const result = await getProductPreviewOnce(urlToScrape);
+    const result = await getProductPreviewOnce(productUrl);
     if (result !== null) return result;
   }
   return null;
@@ -285,6 +406,51 @@ async function getProductPreviewOnce(productUrl: string): Promise<ProductPreview
               });
             }
             // Múltiplos grupos de opções (skuProps 1688: estilo, cor, tamanho, etc.) com imagem por valor
+            function extractValueAndImage(block: string): { values: string[]; images: string[] } {
+              const values: string[] = [];
+              const images: string[] = [];
+              const fixStr = (s: string) => s.replace(/\\"/g, '"').replace(/\\\//g, "/").replace(/\\u002F/g, "/").trim();
+              // 1) propValues array: [{"value":"白色","image":"url"},...]
+              const pvIdx = block.indexOf('"propValues":[');
+              if (pvIdx !== -1) {
+                const start = pvIdx + '"propValues":'.length;
+                let depth = 1;
+                let i = start;
+                while (i < block.length && depth > 0) {
+                  const c = block[i];
+                  if (c === "[" || c === "{") depth++;
+                  else if (c === "]" || c === "}") depth--;
+                  i++;
+                }
+                const arrStr = block.slice(start + 1, i - 1);
+                const objs = arrStr.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g) || [];
+                for (const obj of objs) {
+                  const valM = obj.match(/"value"\s*:\s*"((?:[^"\\]|\\.)*)"/) || obj.match(/"name"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                  const imgM = obj.match(/"image"\s*:\s*"((?:[^"\\]|\\.)*)"/) || obj.match(/"imgUrl"\s*:\s*"((?:[^"\\]|\\.)*)"/) || obj.match(/"picUrl"\s*:\s*"((?:[^"\\]|\\.)*)"/) || obj.match(/"valueImage"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                  if (valM) {
+                    values.push(fixStr(valM[1]));
+                    images.push(imgM ? fixStr(imgM[1]) : "");
+                  }
+                }
+                if (values.length > 0) return { values, images };
+              }
+              // 2) Inline: "value":"X", "image":"url" ou "image":"url", "value":"X"
+              const valueImgRe = /"value"\s*:\s*"((?:[^"\\]|\\.)*)"\s*(?:,[^{}]*?)?(?:"image"\s*:\s*"((?:[^"\\]|\\.)*)"|"imgUrl"\s*:\s*"((?:[^"\\]|\\.)*)"|"picUrl"\s*:\s*"((?:[^"\\]|\\.)*)")?/g;
+              const imgValueRe = /"(?:image|imgUrl|picUrl)"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"value"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+              let vm;
+              while ((vm = valueImgRe.exec(block)) !== null) {
+                values.push(fixStr(vm[1]));
+                images.push((vm[2] || vm[3] || vm[4] || "").replace(/\\\//g, "/"));
+              }
+              while ((vm = imgValueRe.exec(block)) !== null) {
+                const v = fixStr(vm[2]);
+                if (!values.includes(v)) {
+                  values.push(v);
+                  images.push(fixStr(vm[1]));
+                }
+              }
+              return { values, images };
+            }
             try {
               const idx = text.indexOf('"skuProps":[');
               if (idx !== -1) {
@@ -307,26 +473,36 @@ async function getProductPreviewOnce(productUrl: string): Promise<ProductPreview
                   segments.push({ name: pm[1].trim(), block });
                 }
                 for (const seg of segments) {
-                  const values: string[] = [];
-                  const images: string[] = [];
-                  const valueImgRe = /"value"\s*:\s*"((?:[^"\\]|\\.)*)"\s*(?:,\s*"image"\s*:\s*"((?:[^"\\]|\\.)*)"|\s*,\s*"imgUrl"\s*:\s*"((?:[^"\\]|\\.)*)")?/g;
-                  let vm;
-                  while ((vm = valueImgRe.exec(seg.block)) !== null) {
-                    values.push(vm[1].replace(/\\"/g, '"').replace(/\\\//g, "/").trim());
-                    const img = vm[2] || vm[3];
-                    images.push(img ? img.replace(/\\\//g, "/") : "");
-                  }
+                  const { values, images } = extractValueAndImage(seg.block);
                   if (values.length > 0) {
-                    result.optionGroups.push({ name: seg.name, values, images: images.slice(0, values.length) });
+                    const normImgs = images.slice(0, values.length).map((u) =>
+                      u ? u.replace(/_(\d{2,3})x(\d{2,3})(\.(jpg|jpeg|png|webp))?/gi, "_200x200$3") : ""
+                    );
+                    result.optionGroups.push({ name: seg.name, values, images: normImgs });
                   }
                 }
-                // Backward compat: first group -> color; second -> size
-                if (result.optionGroups.length > 0) {
-                  const first = result.optionGroups[0];
-                  result.colorOptions = first.values;
-                  result.colorOptionImages = first.images.slice(0, first.values.length);
-                  if (result.optionGroups.length > 1) {
-                    result.sizeOptions = result.optionGroups[1].values;
+                // prop_imgs / propImgs: mapeia ID de valor para URL (fallback para imagens de variante)
+                if (result.optionGroups.length > 0 && result.optionGroups[0].images.every((img) => !img)) {
+                  const propImgsMatch = text.match(/"prop_imgs"\s*:\s*\{([^}]+)\}/) || text.match(/"propImgs"\s*:\s*\[([\s\S]*?)\]/);
+                  if (propImgsMatch) {
+                    const urls = propImgsMatch[1].match(/"https?:\/\/[^"]+"/g);
+                    if (urls && urls.length > 0) {
+                      const firstGroup = result.optionGroups[0];
+                      const imgs = urls.map((u) => u.replace(/^"|"$/g, "").replace(/\\\//g, "/")).slice(0, firstGroup.values.length);
+                      firstGroup.images = imgs.length >= firstGroup.values.length ? imgs : imgs.concat(new Array(firstGroup.values.length - imgs.length).fill(""));
+                    }
+                  }
+                }
+                // Backward compat: find color and size groups by name (not position)
+                const isColorName = (n: string) => /颜色|色彩|color|cor|款式|estilo|style|modelo/i.test(n);
+                const isSizeName = (n: string) => /尺码|尺寸|size|tamanho|规格/i.test(n);
+                for (const g of result.optionGroups) {
+                  if (isColorName(g.name) && result.colorOptions.length === 0) {
+                    result.colorOptions = g.values;
+                    result.colorOptionImages = g.images.slice(0, g.values.length);
+                  }
+                  if (isSizeName(g.name) && result.sizeOptions.length === 0) {
+                    result.sizeOptions = g.values;
                   }
                 }
               }
@@ -470,6 +646,32 @@ async function getProductPreviewOnce(productUrl: string): Promise<ProductPreview
       }
       result.images = result.images.slice(0, 20);
 
+      // Remove da galeria principal imagens que são miniaturas de variante (evitar duplicar na esquerda)
+      const variantImgSet = new Set<string>();
+      for (const g of result.optionGroups) {
+        for (const u of (g.images || [])) {
+          if (u && u.startsWith("http")) variantImgSet.add(u);
+        }
+      }
+      if (variantImgSet.size > 0 && result.images.length > 1) {
+        const orig = [...result.images];
+        result.images = result.images.filter((u) => !variantImgSet.has(u));
+        if (result.images.length === 0 && orig.length > 0) result.images = [orig[0]];
+      }
+
+      // DOM fallback para imagens de variantes (1688: .sku-item img, li com img para cor)
+      if (result.optionGroups.length > 0 && result.optionGroups.some((g) => g.images.every((i) => !i))) {
+        const sel = "[class*='sku'] img, [class*='spec'] img, [class*='color'] img, .mod-sku img, [class*='prop'] img, li img[src]";
+        const imgs = Array.from(document.querySelectorAll(sel)).map((el) => (el as HTMLImageElement).src).filter((s) => s && !s.startsWith("data:") && s.length > 30);
+        const unique = Array.from(new Set(imgs));
+        const needImgs = result.optionGroups.findIndex((g) => g.images.every((i) => !i));
+        if (needImgs >= 0 && unique.length > 0) {
+          const g = result.optionGroups[needImgs];
+          const fill = unique.slice(0, g.values.length);
+          result.optionGroups[needImgs].images = fill.concat(new Array(g.values.length - fill.length).fill(""));
+        }
+      }
+
       const selects = document.querySelectorAll("select");
       selects.forEach((sel) => {
         const options = Array.from(sel.querySelectorAll("option"))
@@ -537,6 +739,23 @@ async function getProductPreviewOnce(productUrl: string): Promise<ProductPreview
     if (data.sizeOptions?.length) variants.size = data.sizeOptions;
     if (data.colorOptionImages?.length) variants.colorImages = data.colorOptionImages.slice(0, data.colorOptions?.length || 0);
 
+    const SIZE_GROUP_NAMES = /tamanho|size|尺码|尺寸|尺码选择/i;
+    const COLOR_GROUP_NAMES = /cor|color|颜色|色彩|款式|style|estilo/i;
+    if (!variants.color?.length || !variants.size?.length) {
+      for (const g of data.optionGroups || []) {
+        if (COLOR_GROUP_NAMES.test(g.name) && g.values?.length && !variants.color?.length) {
+          variants.color = g.values;
+          variants.colorImages = (g.images || []).slice(0, g.values.length);
+        }
+        if (SIZE_GROUP_NAMES.test(g.name) && g.values?.length && !variants.size?.length) {
+          variants.size = g.values;
+        }
+      }
+    }
+    const isSizeGroup = (n: string, v?: string[]) => {
+      if (v?.length && v.every((x) => /^(M|L|XL|XXL|2XL|3XL|S|XS|均码|自由|\d{2})$/i.test(x.trim()))) return true;
+      return SIZE_GROUP_NAMES.test(n);
+    };
     const optionGroups: OptionGroup[] = [];
     for (const g of data.optionGroups || []) {
       const values = g.values || [];
@@ -544,6 +763,7 @@ async function getProductPreviewOnce(productUrl: string): Promise<ProductPreview
       const namePt = OPTION_NAME_ZH_TO_PT[g.name.trim()] ?? (await translateToPortuguese(g.name.trim()));
       optionGroups.push({ name: namePt, values, images });
     }
+    optionGroups.sort((a, b) => (isSizeGroup(a.name, a.values) && !isSizeGroup(b.name, b.values) ? 1 : !isSizeGroup(a.name, a.values) && isSizeGroup(b.name, b.values) ? -1 : 0));
 
     const images = [...(data.images || [])].filter(isValidProductImage);
     if (images.length === 0 && data.images?.length) images.push(...data.images);
@@ -553,10 +773,12 @@ async function getProductPreviewOnce(productUrl: string): Promise<ProductPreview
       titlePt = await translateToPortuguese(data.title);
       if (titlePt === data.title) titlePt = null;
     }
+    const displayTitle = titlePt || data.title || null;
+    const normalizedPt = displayTitle ? normalizeProductTitle(displayTitle) : null;
 
     return {
       title: data.title || null,
-      titlePt: titlePt || data.title || null,
+      titlePt: normalizedPt || titlePt || data.title || null,
       priceCny: data.priceCny != null ? data.priceCny : null,
       images,
       variants,

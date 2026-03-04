@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import TurnstileWidget, { TURNSTILE_ENABLED } from "@/components/TurnstileWidget";
 
 type ViaCepResponse = {
   logradouro: string;
@@ -34,7 +35,9 @@ const Cadastro = () => {
     addressNeighborhood: "",
     addressCity: "",
     addressState: "",
+    termsAccepted: false,
   });
+  const [turnstileToken, setTurnstileToken] = useState<string>("");
 
   const fetchCep = useCallback(async (cep: string) => {
     if (cep.replace(/\D/g, "").length !== 8) return;
@@ -100,6 +103,14 @@ const Cadastro = () => {
       toast.error("Preencha o endereço completo");
       return;
     }
+    if (!form.termsAccepted) {
+      toast.error("Você precisa aceitar os Termos de Serviço e a Política de Privacidade");
+      return;
+    }
+    if (TURNSTILE_ENABLED && !turnstileToken) {
+      toast.error("Complete a verificação de segurança abaixo.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -116,6 +127,8 @@ const Cadastro = () => {
         addressNeighborhood: form.addressNeighborhood,
         addressCity: form.addressCity,
         addressState: form.addressState,
+        termsAccepted: true,
+        turnstileToken: turnstileToken || undefined,
       });
       toast.success("Conta criada com sucesso!");
       navigate("/", { replace: true });
@@ -291,6 +304,31 @@ const Cadastro = () => {
               />
             </div>
           </div>
+
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                id="termsAccepted"
+                checked={form.termsAccepted}
+                onChange={(e) => setForm((p) => ({ ...p, termsAccepted: e.target.checked }))}
+                className="mt-1 h-4 w-4 rounded border-border"
+              />
+              <Label htmlFor="termsAccepted" className="text-sm leading-tight cursor-pointer">
+                Li e aceito os{" "}
+                <Link to="/termos-de-servico" target="_blank" rel="noopener noreferrer" className="text-china-red underline">
+                  Termos de Serviço
+                </Link>{" "}
+                e a{" "}
+                <Link to="/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="text-china-red underline">
+                  Política de Privacidade
+                </Link>
+                .
+              </Label>
+            </div>
+          </div>
+
+          <TurnstileWidget onVerify={setTurnstileToken} className="flex justify-center" />
 
           <button
             type="submit"

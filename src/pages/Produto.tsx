@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart } from "lucide-react";
+import { SaveProductHeart } from "@/components/SaveProductHeart";
 
 type Product = {
   id: string;
@@ -107,7 +108,10 @@ const Produto = () => {
           </div>
           <div>
             <p className="text-xs font-semibold text-china-red uppercase tracking-wider">{product.source}</p>
-            <h1 className="text-2xl font-heading font-bold text-foreground mt-2">{displayTitle}</h1>
+            <div className="flex items-start gap-2 mt-2">
+              <h1 className="text-2xl font-heading font-bold text-foreground flex-1">{displayTitle}</h1>
+              {slug && <SaveProductHeart slug={slug} variant="inline" />}
+            </div>
             <p className="text-2xl font-bold text-china-red mt-4">{priceStr}</p>
             <p className="text-sm text-muted-foreground mt-2">
               Preço em reais · Entrega no Brasil · Você paga aqui

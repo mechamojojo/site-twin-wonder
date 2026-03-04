@@ -20,7 +20,7 @@ const AboutSection = () => {
                 Seu serviço <span className="text-china-red">brasileiro</span> de compras da China
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                A ComprasChina é um serviço brasileiro que utiliza a infraestrutura da CSSBuy para facilitar a compra de produtos nos maiores marketplaces chineses como Taobao, 1688, Weidian e TMALL.
+                A ComprasChina é um serviço brasileiro que facilita a compra de produtos nos maiores marketplaces chineses como Taobao, 1688, Weidian e TMALL.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Atendimento 100% em português, suporte dedicado e foco total no cliente brasileiro. Inspeção de qualidade, fotos de QC ilimitadas e embalagem profissional.

@@ -1,79 +1,99 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { FEATURED_PRODUCTS, CATEGORY_LABELS as FEATURED_CATEGORY_LABELS, type FeaturedCategory, type FeaturedProduct } from "@/data/featuredProducts";
+import { Card, CardContent } from "@/components/ui/card";
+import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
 import { CATEGORY_LABELS as CATALOG_CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { apiUrl } from "@/lib/api";
-import { ensureHttpsImage } from "@/lib/utils";
-import { ShoppingBag, Sparkles } from "lucide-react";
+import { ensureHttpsImage, referrerPolicyForImage } from "@/lib/utils";
+import { ChevronDown, ShoppingBag, Sparkles } from "lucide-react";
+
+/** Número de produtos exibidos antes de "Ver mais" (≈ 4 linhas no desktop com 5 colunas). */
+const INITIAL_VISIBLE = 20;
 
 const PLACEHOLDER_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext fill='%2394a3b8' font-family='sans-serif' font-size='18' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3EProduto%3C/text%3E%3C/svg%3E";
 
-type CatalogProduct = { id: string; originalUrl: string; title: string; titlePt: string | null; image: string | null; priceCny: number | null; priceBrl: number | null; source: string; slug: string; category: string };
+type ProductLike = { id: string; url?: string; originalUrl?: string; title: string; titlePt?: string | null; image?: string | null; priceCny?: number | null; priceBrl?: number | null; source: string; slug?: string; category: string };
 
-function ProductCard({ product, useSlug = false }: { product: FeaturedProduct | CatalogProduct; useSlug?: boolean }) {
-  const url = "originalUrl" in product ? product.originalUrl : (product as FeaturedProduct).url;
+function ProductCard({ product, useSlug = false }: { product: ProductLike; useSlug?: boolean }) {
+  const url = product.originalUrl ?? product.url ?? "";
   const imgSrc = product.image ? ensureHttpsImage(product.image) : PLACEHOLDER_IMAGE;
   const priceStr = product.priceBrl != null ? `R$ ${Number(product.priceBrl).toFixed(2)}` : product.priceCny != null ? `CNY ¥ ${Number(product.priceCny)}` : "Consultar";
-  const to = useSlug && "slug" in product ? `/produto/${product.slug}` : `/pedido?url=${encodeURIComponent(url)}`;
+  const to = useSlug && product.slug ? `/produto/${product.slug}` : `/pedido?url=${encodeURIComponent(url)}`;
 
   return (
-    <Card className="overflow-hidden border-border hover:border-china-red/40 transition-colors h-full flex flex-col">
-      <Link to={to} className="flex flex-col flex-1">
-        <div className="aspect-square bg-muted relative overflow-hidden">
+    <Card className="overflow-hidden border-0 shadow-none rounded-none hover:shadow-md transition-shadow h-full flex flex-col bg-transparent">
+      <Link to={to} className="flex flex-col flex-1 group">
+        <div className="aspect-[3/4] bg-muted/50 relative overflow-hidden">
           <img
             src={imgSrc}
-            alt=""
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
+            alt={product.titlePt || product.title || "Produto"}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            referrerPolicy={referrerPolicyForImage(imgSrc)}
+            loading="lazy"
             onError={(e) => {
               (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
             }}
           />
         </div>
-        <CardContent className="p-4 flex-1">
-          <p className="text-xs font-medium text-china-red uppercase tracking-wider">{product.source}</p>
-          <h3 className="font-semibold text-foreground line-clamp-2 mt-1">{product.titlePt || product.title}</h3>
+        <CardContent className="p-3 flex-1 flex flex-col">
+          <h3 className="font-medium text-foreground text-sm line-clamp-2">{product.titlePt || product.title}</h3>
+          <div className="mt-auto pt-2 flex items-center justify-between">
+            <span className="text-base font-bold text-china-red">{priceStr}</span>
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground group-hover:text-china-red transition-colors">
+              Ver <ShoppingBag className="w-3.5 h-3.5" />
+            </span>
+          </div>
         </CardContent>
-        <CardFooter className="p-4 pt-0 flex items-center justify-between">
-          <span className="text-lg font-bold text-china-red">{priceStr}</span>
-          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
-            Ver e comprar <ShoppingBag className="w-4 h-4" />
-          </span>
-        </CardFooter>
       </Link>
     </Card>
   );
 }
 
 export default function FeaturedProductsSection() {
-  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
+  const [apiProducts, setApiProducts] = useState<ProductLike[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    fetch(apiUrl("/api/products?featured=true&limit=12"))
+    fetch(apiUrl("/api/products?featured=true&limit=60"))
       .then((r) => r.json())
       .then((data) => {
-        setCatalogProducts(data.products ?? []);
+        const list = data.products ?? [];
+        setApiProducts(Array.isArray(list) ? list : []);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
   }, []);
 
-  const products = catalogProducts.length > 0 ? catalogProducts : FEATURED_PRODUCTS;
-  const useSlug = catalogProducts.length > 0;
-  const hasMultipleCategories = catalogProducts.length > 0 ? new Set(catalogProducts.map((p) => p.category)).size > 1 : new Set(FEATURED_PRODUCTS.map((p) => p.category)).size > 1;
-  const categories: FeaturedCategory[] = ["destaques", "mais-vendidos", "tendencias"];
-  const categoriesWithProducts = catalogProducts.length > 0
-    ? Array.from(new Set(catalogProducts.map((p) => p.category)))
-    : categories.filter((cat) => FEATURED_PRODUCTS.some((p) => p.category === cat));
+  const allProducts = apiProducts.length > 0 ? apiProducts : EXPLORAR_PRODUCTS;
+  const useSlug = apiProducts.length > 0;
+  const categoriesWithProducts = Array.from(new Set(allProducts.map((p) => p.category))).sort((a, b) => {
+    const order = ["moda", "eletronicos", "acessorios", "beleza", "casa", "outros"];
+    return order.indexOf(a) - order.indexOf(b);
+  });
 
-  if (products.length === 0 && loaded) return null;
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [expanded, setExpanded] = useState(false);
+  const verMaisRef = useRef<HTMLDivElement>(null);
+
+  const products =
+    selectedCategory === "all"
+      ? allProducts
+      : allProducts.filter((p) => p.category === selectedCategory);
+
+  const visibleProducts = expanded ? products : products.slice(0, INITIAL_VISIBLE);
+  const hasMore = products.length > INITIAL_VISIBLE;
+
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    setExpanded(false);
+  };
+
+  if (allProducts.length === 0 && loaded) return null;
 
   return (
     <section id="explorar" className="py-16 md:py-20 bg-muted/30">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-10">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
           <div>
             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-china-red uppercase tracking-widest">
               <Sparkles className="w-4 h-4" /> Explorar
@@ -90,35 +110,80 @@ export default function FeaturedProductsSection() {
           </Link>
         </div>
 
+        {categoriesWithProducts.length > 1 && loaded && (
+          <div className="flex flex-wrap gap-1.5 mb-6">
+            <button
+              type="button"
+              onClick={() => handleCategoryChange("all")}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                selectedCategory === "all"
+                  ? "bg-foreground text-background"
+                  : "bg-muted/70 text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Todos
+            </button>
+            {categoriesWithProducts.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => handleCategoryChange(cat)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  selectedCategory === cat
+                    ? "bg-foreground text-background"
+                    : "bg-muted/70 text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {CATALOG_CATEGORY_LABELS[cat] ?? cat}
+              </button>
+            ))}
+          </div>
+        )}
+
         {!loaded ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="aspect-square bg-muted rounded-xl animate-pulse" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="aspect-[3/4] bg-muted rounded-sm animate-pulse" />
             ))}
           </div>
-        ) : hasMultipleCategories && categoriesWithProducts.length > 1 ? (
-          <div className="space-y-12">
-            {categoriesWithProducts.map((cat) => {
-              const items = products.filter((p) => p.category === cat);
-              if (items.length === 0) return null;
-              return (
-                <div key={cat}>
-                  <h3 className="text-lg font-semibold text-foreground mb-4">{CATALOG_CATEGORY_LABELS[cat] ?? FEATURED_CATEGORY_LABELS[cat as FeaturedCategory] ?? cat}</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {items.map((product) => (
-                      <ProductCard key={product.id} product={product} useSlug={useSlug} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        ) : products.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-8">
+            Nenhum produto nesta categoria. Escolha outra acima.
+          </p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} useSlug={useSlug} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
+              {visibleProducts.map((product) => (
+                <ProductCard key={product.id} product={product} useSlug={useSlug} />
+              ))}
+            </div>
+            {hasMore && (
+              <div ref={verMaisRef} className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (expanded) {
+                      setExpanded(false);
+                      setTimeout(() => verMaisRef.current?.scrollIntoView({ block: "center" }), 80);
+                    } else {
+                      setExpanded(true);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-china-red transition-colors"
+                >
+                  {expanded ? (
+                    <>
+                      Ver menos <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                    </>
+                  ) : (
+                    <>
+                      Ver mais ({products.length - INITIAL_VISIBLE}) <ChevronDown className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </section>

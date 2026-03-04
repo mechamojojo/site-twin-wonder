@@ -1,6 +1,7 @@
 const SUPPORTED_HOSTS = [
-  "taobao", "1688", "weidian", "tmall", "jd.com", "pinduoduo", "goofish", "dangdang",
-  "vip.com", "vipshop", "alicdn", "tbcdn", "geilicdn", "jdimg",
+  "taobao", "1688", "weidian", "tmall", "jd.com", "pinduoduo", "yangkeduo",
+  "goofish", "dangdang", "vip.com", "vipshop", "alicdn", "tbcdn", "geilicdn", "jdimg",
+  "yupoo", // álbuns/catálogos; CSSBuy usa Quick Buy; scrape direto tenta extrair imagens
   "cssbuy", // aceita links CSSBuy com ?url= ou ?link= (o scraper extrai o link interno)
 ];
 

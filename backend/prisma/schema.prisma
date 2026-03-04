@@ -13,6 +13,18 @@ model User {
   password  String
   name      String
 
+  // Confirmação de e-mail
+  emailVerified                 Boolean   @default(false)
+  emailVerificationToken        String?
+  emailVerificationTokenExpires DateTime?
+
+  // Recuperação de senha
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+
+  // Aceite de Termos/Política (auditoria)
+  termsAcceptedAt DateTime?
+
   // Dados para envio (obrigatórios no cadastro)
   customerCpf        String?
   customerWhatsapp   String?
@@ -27,7 +39,20 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders Order[]
+  orders        Order[]
+  savedProducts SavedProduct[]
+}
+
+model SavedProduct {
+  id          String   @id @default(cuid())
+  userId      String
+  productSlug String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productSlug])
+  @@index([userId])
 }
 
 model Product {
@@ -48,6 +73,7 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
 
 model Order {
   id                 String        @id @default(cuid())

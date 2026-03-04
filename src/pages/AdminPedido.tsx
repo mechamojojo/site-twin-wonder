@@ -8,11 +8,11 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Check,
-  Copy,
   ExternalLink,
   Lock,
   MessageCircle,
   Package,
+  ShoppingBag,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -144,18 +144,19 @@ const AdminPedido = () => {
 
   useEffect(() => {
     if (!token) {
-      navigate("/admin");
+      navigate("/admin", { replace: true });
       return;
     }
     if (!id) return;
     setLoading(true);
+    setError(null);
     fetch(apiUrl(`/api/admin/orders/${id}`), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => {
         if (r.status === 401) {
           sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-          navigate("/admin");
+          navigate("/admin", { replace: true });
           return null;
         }
         return r.ok ? r.json() : null;
@@ -171,10 +172,10 @@ const AdminPedido = () => {
             carrier: data.shipment?.carrier ?? "",
           });
         } else {
-          setError("Pedido não encontrado");
+          setError("Pedido não encontrado ou sessão expirada. Faça login novamente no admin.");
         }
       })
-      .catch(() => setError("Erro ao carregar"))
+      .catch(() => setError("Erro ao carregar. Verifique se o backend está rodando e se a URL da API está correta."))
       .finally(() => setLoading(false));
   }, [id, token, navigate]);
 
@@ -254,38 +255,37 @@ const AdminPedido = () => {
     }
   };
 
-  const handleCopyCssBuy = () => {
-    if (!order) return;
-    navigator.clipboard.writeText(buildCssBuyCopyText(order)).then(
-      () => toast.success("Copiado! Cole no CSSBuy."),
-      () => toast.error("Não foi possível copiar")
-    );
+  const [processingCssBuy, setProcessingCssBuy] = useState(false);
+
+  const handleProcessarCompra = async () => {
+    if (!order?.id || !token) return;
+    setProcessingCssBuy(true);
+    try {
+      const res = await fetch(apiUrl(`/api/admin/orders/${order.id}/cssbuy-url`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      const url = data?.url;
+      if (url) {
+        window.open(url, "_blank", "noopener,noreferrer");
+        toast.success("Abrindo produto no CSSBuy. Replique o modelo da imagem abaixo.");
+      } else {
+        toast.info("Este marketplace não tem link direto no CSSBuy. Use o link do produto e copie o resumo.");
+      }
+    } catch {
+      toast.error("Erro ao obter link CSSBuy");
+    } finally {
+      setProcessingCssBuy(false);
+    }
   };
 
-  const nome = order.customerName?.trim().split(/\s/)[0] || "cliente";
-  const produto = (order.productTitle || order.productDescription || "seu produto").slice(0, 80);
-  const linkAcompanhamento = `${SITE_URL.replace(/\/$/, "")}/pedido-confirmado/${order.id}`;
-
-  const msgPedidoAceito =
-    `Olá, ${nome}!\n\n` +
-    `O pagamento do produto *${produto}* foi confirmado e seu pedido já está em processamento na ComprasChina.\n\n` +
-    `Assim que tivermos mais novidades, entraremos em contato.\n\n` +
-    `Você pode acompanhar o status pelo link: ${linkAcompanhamento}`;
-
-  const msgEnviado = (code: string) =>
-    `Olá, ${nome}!\n\n` +
-    `Seu pedido do produto *${produto}* já foi enviado.\n\n` +
-    `Código de rastreio: ${code}\n` +
-    `Acompanhe a entrega em: https://t.17track.net/pt#nums=${code}\n\n` +
-    `Qualquer dúvida, estamos à disposição.`;
-
-  const msgNegado =
-    `Olá, ${nome}!\n\n` +
-    `Infelizmente não foi possível processar seu pedido do produto *${produto}*.\n\n` +
-    `Caso tenha efetuado pagamento, entre em contato conosco para tratarmos do reembolso.\n\n` +
-    `Estamos à disposição para qualquer dúvida.`;
-
-  if (!token) return null;
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Redirecionando para o login do admin...</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -314,6 +314,29 @@ const AdminPedido = () => {
     );
   }
 
+  const nome = order.customerName?.trim().split(/\s/)[0] || "cliente";
+  const produto = (order.productTitle || order.productDescription || "seu produto").slice(0, 80);
+  const linkAcompanhamento = `${SITE_URL.replace(/\/$/, "")}/pedido-confirmado/${order.id}`;
+
+  const msgPedidoAceito =
+    `Olá, ${nome}!\n\n` +
+    `O pagamento do produto *${produto}* foi confirmado e seu pedido já está em processamento na ComprasChina.\n\n` +
+    `Assim que tivermos mais novidades, entraremos em contato.\n\n` +
+    `Você pode acompanhar o status pelo link: ${linkAcompanhamento}`;
+
+  const msgEnviado = (code: string) =>
+    `Olá, ${nome}!\n\n` +
+    `Seu pedido do produto *${produto}* já foi enviado.\n\n` +
+    `Código de rastreio: ${code}\n` +
+    `Acompanhe a entrega em: https://t.17track.net/pt#nums=${code}\n\n` +
+    `Qualquer dúvida, estamos à disposição.`;
+
+  const msgNegado =
+    `Olá, ${nome}!\n\n` +
+    `Infelizmente não foi possível processar seu pedido do produto *${produto}*.\n\n` +
+    `Caso tenha efetuado pagamento, entre em contato conosco para tratarmos do reembolso.\n\n` +
+    `Estamos à disposição para qualquer dúvida.`;
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -329,8 +352,9 @@ const AdminPedido = () => {
         </div>
 
         <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {/* Bloco do produto: imagem + título + link */}
           <div className="p-6 border-b border-border">
-            <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className="flex flex-wrap items-start gap-2 mb-3">
               <span className="text-xs font-mono text-muted-foreground">{order.id}</span>
               <Badge className={STATUS_COLORS[order.status] || "bg-muted"}>
                 {STATUS_LABELS[order.status] || order.status}
@@ -341,15 +365,76 @@ const AdminPedido = () => {
                 </span>
               )}
             </div>
-            <h1 className="text-xl font-heading font-bold text-foreground">
-              {order.productTitle || order.productDescription}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Qtd: {order.quantity}
-              {(order.productColor || order.productSize || order.productVariation) && (
-                <> · {[order.productColor, order.productSize, order.productVariation].filter(Boolean).join(", ")}</>
+            <div className="flex gap-4 flex-wrap">
+              {order.productImage && (
+                <div className="shrink-0 w-24 h-24 rounded-lg border border-border bg-muted overflow-hidden">
+                  <img
+                    src={order.productImage}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
               )}
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl font-heading font-bold text-foreground">
+                  {order.productTitle || order.productDescription}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Qtd: {order.quantity}
+                  {(order.productColor || order.productSize || order.productVariation) && (
+                    <> · {[order.productColor, order.productSize, order.productVariation].filter(Boolean).join(", ")}</>
+                  )}
+                </p>
+                <a
+                  href={order.originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2 text-sm text-china-red hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Abrir link do produto no marketplace
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Modelo escolhido pelo cliente — imagem em destaque para replicar no CSSBuy */}
+          <div className="p-6 border-b border-border bg-amber-50/50 dark:bg-amber-950/20">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Modelo escolhido pelo cliente</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Use esta imagem para replicar exatamente a variante no CSSBuy (cor/estilo).
             </p>
+            <div className="flex flex-wrap items-start gap-4">
+              {order.productImage ? (
+                <div className="shrink-0 w-48 h-48 sm:w-56 sm:h-56 rounded-xl border-2 border-border bg-white overflow-hidden shadow-sm">
+                  <img
+                    src={order.productImage}
+                    alt="Modelo escolhido"
+                    className="w-full h-full object-contain"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="shrink-0 w-48 h-48 sm:w-56 sm:h-56 rounded-xl border-2 border-dashed border-border bg-muted/50 flex items-center justify-center text-xs text-muted-foreground text-center px-3">
+                  Imagem do modelo não disponível
+                </div>
+              )}
+              <div className="min-w-0">
+                {(order.productColor || order.productSize || order.productVariation) && (
+                  <p className="text-sm font-medium text-foreground">
+                    {[order.productColor, order.productSize, order.productVariation].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+                <p className="text-sm text-muted-foreground mt-1">Qtd: {order.quantity}</p>
+              </div>
+            </div>
           </div>
 
           {/* Contatar cliente */}
@@ -431,9 +516,14 @@ const AdminPedido = () => {
                 <XCircle className="w-3.5 h-3.5 mr-1" />
                 Negar / Cancelar
               </Button>
-              <Button size="sm" variant="outline" onClick={handleCopyCssBuy} className="gap-1.5">
-                <Copy className="w-3.5 h-3.5" />
-                Copiar p/ CSSBuy
+              <Button
+                size="sm"
+                className="gap-1.5 bg-china-red hover:bg-china-red/90"
+                onClick={handleProcessarCompra}
+                disabled={processingCssBuy}
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                {processingCssBuy ? "Abrindo…" : "Processar no CSSBuy"}
               </Button>
               <Button size="sm" variant="outline" asChild>
                 <a href={order.originalUrl} target="_blank" rel="noopener noreferrer" className="gap-1.5">
