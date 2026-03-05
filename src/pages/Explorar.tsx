@@ -46,7 +46,7 @@ const Explorar = () => {
   useEffect(() => setSearchInput(q), [q]);
 
   useEffect(() => {
-    fetch(apiUrl("/api/products?limit=100"))
+    fetch(apiUrl("/api/products?limit=2000"))
       .then((r) => r.json())
       .then((data) => {
         const list = data.products ?? [];
@@ -56,7 +56,21 @@ const Explorar = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const sourceList = apiProducts.length > 0 ? apiProducts : EXPLORAR_PRODUCTS;
+  const sourceList = useMemo(() => {
+    if (apiProducts.length === 0) return EXPLORAR_PRODUCTS;
+    const apiUrls = new Set(
+      apiProducts.map((p) => (p.originalUrl || p.url || "").replace(/\?.*$/, "")),
+    );
+    const extra = EXPLORAR_PRODUCTS.filter(
+      (p) => !apiUrls.has((p.url || "").replace(/\?.*$/, "")),
+    );
+    return [...apiProducts, ...extra];
+  }, [apiProducts]);
+
+  const apiUrlSet = useMemo(
+    () => new Set(apiProducts.map((p) => (p.originalUrl || p.url || "").replace(/\?.*$/, ""))),
+    [apiProducts],
+  );
 
   const { products, total } = useMemo(() => {
     let list = sourceList;
@@ -85,9 +99,9 @@ const Explorar = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-[env(safe-area-inset-bottom)]">
         <div className="mb-6 sm:mb-8">
-          <form onSubmit={handleSearch} className="flex gap-2 mb-4">
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2 mb-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
@@ -95,23 +109,24 @@ const Explorar = () => {
                 placeholder="Buscar produtos..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-md border border-border bg-background text-sm outline-none focus:border-foreground/30"
+                className="w-full pl-10 pr-4 py-3 sm:py-2.5 rounded-md border border-border bg-background text-base sm:text-sm outline-none focus:border-foreground/30 min-h-[44px]"
               />
             </div>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90"
+              className="touch-target min-h-[44px] px-5 py-3 sm:py-2.5 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90"
             >
               Buscar
             </button>
           </form>
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((c) => (
               <button
                 key={c.id}
+                type="button"
                 onClick={() => handleCategory(c.id)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`touch-target min-h-[40px] px-4 py-2.5 rounded-full text-xs font-medium transition-colors ${
                   (c.id === "all" && category === "all") || category === c.id
                     ? "bg-foreground text-background"
                     : "bg-muted/70 text-muted-foreground hover:bg-muted"
@@ -147,7 +162,7 @@ const Explorar = () => {
                 return (
                   <Link
                     key={p.id}
-                    to={apiProducts.length > 0 && p.slug ? `/produto/${p.slug}` : `/pedido?url=${encodeURIComponent(p.originalUrl ?? p.url ?? "")}`}
+                    to={p.slug && apiUrlSet.has((p.originalUrl ?? p.url ?? "").replace(/\?.*$/, "")) ? `/produto/${p.slug}` : `/pedido?url=${encodeURIComponent(p.originalUrl ?? p.url ?? "")}`}
                     className="group flex flex-col bg-transparent"
                   >
                     <div className="aspect-[3/4] bg-muted/30 relative overflow-hidden rounded-sm">

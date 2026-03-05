@@ -16,6 +16,8 @@ export interface OptionGroup {
   inventoryByValue?: Record<string, number>;
   /** When product has color+size: inventory per (color, size). Outer key = color value. */
   inventoryByColorAndValue?: Record<string, Record<string, number>>;
+  /** Price in CNY per option value (e.g. model "01" -> 69). From CSSBuy/source when each variant has different price. */
+  priceByValue?: Record<string, number>;
 }
 
 export interface ProductPreviewResult {

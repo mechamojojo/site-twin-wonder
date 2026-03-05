@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
@@ -7,8 +7,8 @@ import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage, referrerPolicyForImage } from "@/lib/utils";
 import { ChevronDown, ShoppingBag, Sparkles } from "lucide-react";
 
-/** Número de produtos exibidos antes de "Ver mais" (≈ 4 linhas no desktop com 5 colunas). */
-const INITIAL_VISIBLE = 20;
+/** Número de produtos exibidos antes de "Ver mais" (≈ 8 linhas no desktop com 5 colunas). */
+const INITIAL_VISIBLE = 40;
 
 const PLACEHOLDER_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext fill='%2394a3b8' font-family='sans-serif' font-size='18' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3EProduto%3C/text%3E%3C/svg%3E";
 
@@ -54,18 +54,31 @@ export default function FeaturedProductsSection() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    fetch(apiUrl("/api/products?featured=true&limit=60"))
+    fetch(apiUrl("/api/products?limit=2000"))
       .then((r) => r.json())
       .then((data) => {
         const list = data.products ?? [];
-        setApiProducts(Array.isArray(list) ? list : []);
+        const fromApi = Array.isArray(list) ? list : [];
+        setApiProducts(fromApi);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
   }, []);
 
-  const allProducts = apiProducts.length > 0 ? apiProducts : EXPLORAR_PRODUCTS;
-  const useSlug = apiProducts.length > 0;
+  const allProducts = useMemo(() => {
+    if (apiProducts.length === 0) return EXPLORAR_PRODUCTS;
+    const apiUrls = new Set(
+      apiProducts.map((p) => (p.originalUrl || p.url || "").replace(/\?.*$/, "")),
+    );
+    const extra = EXPLORAR_PRODUCTS.filter(
+      (p) => !apiUrls.has((p.url || "").replace(/\?.*$/, "")),
+    );
+    return [...apiProducts, ...extra];
+  }, [apiProducts]);
+  const apiUrlSet = useMemo(
+    () => new Set(apiProducts.map((p) => (p.originalUrl || p.url || "").replace(/\?.*$/, ""))),
+    [apiProducts],
+  );
   const categoriesWithProducts = Array.from(new Set(allProducts.map((p) => p.category))).sort((a, b) => {
     const order = ["moda", "eletronicos", "acessorios", "beleza", "casa", "outros"];
     return order.indexOf(a) - order.indexOf(b);
@@ -154,7 +167,11 @@ export default function FeaturedProductsSection() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
               {visibleProducts.map((product) => (
-                <ProductCard key={product.id} product={product} useSlug={useSlug} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  useSlug={apiUrlSet.has((product.originalUrl || product.url || "").replace(/\?.*$/, ""))}
+                />
               ))}
             </div>
             {hasMore && (
@@ -169,7 +186,7 @@ export default function FeaturedProductsSection() {
                       setExpanded(true);
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-china-red transition-colors"
+                  className="touch-target min-h-[44px] inline-flex items-center gap-1.5 px-4 py-2.5 text-sm text-muted-foreground hover:text-china-red transition-colors rounded-lg active:bg-muted/50"
                 >
                   {expanded ? (
                     <>

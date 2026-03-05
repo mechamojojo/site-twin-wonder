@@ -4,7 +4,7 @@ import { CONTACT_EMAIL, whatsAppUrl, WHATSAPP_DEFAULT_MESSAGE } from "@/data/sit
 
 const Footer = () => {
   return (
-    <footer id="contact" className="bg-foreground py-14">
+    <footer id="contact" className="bg-foreground py-14 pb-[max(2.5rem,env(safe-area-inset-bottom))]">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           <div>

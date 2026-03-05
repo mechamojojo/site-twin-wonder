@@ -632,7 +632,7 @@ app.get("/api/products", async (req, res) => {
     const q = (req.query.q as string)?.trim().toLowerCase();
     const category = (req.query.category as string)?.trim();
     const featured = req.query.featured === "true";
-    const limit = Math.min(Number(req.query.limit) || 48, 100);
+    const limit = Math.min(Number(req.query.limit) || 48, 2000);
     const offset = Math.max(0, Number(req.query.offset) || 0);
 
     const where: Record<string, unknown> = {};
@@ -1188,17 +1188,23 @@ const MARGEM_BAIXA_PERCENT = 35;   // produto < R$ 40: +35%
 const MARGEM_ALTA_PERCENT = 25;    // produto >= R$ 40: +25%
 
 // Preview de preço: custo em yuan → conversão → margem ComprasChina → preço final em reais
+// Query opcional: priceCny — quando informado (ex.: preço da variante no CSSBuy), usa esse valor em vez do cache
 app.get("/api/price/preview", async (req, res) => {
   try {
     const url = (req.query.url as string)?.trim() || "";
     if (!url) {
       return res.status(400).json({ error: "Parâmetro 'url' é obrigatório." });
     }
-
-    const cached = productPreviewCache.get(url);
-    const productPriceCny = cached?.data?.priceCny != null && typeof cached.data.priceCny === "number"
-      ? cached.data.priceCny
-      : null;
+    const paramPrice = req.query.priceCny != null ? parseFloat(String(req.query.priceCny)) : null;
+    const productPriceCny =
+      paramPrice != null && Number.isFinite(paramPrice) && paramPrice > 0
+        ? paramPrice
+        : (() => {
+            const cached = productPreviewCache.get(url);
+            return cached?.data?.priceCny != null && typeof cached.data.priceCny === "number"
+              ? cached.data.priceCny
+              : null;
+          })();
 
     if (productPriceCny == null) {
       return res.json({

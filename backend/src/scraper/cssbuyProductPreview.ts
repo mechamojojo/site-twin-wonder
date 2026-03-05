@@ -244,9 +244,10 @@ export async function getCssbuyProductPreview(
                     ? raw.split(":").slice(-1)[0]?.trim() || raw
                     : raw;
                 const v = String(displayVal).trim();
+                // Only add values that are clearly sizes; avoid numeric option IDs (10–40) from color/style props
                 const isSz =
-                  /^(3[4-9]|4[0-8])(\.5)?$/.test(v) ||
-                  /^[1-9][0-2]?$/.test(v) ||
+                  /^(3[5-9]|4[0-8])(\.5)?$/.test(v) ||
+                  /^[1-9]$/.test(v) ||
                   /^(M|L|XL|2XL|S|XS)$/i.test(v) ||
                   /^C\d+\/\d+cm$/i.test(v) ||
                   /^J\d+\/\d+cm$/i.test(v) ||
@@ -394,30 +395,30 @@ export async function getCssbuyProductPreview(
               while ((im = imgRe.exec(block)) !== null)
                 imgs.push(im[1].replace(/\\\//g, "/"));
               const isColorByName =
-                /颜色|色彩|color|cor|款式|estilo|modelo|style/i.test(propName);
+                /颜色|色彩|color|cor|款式|estilo|modelo|model|style/i.test(propName);
               const isSizeByName = /尺码|尺寸|size|tamanho/i.test(propName);
               const isFabricByName = /fabric|tecido|面料|材质/i.test(propName);
+              const isRealSizeValue = (t: string) => {
+                const v = t.trim();
+                return (
+                  /^(3[5-9]|4[0-8])(\.5)?$/.test(v) ||
+                  /^[1-9][0-2]?$/.test(v) ||
+                  /^(M|L|XL|XXL|2XL|3XL|S|XS|均码|自由)$/i.test(v) ||
+                  /^C\d+\/\d+cm$/i.test(v) ||
+                  /^J\d+\/\d+cm$/i.test(v) ||
+                  /^M\d+m?\d*\/[\d-]+ code$/i.test(v) ||
+                  /^M\d+\/[\d-]+ code$/i.test(v) ||
+                  /^M\d+ code$/i.test(v)
+                );
+              };
               const valsLookLikeSizes =
-                vals.length > 0 &&
-                vals.every((v) => {
-                  const t = v.trim();
-                  return (
-                    /^(M|L|XL|XXL|2XL|3XL|S|XS|均码|自由|\d{1,2}(码|号)?)$/i.test(
-                      t,
-                    ) ||
-                    /^C\d+\/\d+cm$/i.test(t) ||
-                    /^J\d+\/\d+cm$/i.test(t) ||
-                    /^M\d+m?\d*\/[\d-]+ code$/i.test(t) ||
-                    /^M\d+\/[\d-]+ code$/i.test(t) ||
-                    /^M\d+ code$/i.test(t)
-                  );
-                });
+                vals.length > 0 && vals.every((v) => isRealSizeValue(v));
               if (isFabricByName && vals.length > 0) {
                 result.fabricValues = vals;
               } else if (isColorByName && vals.length > 0) {
                 result.colorValues = vals;
                 result.colorImages = imgs.slice(0, vals.length);
-              } else if (isSizeByName && vals.length > 0) {
+              } else if (isSizeByName && vals.length > 0 && valsLookLikeSizes) {
                 result.sizeValues = vals;
               } else if (
                 /规格|especificação/i.test(propName) &&
@@ -490,7 +491,8 @@ export async function getCssbuyProductPreview(
               result.images.push(src);
             }
           });
-          if (result.images.length >= 5) break;
+          // Cap at 12 to avoid pulling in every variant/box shot from big grids
+          if (result.images.length >= 12) break;
         } catch (_) {}
       }
       if (result.images.length === 0) {
@@ -509,10 +511,10 @@ export async function getCssbuyProductPreview(
       result.images = result.images.slice(0, 20);
 
       function extractColorOptions() {
-        const labels = ["Color:", "Style:", "颜色", "款式", "Colour:"];
+        const labels = ["Color:", "Style:", "Model:", "Modelo:", "颜色", "款式", "Colour:"];
         function tryExtractFromContainer(container: Element): boolean {
           const imgs = Array.from(container.querySelectorAll("img[src]"));
-          if (imgs.length < 2 || imgs.length > 50) return false;
+          if (imgs.length < 2 || imgs.length > 80) return false;
           const added: string[] = [];
           for (let i = 0; i < imgs.length; i++) {
             const src = (imgs[i] as HTMLImageElement).src;
@@ -557,7 +559,7 @@ export async function getCssbuyProductPreview(
         }
         for (const label of labels) {
           const els = document.querySelectorAll(
-            "[class*='color'], [class*='Color'], [class*='style'], [class*='Style']",
+            "[class*='color'], [class*='Color'], [class*='style'], [class*='Style'], [class*='model'], [class*='Model']",
           );
           for (const el of els) {
             if (!(el as HTMLElement).textContent?.includes(label)) continue;
@@ -573,8 +575,12 @@ export async function getCssbuyProductPreview(
           if (
             (t === "Color:" ||
               t === "Style:" ||
+              t === "Model:" ||
+              t === "Modelo:" ||
               t.startsWith("Color:") ||
               t.startsWith("Style:") ||
+              t.startsWith("Model:") ||
+              t.startsWith("Modelo:") ||
               t.startsWith("Colour:")) &&
             t.length < 50
           ) {
@@ -717,6 +723,7 @@ export async function getCssbuyProductPreview(
       }
 
       function extractSizeOptions() {
+        let foundSizeSection = false;
         const labels = ["Size:", "Shoe size:", "尺码", "规格", "Tamanho:"];
         for (const label of labels) {
           const els = document.querySelectorAll("label, span, div, p, td, th");
@@ -733,7 +740,7 @@ export async function getCssbuyProductPreview(
                 const txt = (b as HTMLElement).textContent?.trim();
                 if (txt && txt.length <= 6) {
                   if (
-                    /^(3[6-9]|4[0-7])(\.5)?$/.test(txt) ||
+                    /^(3[5-9]|4[0-8])(\.5)?$/.test(txt) ||
                     /^[1-9][0-2]?$/.test(txt)
                   )
                     found.push(txt);
@@ -747,10 +754,11 @@ export async function getCssbuyProductPreview(
                 }
               });
               const fromText = (parent as HTMLElement).innerText?.match(
-                /\b(36|36\.5|37|37\.5|38|38\.5|39|39\.5|40|40\.5|41|41\.5|42|42\.5|43|43\.5|44|44\.5|45|45\.5|46|46\.5|47|47\.5|48|1|2|3|4|5|6|7|8|9|10|11|12)\b/g,
+                /\b(35|35\.5|36|36\.5|37|37\.5|38|38\.5|39|39\.5|40|40\.5|41|41\.5|42|42\.5|43|43\.5|44|44\.5|45|45\.5|46|46\.5|47|47\.5|48|1|2|3|4|5|6|7|8|9|10|11|12)\b/g,
               );
               if (fromText) found.push(...fromText);
               if (found.length > 0) {
+                foundSizeSection = true;
                 [...new Set(found)].forEach((s) => {
                   if (!result.sizeValues.includes(s)) result.sizeValues.push(s);
                 });
@@ -765,9 +773,13 @@ export async function getCssbuyProductPreview(
             }
           }
         }
+        // Only run body-text fallbacks when we found a real Size section in the DOM.
+        // Otherwise we would invent sizes from random numbers (price, item ID, etc.).
+        if (!foundSizeSection) return;
+
         const allText = document.body?.innerText || "";
         const shoe = allText.match(
-          /\b(36|36\.5|37|37\.5|38|38\.5|39|39\.5|40|40\.5|41|41\.5|42|42\.5|43|43\.5|44|44\.5|45|45\.5|46|46\.5|47|47\.5|48)\b/g,
+          /\b(35|35\.5|36|36\.5|37|37\.5|38|38\.5|39|39\.5|40|40\.5|41|41\.5|42|42\.5|43|43\.5|44|44\.5|45|45\.5|46|46\.5|47|47\.5|48)\b/g,
         );
         const childSizes = allText.match(
           /(C\d+\/\d+cm|J\d+\/\d+cm|M\d+m?\d*\/[\d-]+ code|M\d+\/[\d-]+ code|M\d+ code)/gi,
@@ -1029,7 +1041,7 @@ export async function getCssbuyProductPreview(
     const isSizeLabel = (label: string) =>
       /^size|尺码|尺寸|tamanho|规格|shoe|鞋码/i.test(label.trim());
     const isColorLabel = (label: string) =>
-      /^color|colour|颜色|款式|style|estilo|cor/i.test(label.trim());
+      /^color|colour|颜色|款式|style|estilo|cor|model|modelo/i.test(label.trim());
 
     if (propsList && typeof propsList === "object") {
       const colors: string[] = [];
@@ -1055,7 +1067,7 @@ export async function getCssbuyProductPreview(
         const label = colonIdx >= 0 ? raw.slice(0, colonIdx).trim() : "";
         const val = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
         if (!val || val.length > 50) continue;
-        if (label && isSizeLabel(label)) {
+        if (label && isSizeLabel(label) && isSizeLike(val)) {
           sizes.add(val);
         } else if (label && isColorLabel(label)) {
           if (!colors.includes(val)) {
@@ -1091,7 +1103,7 @@ export async function getCssbuyProductPreview(
     if (skuProps && Array.isArray(skuProps) && data.colorValues.length === 0) {
       for (const prop of skuProps) {
         const name = String(prop.propName ?? "").toLowerCase();
-        if (!/style|color|colour|颜色|款式|estilo/.test(name)) continue;
+        if (!/style|color|colour|颜色|款式|estilo|model|modelo/.test(name)) continue;
         const valuesArr = (
           prop as { values?: Array<{ value?: string; image?: string }> }
         ).values;
@@ -1161,10 +1173,8 @@ export async function getCssbuyProductPreview(
           return [];
         };
         const vals = getVals();
-        if (
-          vals.length > 0 &&
-          (isSizeProp || vals.every((v) => isSizeLike(v)))
-        ) {
+        // Only accept as sizes when values look like real sizes (not option IDs like 10–40)
+        if (vals.length > 0 && isSizeProp && vals.every((v) => isSizeLike(v))) {
           data.sizeValues = vals;
           break;
         }
@@ -1201,7 +1211,7 @@ export async function getCssbuyProductPreview(
         const label = colonIdx >= 0 ? raw.slice(0, colonIdx).trim() : "";
         const v = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
         if (!v || v.length > 50) continue;
-        if (label && isSizeLabel(label)) sizeSet.add(v);
+        if (label && isSizeLabel(label) && isSizeLike(v)) sizeSet.add(v);
         else if (label && isColorLabel(label)) colorSet.add(v);
         else if (isSizeLike(v)) sizeSet.add(v);
         else if (!/^\d+$/.test(v)) colorSet.add(v);
@@ -1256,11 +1266,98 @@ export async function getCssbuyProductPreview(
       images: [],
     };
 
+    // Filter out packaging/box/accessory options so we don't show non-product thumbnails (e.g. green box images)
+    const isPackagingOrAccessory = (value: string): boolean => {
+      const v = value.trim().toLowerCase();
+      return (
+        /礼盒|包装|标配|盒装|收纳|配件|赠品|包装盒|外盒|内盒|盒子|箱/.test(value) ||
+        /\b(box|packaging|gift\s*box|case\s*only|accessory|acessório|embalagem|caixa)\b/i.test(v)
+      );
+    };
+    let colorValuesFiltered = data.colorValues.filter((v) => !isPackagingOrAccessory(v));
+    // When there are many options, packaging is often at the end; keep at most 15 model options to avoid trailing non-product images
+    const MAX_MODEL_OPTIONS = 15;
+    if (colorValuesFiltered.length > MAX_MODEL_OPTIONS)
+      colorValuesFiltered = colorValuesFiltered.slice(0, MAX_MODEL_OPTIONS);
+    const colorImagesFiltered = colorValuesFiltered.map(
+      (val) => data.colorImages[data.colorValues.indexOf(val)] ?? "",
+    );
+    if (colorValuesFiltered.length > 0) {
+      data.colorValues = colorValuesFiltered;
+      data.colorImages = colorImagesFiltered;
+    }
+
     const colorGroup: OptionGroup = {
       name: data.colorValues.length > 0 ? "Cor / Estilo" : "Cor",
       values: data.colorValues.length > 0 ? data.colorValues : [],
       images: data.colorImages.slice(0, data.colorValues.length),
     };
+
+    // Build price per variant (model/color) from SKU list so we match CSSBuy prices per product type
+    if (
+      propsList &&
+      typeof propsList === "object" &&
+      skuList.length > 0 &&
+      data.colorValues.length > 0
+    ) {
+      const getEntryRaw = (propKey: string): string => {
+        const entry = (propsList as Record<string, unknown>)[propKey];
+        if (entry == null) return "";
+        if (typeof entry === "string") return entry;
+        if (entry && typeof entry === "object")
+          return String(
+            (entry as { value?: string }).value ??
+              (entry as { value1?: string }).value1 ??
+              "",
+          );
+        return "";
+      };
+      const priceByValue: Record<string, number> = {};
+      for (const sku of skuList) {
+        const priceRaw =
+          (sku as Record<string, unknown>).price ??
+          (sku as Record<string, unknown>).salePrice ??
+          (sku as Record<string, unknown>).item_price ??
+          (sku as Record<string, unknown>).priceMoney;
+        const price =
+          typeof priceRaw === "number" && priceRaw > 0
+            ? priceRaw
+            : typeof priceRaw === "string"
+              ? parseFloat(priceRaw)
+              : null;
+        if (price == null || !Number.isFinite(price)) continue;
+        const props = String(
+          sku.properties ??
+            (sku as Record<string, unknown>).propertiesStr ??
+            "",
+        );
+        const parts = props
+          .split(/[;，,]/)
+          .map((p) => p.trim())
+          .filter(Boolean);
+        let colorVal = "";
+        for (const part of parts) {
+          const raw = getEntryRaw(part);
+          if (!raw) continue;
+          const colonIdx = raw.indexOf(":");
+          const label = colonIdx >= 0 ? raw.slice(0, colonIdx).trim() : "";
+          const disp =
+            colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
+          if (!disp || disp.length > 50) continue;
+          if (label && isColorLabel(label)) {
+            colorVal = disp;
+            break;
+          }
+          if (!/^\d+$/.test(disp) && isSizeLike(disp) === false) {
+            colorVal = disp;
+            break;
+          }
+        }
+        if (colorVal && !(colorVal in priceByValue)) priceByValue[colorVal] = price;
+      }
+      if (Object.keys(priceByValue).length > 0)
+        colorGroup.priceByValue = priceByValue;
+    }
 
     const sizeGroup: OptionGroup = {
       name: "Tamanho",
@@ -1370,11 +1467,17 @@ export async function getCssbuyProductPreview(
       ? normalizeProductTitle(displayTitle)
       : null;
 
+    // Prefer variant (model/color) images as main gallery to avoid showing grid of product+packaging shots
+    const mainImages =
+      colorGroup.images.length > 0
+        ? colorGroup.images.filter(Boolean).slice(0, 40)
+        : (data.images || []).slice(0, 12);
+
     return {
       title: data.title || null,
       titlePt: normalizedPt || titlePt || data.title || null,
       priceCny: data.priceCny ?? null,
-      images: data.images || [],
+      images: mainImages.length > 0 ? mainImages : (data.images || []).slice(0, 12),
       variants: {
         color: colorGroup.values.length ? colorGroup.values : undefined,
         size: sizeGroup.values.length ? sizeGroup.values : undefined,

@@ -82,6 +82,7 @@ const Order = () => {
       images: string[];
       inventoryByValue?: Record<string, number>;
       inventoryByColorAndValue?: Record<string, Record<string, number>>;
+      priceByValue?: Record<string, number>;
     }[];
     specs: { key: string; value: string }[];
     description: string | null;
@@ -177,11 +178,24 @@ const Order = () => {
     fetchPreview();
   }, [url]);
 
-  // Quando o product preview trouxer preço, atualiza o preço em reais (backend usa cache)
+  // Preço efetivo: da variante selecionada (quando cada modelo tem preço no CSSBuy) ou preço base
+  const effectivePriceCny = (() => {
+    if (!productPreview?.priceCny) return null;
+    const colorGroup = productPreview.optionGroups?.find((g) =>
+      /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name),
+    );
+    const selected = colorGroup ? selectedOptionByGroup[colorGroup.name] : undefined;
+    if (selected && colorGroup?.priceByValue?.[selected] != null)
+      return colorGroup.priceByValue[selected];
+    return productPreview.priceCny;
+  })();
+
+  // Quando o product preview ou a variante selecionada mudar, atualiza o preço em reais (usa preço da variante quando existir)
   useEffect(() => {
-    if (!url || !productPreview?.priceCny || productPreviewLoading) return;
+    if (!url || effectivePriceCny == null || productPreviewLoading) return;
     let cancelled = false;
-    fetch(apiUrl(`/api/price/preview?url=${encodeURIComponent(url)}`))
+    const priceParam = effectivePriceCny !== productPreview?.priceCny ? `&priceCny=${effectivePriceCny}` : "";
+    fetch(apiUrl(`/api/price/preview?url=${encodeURIComponent(url)}${priceParam}`))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
@@ -195,7 +209,7 @@ const Order = () => {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [url, productPreview?.priceCny, productPreviewLoading]);
+  }, [url, effectivePriceCny, productPreview?.priceCny, productPreviewLoading]);
 
 
   if (!url) {
@@ -258,7 +272,7 @@ const Order = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <main className="container mx-auto px-4 py-10 pb-20 max-w-6xl">
+      <main className="container mx-auto px-4 py-10 pb-[max(5rem,env(safe-area-inset-bottom))] max-w-6xl">
         <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
           <Link to="/" className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
             <ArrowLeft className="w-3.5 h-3.5" />
@@ -546,7 +560,7 @@ const Order = () => {
                                     <button
                                       type="button"
                                       onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, (prev[value] ?? 0) - 1) }))}
-                                      className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
+                                      className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
                                     >
                                       −
                                     </button>
@@ -554,14 +568,14 @@ const Order = () => {
                                       type="number"
                                       min={0}
                                       max={maxQty}
-                                      className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
+                                      className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
                                       value={qty}
                                       onChange={(e) => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, Math.min(maxQty, Number(e.target.value) || 0)) }))}
                                     />
                                     <button
                                       type="button"
                                       onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.min(maxQty, (prev[value] ?? 0) + 1) }))}
-                                      className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
+                                      className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
                                     >
                                       +
                                     </button>
@@ -591,7 +605,7 @@ const Order = () => {
                                     key={i}
                                     type="button"
                                     onClick={() => setSelectedOptionByGroup((prev) => ({ ...prev, [group.name]: prev[group.name] === value ? "" : value }))}
-                                    className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border-2 overflow-hidden transition-colors ${
+                                    className={`flex flex-col items-center gap-1 p-2 sm:p-1.5 rounded-lg border-2 overflow-hidden transition-colors min-h-[52px] sm:min-h-0 ${
                                       isSelected ? "border-china-red ring-1 ring-china-red bg-china-red/5" : "border-border hover:border-muted-foreground/50 bg-muted/30"
                                     }`}
                                     title={value}
@@ -616,7 +630,7 @@ const Order = () => {
                                     key={i}
                                     type="button"
                                     onClick={() => setSelectedOptionByGroup((prev) => ({ ...prev, [group.name]: prev[group.name] === value ? "" : value }))}
-                                    className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
+                                    className={`touch-target min-h-[44px] px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
                                       isSelected ? "border-china-red bg-china-red/5 text-foreground" : "border-border bg-muted/30 hover:border-muted-foreground/50 text-foreground"
                                     }`}
                                     title={value}
@@ -637,9 +651,9 @@ const Order = () => {
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground mb-1.5">Quantidade:</p>
                         <div className="flex items-center gap-0 w-fit">
-                          <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
-                          <input type="number" min={1} max={99} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
-                          <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
+                          <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
+                          <input type="number" min={1} max={99} className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
+                          <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
                         </div>
                       </div>
                     )}
@@ -658,7 +672,7 @@ const Order = () => {
                                 key={i}
                                 type="button"
                                 onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
-                                className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border-2 overflow-hidden transition-colors ${
+                                className={`flex flex-col items-center gap-1 p-2 sm:p-1.5 rounded-lg border-2 overflow-hidden transition-colors min-h-[52px] sm:min-h-0 ${
                                   isSelected ? "border-china-red ring-1 ring-china-red bg-china-red/5" : "border-border hover:border-muted-foreground/50 bg-muted/30"
                                 }`}
                                 title={c}
@@ -679,9 +693,9 @@ const Order = () => {
                         </p>
                         {!productPreview.variants.size?.length && (
                           <div className="flex items-center gap-0 mt-2">
-                            <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
-                            <input type="number" min={1} max={99} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
-                            <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
+                            <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
+                            <input type="number" min={1} max={99} className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
+                            <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
                           </div>
                         )}
                       </div>
@@ -706,9 +720,9 @@ const Order = () => {
                                   Estoque: {stock != null ? stock : "consultar"}
                                 </span>
                                 <div className="flex items-center gap-0 ml-auto">
-                                  <button type="button" onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, (prev[value] ?? 0) - 1) }))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
-                                  <input type="number" min={0} max={maxQty} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={qty} onChange={(e) => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, Math.min(maxQty, Number(e.target.value) || 0)) }))} />
-                                  <button type="button" onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.min(maxQty, (prev[value] ?? 0) + 1) }))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
+                                  <button type="button" onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, (prev[value] ?? 0) - 1) }))} className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
+                                  <input type="number" min={0} max={maxQty} className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={qty} onChange={(e) => setQuantityBySize((prev) => ({ ...prev, [value]: Math.max(0, Math.min(maxQty, Number(e.target.value) || 0)) }))} />
+                                  <button type="button" onClick={() => setQuantityBySize((prev) => ({ ...prev, [value]: Math.min(maxQty, (prev[value] ?? 0) + 1) }))} className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
                                 </div>
                               </li>
                             );
@@ -724,9 +738,9 @@ const Order = () => {
                       <div>
                         <p className="text-xs font-semibold text-muted-foreground mb-1.5">Quantidade:</p>
                         <div className="flex items-center gap-0 w-fit">
-                          <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
-                          <input type="number" min={1} max={99} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
-                          <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
+                          <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
+                          <input type="number" min={1} max={99} className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
+                          <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
                         </div>
                       </div>
                     )}
@@ -748,9 +762,9 @@ const Order = () => {
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-1.5">Quantidade:</p>
                     <div className="flex items-center gap-0">
-                      <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
-                      <input type="number" min={1} max={99} className="w-12 text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
-                      <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="w-9 h-9 rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
+                      <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">−</button>
+                      <input type="number" min={1} max={99} className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40" value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(99, Number(e.target.value) || 1)))} />
+                      <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted">+</button>
                     </div>
                   </div>
                 )}
@@ -838,7 +852,7 @@ const Order = () => {
                         notes: notes.trim() || undefined,
                         title: productPreview?.title ?? undefined,
                         titlePt: productPreview?.titlePt ?? undefined,
-                        priceCny: productPreview?.priceCny ?? undefined,
+                        priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                         priceBrl: preview?.totalProductBrl ?? undefined,
                         image: selectedVariantImage ?? productPreview?.images?.[0] ?? undefined,
                       });
@@ -866,13 +880,13 @@ const Order = () => {
                               notes: notes.trim() || undefined,
                               title: productPreview?.title ?? undefined,
                               titlePt: productPreview?.titlePt ?? undefined,
-                              priceCny: productPreview?.priceCny ?? undefined,
+                              priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                               priceBrl: preview?.totalProductBrl ?? undefined,
                               image: selectedVariantImage ?? productPreview?.images?.[0] ?? undefined,
                             });
                             navigate("/carrinho");
                           }}
-                          className="w-full inline-flex items-center justify-center gap-2 border-2 border-border text-foreground px-4 py-3 rounded-xl text-sm font-heading font-semibold hover:bg-muted/50 transition-colors"
+                          className="touch-target w-full min-h-[48px] inline-flex items-center justify-center gap-2 border-2 border-border text-foreground px-4 py-3 rounded-xl text-sm font-heading font-semibold hover:bg-muted/50 transition-colors"
                         >
                           <ShoppingCart className="w-4 h-4" />
                           Adicionar ao carrinho

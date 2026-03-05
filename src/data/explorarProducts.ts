@@ -1,11 +1,10 @@
 /**
  * Lista de produtos do Explorar / "Produtos que você pode comprar".
- * Se existir explorarProducts.export.json com itens (gerado pelo Admin), ele é usado — assim o que
- * você edita no Admin (imagem de preview, títulos, etc.) fica no código e vai para produção.
+ * Inclui: export do Admin (ou lista embutida) + FEATURED_PRODUCTS (produtos adicionados com npm run add-product).
  * Para exportar após editar no Admin: cd backend && npm run export-explorar-to-code
- * Depois: commitar src/data/explorarProducts.export.json
  */
 import exportedFromAdmin from "./explorarProducts.export.json";
+import { FEATURED_PRODUCTS } from "./featuredProducts";
 
 const RATE_CNY = 0.75;
 
@@ -128,6 +127,38 @@ const BUILT_IN: ExplorarProduct[] = RAW.map((r) => ({
 
 const exported = exportedFromAdmin as ExplorarProduct[];
 
-/** Lista de produtos: usa a exportação do Admin se houver; senão usa a lista embutida. */
-export const EXPLORAR_PRODUCTS: ExplorarProduct[] =
+const baseList: ExplorarProduct[] =
   Array.isArray(exported) && exported.length > 0 ? exported : BUILT_IN;
+
+/** Normaliza URL para dedupe (remove query string). */
+function urlKey(u: string): string {
+  try {
+    const url = new URL(u);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return u;
+  }
+}
+
+const baseUrls = new Set(baseList.map((p) => urlKey(p.url)));
+
+const fromFeatured: ExplorarProduct[] = FEATURED_PRODUCTS.filter(
+  (fp) => !baseUrls.has(urlKey(fp.url)),
+).map((fp) => {
+  const slug = `${slugify(fp.title)}-${fp.id}`;
+  return {
+    id: fp.id,
+    url: fp.url,
+    title: fp.title,
+    titlePt: fp.title,
+    image: fp.image ?? null,
+    priceCny: fp.priceCny ?? null,
+    priceBrl: fp.priceBrl ?? null,
+    category: "outros",
+    source: fp.source,
+    slug,
+  };
+});
+
+/** Lista de produtos: base (Admin/embutida) + produtos em destaque (featuredProducts.ts). */
+export const EXPLORAR_PRODUCTS: ExplorarProduct[] = [...baseList, ...fromFeatured];

@@ -36,11 +36,12 @@ const Cart = () => {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="flex gap-4 rounded-xl border border-border bg-card p-4 shadow-sm"
+                className="flex flex-col sm:flex-row gap-4 rounded-xl border border-border bg-card p-4 shadow-sm"
               >
+                <div className="flex gap-4 flex-1 min-w-0">
                 <Link
                   to={`/pedido?url=${encodeURIComponent(item.url)}`}
-                  className="shrink-0 w-20 h-20 rounded-lg border border-border bg-muted overflow-hidden"
+                  className="shrink-0 w-20 h-20 sm:w-20 sm:h-20 rounded-lg border border-border bg-muted overflow-hidden"
                 >
                   {item.image ? (
                     <img
@@ -78,22 +79,23 @@ const Cart = () => {
                         : "—"}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                </div>
+                <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t border-border pt-3 sm:border-0 sm:pt-0">
                   <div className="flex items-center rounded-lg border border-border overflow-hidden">
                     <button
                       type="button"
                       onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                      className="w-8 h-8 flex items-center justify-center bg-background hover:bg-muted text-sm font-bold"
+                      className="touch-target min-w-[44px] min-h-[44px] flex items-center justify-center bg-background hover:bg-muted text-sm font-bold"
                     >
                       −
                     </button>
-                    <span className="w-8 h-8 flex items-center justify-center text-sm font-semibold border-x border-border">
+                    <span className="min-w-[44px] min-h-[44px] flex items-center justify-center text-sm font-semibold border-x border-border">
                       {item.quantity}
                     </span>
                     <button
                       type="button"
                       onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                      className="w-8 h-8 flex items-center justify-center bg-background hover:bg-muted text-sm font-bold"
+                      className="touch-target min-w-[44px] min-h-[44px] flex items-center justify-center bg-background hover:bg-muted text-sm font-bold"
                     >
                       +
                     </button>
@@ -101,7 +103,7 @@ const Cart = () => {
                   <button
                     type="button"
                     onClick={() => removeItem(item.id)}
-                    className="p-2 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                    className="touch-target min-w-[44px] min-h-[44px] p-2 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
                     aria-label="Remover"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -122,13 +124,13 @@ const Cart = () => {
             <div className="flex flex-wrap gap-3">
               <Link
                 to="/"
-                className="inline-flex items-center gap-2 border border-border px-4 py-2 rounded-full text-sm font-medium hover:bg-muted transition-colors"
+                className="touch-target inline-flex items-center justify-center gap-2 border border-border px-4 py-3 min-h-[48px] rounded-full text-sm font-medium hover:bg-muted transition-colors"
               >
                 Continuar comprando
               </Link>
               <Link
                 to="/checkout"
-                className="inline-flex items-center gap-2 bg-china-red text-white px-5 py-2.5 rounded-full text-sm font-heading font-bold hover:bg-china-red/90 transition-colors"
+                className="touch-target inline-flex items-center justify-center gap-2 bg-china-red text-white px-5 py-3 min-h-[48px] rounded-full text-sm font-heading font-bold hover:bg-china-red/90 transition-colors"
               >
                 Finalizar pedido
               </Link>
