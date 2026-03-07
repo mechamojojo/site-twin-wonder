@@ -33,8 +33,8 @@ export interface ProductPreviewResult {
   rawUrl: string;
 }
 
-const SCRAPE_TIMEOUT_MS = 35000;
-const SCRAPE_RETRY_COUNT = 1;
+const SCRAPE_TIMEOUT_MS = 45000;
+const SCRAPE_RETRY_COUNT = 2;
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -272,6 +272,19 @@ export async function getProductPreview(productUrl: string): Promise<ProductPrev
         }
       } catch (err) {
         console.warn("[scraper] CSSBuy scrape failed:", err);
+      }
+    }
+    // CSSBuy falhou — tentar scrape da URL original (marketplace) para produtos que carregam no navegador
+    if (productUrl !== cssbuyUrl) {
+      console.log("[scraper] CSSBuy failed, trying original URL:", productUrl.slice(0, 60));
+      for (let attempt = 0; attempt <= SCRAPE_RETRY_COUNT; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+        const directResult = await getProductPreviewOnce(productUrl);
+        if (directResult) {
+          return { ...directResult, rawUrl: productUrl };
+        }
       }
     }
     return null;

@@ -1,14 +1,29 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
+# ComprasChina — robots.txt
+# https://compraschina.com.br
 
 User-agent: *
 Allow: /
+
+# Block admin and private pages
+Disallow: /admin
+Disallow: /admin/
+Disallow: /meus-pedidos
+Disallow: /checkout
+Disallow: /carrinho
+Disallow: /pagar/
+Disallow: /entrar
+Disallow: /cadastro
+Disallow: /esqueci-senha
+Disallow: /redefinir-senha
+Disallow: /confirmar-email
+Disallow: /pedido-confirmado/
+
+# Allow public pages explicitly
+Allow: /$
+Allow: /explorar
+Allow: /produto/
+Allow: /servicos
+Allow: /termos-de-servico
+Allow: /politica-de-privacidade
+
+Sitemap: https://compraschina.com.br/sitemap.xml

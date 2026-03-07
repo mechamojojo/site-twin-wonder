@@ -20,6 +20,20 @@ export type AuthUser = {
   addressState: string | null;
 };
 
+export type UpdateProfileData = {
+  name?: string;
+  customerWhatsapp?: string;
+  cep?: string;
+  addressStreet?: string;
+  addressNumber?: string;
+  addressComplement?: string;
+  addressNeighborhood?: string;
+  addressCity?: string;
+  addressState?: string;
+  currentPassword?: string;
+  newPassword?: string;
+};
+
 type AuthContextValue = {
   user: AuthUser | null;
   token: string | null;
@@ -29,6 +43,7 @@ type AuthContextValue = {
   logout: () => void;
   fetchMe: () => Promise<void>;
   resendVerification: () => Promise<void>;
+  updateProfile: (data: UpdateProfileData) => Promise<void>;
 };
 
 export type RegisterData = {
@@ -173,6 +188,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) throw new Error(data.error || "Erro ao reenviar e-mail");
   }, []);
 
+  const updateProfile = useCallback(async (data: UpdateProfileData) => {
+    const t = getAuthToken();
+    if (!t) throw new Error("Não autenticado");
+    const res = await fetch(apiUrl("/api/auth/me"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+      body: JSON.stringify(data),
+    });
+    const resData = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(resData.error || "Erro ao atualizar perfil");
+    const stored = loadStored();
+    if (stored) saveStored(stored.token, resData as AuthUser);
+    setUser(resData as AuthUser);
+  }, []);
+
   const logout = useCallback(() => {
     clearStored();
     setToken(null);
@@ -188,6 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     fetchMe,
     resendVerification,
+    updateProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -6,4 +6,5 @@ export const CATEGORY_LABELS: Record<string, string> = {
   casa: "Casa & Decoração",
   beleza: "Beleza",
   outros: "Outros",
+  "marcas-chinesas": "Marcas chinesas",
 };

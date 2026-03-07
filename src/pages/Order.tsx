@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
+import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
 
 const getQueryParam = (search: string, key: string) => {
   const params = new URLSearchParams(search);
@@ -61,6 +62,7 @@ const Order = () => {
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const [keepBox, setKeepBox] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<{
     productPriceCny: number;
@@ -785,7 +787,7 @@ const Order = () => {
                   </summary>
                   <div className="p-3 pt-0 text-[11px] text-muted-foreground space-y-2">
                     <p className="leading-relaxed">
-                      Os produtos exibidos são de marketplaces de terceiros. A ComprasChina atua como intermediária. Verifique as informações e aceite os riscos associados à qualidade e autenticidade.
+                      Os produtos são vendidos por lojas nos marketplaces chineses (Taobao, 1688, Weidian etc.). A ComprasChina realiza a compra em seu nome e cuida de todo o envio até o Brasil. A qualidade e as especificações dependem do vendedor na plataforma de origem; verifique as informações antes de finalizar.
                     </p>
                     <label className="flex items-start gap-2 cursor-pointer">
                       <input
@@ -833,6 +835,12 @@ const Order = () => {
                         ? optsAndSize.filter(Boolean).join("; ")
                         : variation.trim();
 
+                    // Detect product category for keepBox eligibility
+                    const productCategory = detectCategory(
+                      productPreview?.titlePt ?? productPreview?.title,
+                    );
+                    const supportsKeepBox = categorySupportsKeepBox(productCategory);
+
                     const handleAddToCart = () => {
                       if (!url) return;
                       if (!disclaimerAccepted) {
@@ -855,11 +863,28 @@ const Order = () => {
                         priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                         priceBrl: preview?.totalProductBrl ?? undefined,
                         image: selectedVariantImage ?? productPreview?.images?.[0] ?? undefined,
+                        category: productCategory,
+                        keepBox,
                       });
                       navigate("/carrinho");
                     };
                     return (
                       <>
+                        {/* keepBox toggle — shown only for bulky-box categories */}
+                        {supportsKeepBox && (
+                          <label className="flex items-center gap-2 cursor-pointer select-none py-1">
+                            <input
+                              type="checkbox"
+                              checked={keepBox}
+                              onChange={(e) => setKeepBox(e.target.checked)}
+                              className="rounded border-border w-4 h-4 accent-china-red"
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              Manter embalagem original
+                              <span className="ml-1 text-xs text-muted-foreground/60">(+peso volumétrico)</span>
+                            </span>
+                          </label>
+                        )}
                         <button type="button" onClick={handleAddToCart} className="w-full inline-flex items-center justify-center gap-2 bg-china-red text-white px-5 py-4 rounded-xl text-base font-heading font-bold hover:bg-china-red/90 transition-colors shadow-md">
                           Comprar agora
                         </button>
@@ -883,6 +908,8 @@ const Order = () => {
                               priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                               priceBrl: preview?.totalProductBrl ?? undefined,
                               image: selectedVariantImage ?? productPreview?.images?.[0] ?? undefined,
+                              category: productCategory,
+                              keepBox,
                             });
                             navigate("/carrinho");
                           }}

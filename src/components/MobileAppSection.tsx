@@ -1,66 +1,83 @@
-import { Apple, Smartphone, Check } from "lucide-react";
-import appMockup from "@/assets/app-mockup.png";
+import { MessageCircle, Mail, Clock, Users } from "lucide-react";
+import { whatsAppUrl, CONTACT_EMAIL } from "@/data/siteConfig";
 
-const features = [
-  "Notificações em tempo real",
-  "Fotografe e pesquise produtos",
-  "Acompanhe seus pedidos",
-  "Chat com suporte em português",
+const channels = [
+  {
+    icon: MessageCircle,
+    title: "WhatsApp",
+    description: "Fale direto com nossa equipe. Resposta em até 2 horas nos dias úteis.",
+    cta: "Abrir conversa",
+    href: whatsAppUrl("Olá! Tenho uma dúvida sobre compras da China."),
+    external: true,
+    accent: "from-emerald-500 to-emerald-600",
+  },
+  {
+    icon: Mail,
+    title: "E-mail",
+    description: "Para dúvidas detalhadas, documentação de pedidos ou suporte pós-compra.",
+    cta: "Enviar e-mail",
+    href: `mailto:${CONTACT_EMAIL}`,
+    external: true,
+    accent: "from-china-red to-china-red/70",
+  },
 ];
 
-const MobileAppSection = () => {
-  return (
-    <section id="app" className="py-20 bg-background overflow-hidden">
-      <div className="container mx-auto px-4">
-        <div className="flex flex-col lg:flex-row items-center gap-12 max-w-5xl mx-auto">
-          <div className="lg:w-1/2 flex justify-center">
-            <div className="relative">
-              <div className="absolute -inset-4 bg-gradient-to-br from-china-red/20 to-gold/20 rounded-3xl blur-2xl" />
-              <img src={appMockup} alt="Aplicativo ComprasChina" className="relative w-72 lg:w-80 drop-shadow-2xl" />
-            </div>
-          </div>
+const stats = [
+  { icon: Clock, value: "< 2h", label: "Tempo médio de resposta" },
+  { icon: Users, value: "100%", label: "Atendimento em português" },
+];
 
-          <div className="lg:w-1/2 text-center lg:text-left">
-            <span className="text-xs font-bold text-gold uppercase tracking-widest">Aplicativo Móvel</span>
-            <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mt-2 mb-4">
-              Compre da China na palma da sua mão
-            </h2>
-            <p className="text-muted-foreground leading-relaxed mb-6">
-              Baixe nosso aplicativo e tenha acesso completo à plataforma pelo celular.
-            </p>
+const MobileAppSection = () => (
+  <section id="contato" className="py-20 bg-section-alt">
+    <div className="container mx-auto px-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-12">
+          <span className="text-xs font-bold text-china-red uppercase tracking-widest">Atendimento</span>
+          <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mt-2 mb-3">
+            Alguma dúvida? A gente resolve.
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-md mx-auto">
+            Suporte 100% em português — antes, durante e depois da compra.
+          </p>
+        </div>
 
-            <ul className="space-y-3 mb-8">
-              {features.map((f, i) => (
-                <li key={i} className="flex items-center gap-3 text-sm text-foreground justify-center lg:justify-start">
-                  <span className="w-6 h-6 rounded-full bg-gradient-to-br from-china-red to-gold flex items-center justify-center shrink-0">
-                    <Check className="w-3.5 h-3.5 text-white" />
-                  </span>
-                  {f}
-                </li>
-              ))}
-            </ul>
-
-            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+          {channels.map((c, i) => (
+            <div
+              key={i}
+              className="bg-background rounded-2xl border border-border shadow-card p-7 flex flex-col hover:shadow-card-hover transition-shadow"
+            >
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${c.accent} flex items-center justify-center mb-4 shadow-md`}>
+                <c.icon className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="font-heading font-bold text-foreground text-lg mb-2">{c.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed flex-1">{c.description}</p>
               <a
-                href="#"
-                className="inline-flex items-center gap-2 bg-foreground text-background px-6 py-3.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                href={c.href}
+                target={c.external ? "_blank" : undefined}
+                rel={c.external ? "noreferrer" : undefined}
+                className="inline-block mt-5 bg-foreground text-background text-sm font-bold px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity text-center"
               >
-                <Apple className="w-5 h-5" />
-                Baixar para iOS
-              </a>
-              <a
-                href="#"
-                className="inline-flex items-center gap-2 border-2 border-foreground text-foreground px-6 py-3.5 rounded-xl font-bold text-sm hover:bg-foreground hover:text-background transition-colors"
-              >
-                <Smartphone className="w-5 h-5" />
-                Baixar para Android
+                {c.cta} →
               </a>
             </div>
-          </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          {stats.map((s, i) => (
+            <div key={i} className="bg-background border border-border rounded-2xl p-5 text-center shadow-card">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-china-red/10 to-gold/10 flex items-center justify-center mx-auto mb-2">
+                <s.icon className="w-5 h-5 text-china-red" />
+              </div>
+              <p className="font-heading font-extrabold text-xl text-foreground">{s.value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+            </div>
+          ))}
         </div>
       </div>
-    </section>
-  );
-};
+    </div>
+  </section>
+);
 
 export default MobileAppSection;

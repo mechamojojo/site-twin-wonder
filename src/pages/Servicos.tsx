@@ -13,8 +13,8 @@ const services = [
     steps: [
       "Envie o link do produto (Taobao, 1688, Weidian, TMALL, etc.) pela nossa página.",
       "Informe a variação desejada (cor, tamanho), quantidade e seu CEP.",
-      "Nossa equipe confere disponibilidade e envia o orçamento final em reais (produto + taxa ComprasChina + frete).",
-      "Você paga em reais (PIX, cartão ou boleto). Nós compramos na China usando nossa estrutura e enviamos até você.",
+      "Veja o valor total em reais na hora — produto, taxa de serviço e frete já calculados.",
+      "Pague via PIX, cartão ou boleto. Nós compramos na China e enviamos direto para você no Brasil.",
     ],
   },
   {

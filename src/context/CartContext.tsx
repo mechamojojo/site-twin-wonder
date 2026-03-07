@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import type { ProductCategory } from "@/lib/shipping";
 
 const CART_STORAGE_KEY = "compraschina-cart";
 
@@ -15,6 +16,12 @@ export type CartItem = {
   priceCny?: number | null;
   priceBrl?: number | null;
   image?: string | null;
+  /** Estimated weight per unit in grams (used for freight calculation) */
+  weightG?: number | null;
+  /** Product category for weight defaults and keepBox detection */
+  category?: ProductCategory;
+  /** Whether the user wants to keep the original box (affects volumetric weight) */
+  keepBox?: boolean;
 };
 
 type CartContextValue = {
@@ -23,6 +30,7 @@ type CartContextValue = {
   addItem: (item: Omit<CartItem, "id">) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
+  updateKeepBox: (id: string, keepBox: boolean) => void;
   clearCart: () => void;
 };
 
@@ -70,6 +78,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const updateKeepBox = useCallback((id: string, keepBox: boolean) => {
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, keepBox } : i))
+    );
+  }, []);
+
   const clearCart = useCallback(() => setItems([]), []);
 
   const totalItems = useMemo(
@@ -78,8 +92,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<CartContextValue>(
-    () => ({ items, totalItems, addItem, removeItem, updateQuantity, clearCart }),
-    [items, totalItems, addItem, removeItem, updateQuantity, clearCart]
+    () => ({ items, totalItems, addItem, removeItem, updateQuantity, updateKeepBox, clearCart }),
+    [items, totalItems, addItem, removeItem, updateQuantity, updateKeepBox, clearCart]
   );
 
   return (

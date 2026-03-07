@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, ExternalLink, GripVertical, Lock, LogOut, Package, Pencil, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, GripVertical, Lock, LogOut, Package, Pencil, Plus, RefreshCw, ShoppingBag, Trash2 } from "lucide-react";
 import { CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { FEATURED_PRODUCTS } from "@/data/featuredProducts";
 
 type OrderWithDetails = {
   id: string;
@@ -168,6 +169,8 @@ const Admin = () => {
   const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
   const [editForm, setEditForm] = useState({ title: "", titlePt: "", category: "outros", featured: false, image: "", images: "" });
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ created: number; skipped: number } | null>(null);
 
   const fetchOrders = (authToken: string) => {
     const url = filter === "all" ? apiUrl("/api/admin/orders") : apiUrl(`/api/admin/orders?status=${filter}`);
@@ -445,6 +448,64 @@ const Admin = () => {
       return;
     }
     handleReorder(ids);
+  };
+
+  // Map FeaturedCategory → DB category + featured flag
+  const FEATURED_CAT_MAP: Record<string, { category: string; featured: boolean }> = {
+    "destaques":       { category: "outros",          featured: true  },
+    "mais-vendidos":   { category: "outros",          featured: true  },
+    "tendencias":      { category: "moda",            featured: false },
+    "marcas-chinesas": { category: "marcas-chinesas", featured: false },
+  };
+
+  // Which static products are NOT yet in the DB (compared by URL without query string)
+  const dbUrls = useMemo(
+    () => new Set(catalogProducts.map((p) => p.originalUrl.replace(/\?.*$/, ""))),
+    [catalogProducts]
+  );
+
+  const unimportedStatic = useMemo(
+    () => FEATURED_PRODUCTS.filter((fp) => !dbUrls.has(fp.url.replace(/\?.*$/, ""))),
+    [dbUrls]
+  );
+
+  const handleSyncStatic = async () => {
+    if (!token || unimportedStatic.length === 0) return;
+    setSyncLoading(true);
+    setSyncResult(null);
+    try {
+      const payload = unimportedStatic.map((fp) => {
+        const mapped = FEATURED_CAT_MAP[fp.category] ?? { category: "outros", featured: false };
+        return {
+          url: fp.url,
+          title: fp.title,
+          titlePt: fp.title,
+          image: fp.image ?? null,
+          priceCny: fp.priceCny ?? null,
+          priceBrl: fp.priceBrl ?? null,
+          source: fp.source,
+          category: mapped.category,
+          featured: mapped.featured,
+        };
+      });
+      const res = await fetch(apiUrl("/api/admin/products/bulk-import"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ products: payload }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao sincronizar");
+        return;
+      }
+      setSyncResult({ created: data.created, skipped: data.skipped });
+      toast.success(`Sincronização concluída: ${data.created} adicionados, ${data.skipped} já existentes.`);
+      await fetchCatalogProducts({ mergeWithPrevious: true });
+    } catch {
+      toast.error("Erro de conexão");
+    } finally {
+      setSyncLoading(false);
+    }
   };
 
   const commitPosition = (productId: string) => {
@@ -787,6 +848,54 @@ const Admin = () => {
                   )}
                 </button>
               </form>
+            </div>
+
+            {/* Sync static products */}
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    <RefreshCw className="w-5 h-5 text-china-red" />
+                    Sincronizar produtos estáticos
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Importa os produtos definidos no código (<code className="bg-muted px-1 rounded">featuredProducts.ts</code>) para o banco de dados, permitindo editá-los e reordená-los pelo admin.
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-2xl font-bold text-foreground">{unimportedStatic.length}</p>
+                  <p className="text-xs text-muted-foreground">não importados</p>
+                </div>
+              </div>
+              {unimportedStatic.length > 0 ? (
+                <div className="mt-4">
+                  <div className="mb-3 max-h-40 overflow-y-auto rounded-lg border border-border bg-muted/30 p-3 space-y-1">
+                    {unimportedStatic.map((fp) => (
+                      <p key={fp.id} className="text-xs text-muted-foreground truncate">
+                        <span className="text-foreground font-medium">{fp.title}</span>
+                        {" · "}{fp.source}
+                      </p>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleSyncStatic}
+                    disabled={syncLoading}
+                    className="inline-flex items-center gap-2 bg-china-red text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-china-red/90 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${syncLoading ? "animate-spin" : ""}`} />
+                    {syncLoading ? "Importando..." : `Importar ${unimportedStatic.length} produtos`}
+                  </button>
+                  {syncResult && (
+                    <p className="mt-2 text-sm text-green-700 dark:text-green-400">
+                      ✓ {syncResult.created} adicionados, {syncResult.skipped} já existiam.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-green-700 dark:text-green-400 font-medium">
+                  ✓ Todos os produtos estáticos já estão no banco de dados.
+                </p>
+              )}
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6">

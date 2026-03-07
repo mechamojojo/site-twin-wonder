@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
+import { calcCartShipping, detectCategory } from "@/lib/shipping";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -167,15 +168,42 @@ const Checkout = () => {
     setLoading(true);
     let firstOrderId: string | null = null;
 
-    const freightPerItem = 45 / items.length;
+    // Compute real freight estimate from cart weights
+    const shippingResult = calcCartShipping(
+      items.map((i) => ({
+        category: i.category ?? detectCategory(i.titlePt ?? i.title),
+        weightG: i.weightG,
+        keepBox: i.keepBox ?? false,
+        quantity: i.quantity,
+      })),
+    );
+    const totalFreightBrl = shippingResult.totalBrl;
+    const totalProductBrl = items.reduce(
+      (acc, i) =>
+        acc +
+        (i.priceBrl ?? (i.priceCny != null ? i.priceCny * 0.75 * 1.25 : 100)) *
+          i.quantity,
+      0,
+    );
+    // Distribute freight proportionally by item weight
+    const totalWeightG = shippingResult.totalWeightG;
+
     try {
       for (const item of items) {
         const unitBrl =
           item.priceBrl ??
           (item.priceCny != null ? item.priceCny * 0.75 * 1.25 : 100);
         const productTotal = unitBrl * item.quantity;
+        // Weight-proportional freight share for this item
+        const itemCat = item.category ?? detectCategory(item.titlePt ?? item.title);
+        const itemWeightG = (item.weightG ?? 400) * item.quantity;
+        const freightShare =
+          totalWeightG > 0
+            ? (itemWeightG / totalWeightG) * totalFreightBrl
+            : totalFreightBrl / items.length;
         const estimatedTotalBrl =
-          Math.round((productTotal + freightPerItem) * 100) / 100;
+          Math.round((productTotal + freightShare) * 100) / 100;
+        void itemCat; void totalProductBrl;
 
         const productDescription = [
           item.titlePt || item.title || "Produto",

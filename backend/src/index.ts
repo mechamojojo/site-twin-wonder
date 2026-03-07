@@ -14,7 +14,7 @@ import crypto from "crypto";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import { sendTelegram } from "./telegram";
-import { sendVerificationEmail, sendPasswordResetEmail } from "./email";
+import { sendVerificationEmail, sendPasswordResetEmail, sendOrderStatusEmail } from "./email";
 import { verifyTurnstile } from "./turnstile";
 import { hashPassword, verifyPassword, signToken, requireUser, optionalUser } from "./auth";
 import cors from "cors";
@@ -384,6 +384,85 @@ app.get("/api/auth/me", requireUser, async (req, res) => {
   }
 });
 
+// Atualizar perfil (usuário logado)
+app.patch("/api/auth/me", requireUser, async (req, res) => {
+  try {
+    const userId = (req as express.Request & { userId: string }).userId;
+    const body = req.body ?? {};
+    const updates: Record<string, unknown> = {};
+
+    if (typeof body.name === "string" && body.name.trim().length >= 2) {
+      updates.name = body.name.trim().slice(0, 100);
+    }
+    if (typeof body.customerWhatsapp === "string") {
+      const w = body.customerWhatsapp.replace(/\D/g, "");
+      if (w.length >= 10) updates.customerWhatsapp = w;
+    }
+    if (typeof body.cep === "string") {
+      const c = body.cep.replace(/\D/g, "");
+      if (c.length === 8) updates.cep = c;
+    }
+    if (typeof body.addressStreet === "string" && body.addressStreet.trim()) {
+      updates.addressStreet = body.addressStreet.trim().slice(0, 200);
+    }
+    if (typeof body.addressNumber === "string" && body.addressNumber.trim()) {
+      updates.addressNumber = body.addressNumber.trim().slice(0, 20);
+    }
+    if (typeof body.addressComplement === "string") {
+      updates.addressComplement = body.addressComplement.trim().slice(0, 100) || null;
+    }
+    if (typeof body.addressNeighborhood === "string" && body.addressNeighborhood.trim()) {
+      updates.addressNeighborhood = body.addressNeighborhood.trim().slice(0, 100);
+    }
+    if (typeof body.addressCity === "string" && body.addressCity.trim()) {
+      updates.addressCity = body.addressCity.trim().slice(0, 100);
+    }
+    if (typeof body.addressState === "string" && body.addressState.trim().length === 2) {
+      updates.addressState = body.addressState.trim().toUpperCase();
+    }
+
+    // Password change (optional)
+    if (typeof body.newPassword === "string" && body.newPassword.length >= 6) {
+      if (typeof body.currentPassword !== "string" || !body.currentPassword) {
+        return res.status(400).json({ error: "Senha atual obrigatória para alterar a senha" });
+      }
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+      const valid = await verifyPassword(body.currentPassword, user.password);
+      if (!valid) return res.status(400).json({ error: "Senha atual incorreta" });
+      updates.password = hashPassword(body.newPassword);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Nenhum campo válido para atualizar" });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updates,
+    });
+
+    res.json({
+      id: updated.id,
+      email: updated.email,
+      name: updated.name,
+      emailVerified: updated.emailVerified,
+      customerCpf: updated.customerCpf,
+      customerWhatsapp: updated.customerWhatsapp,
+      cep: updated.cep,
+      addressStreet: updated.addressStreet,
+      addressNumber: updated.addressNumber,
+      addressComplement: updated.addressComplement,
+      addressNeighborhood: updated.addressNeighborhood,
+      addressCity: updated.addressCity,
+      addressState: updated.addressState,
+    });
+  } catch (err) {
+    console.error("Update profile:", err);
+    res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar perfil") });
+  }
+});
+
 // Meus pedidos (usuário logado)
 app.get("/api/auth/me/orders", requireUser, async (req, res) => {
   try {
@@ -602,7 +681,7 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
     const order = await prisma.order.update({
       where: { id },
       data: updates,
-      include: { quote: true, payment: true, shipment: true },
+      include: { quote: true, payment: true, shipment: true, user: { select: { email: true, name: true } } },
     });
     if (updates.status === OrderStatus.PAGO) {
       try {
@@ -615,6 +694,16 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
       } catch (err) {
         console.warn("Erro ao adicionar produto ao catálogo:", err);
       }
+    }
+    // Send status email if user is linked and status is user-relevant
+    if (updates.status && order.user?.email) {
+      sendOrderStatusEmail(
+        order.user.email,
+        order.user.name,
+        order.id,
+        updates.status as string,
+        order.productTitle || order.productDescription
+      ).catch((err) => console.warn("[email] Order status email failed:", err));
     }
     res.json(order);
   } catch (err) {
@@ -892,6 +981,82 @@ app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
     }
     console.error("Admin delete product:", err);
     res.status(500).json({ error: safeErrorMessage(err, "Erro ao excluir produto") });
+  }
+});
+
+// Admin: importar múltiplos produtos em massa (sem scraping) — protegido
+app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
+  try {
+    const { products } = (req.body ?? {}) as { products?: unknown[] };
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: "Envie { products: [...] }" });
+    }
+
+    function makeSlug(s: string): string {
+      return (s || "produto")
+        .toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        .replace(/-+/g, "-")
+        .slice(0, 80) || "produto";
+    }
+
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const item of products as Record<string, unknown>[]) {
+      const url = String(item.url ?? "").trim();
+      if (!url || !url.startsWith("http")) {
+        errors.push(`URL inválida: ${url}`);
+        continue;
+      }
+
+      // Skip duplicates
+      const existing = await prisma.product.findUnique({ where: { originalUrl: url } });
+      if (existing) { skipped++; continue; }
+
+      // Generate unique slug
+      const baseSlug = makeSlug(String(item.titlePt || item.title || "produto"));
+      let slug = baseSlug;
+      let attempt = 0;
+      while (await prisma.product.findUnique({ where: { slug } })) {
+        attempt++;
+        slug = `${baseSlug}-${attempt}`;
+      }
+
+      try {
+        await prisma.product.create({
+          data: {
+            originalUrl: url,
+            title: String(item.title ?? "").trim().slice(0, 300) || "Produto",
+            titlePt: item.titlePt ? String(item.titlePt).trim().slice(0, 300) : null,
+            image: item.image ? String(item.image).trim() : null,
+            priceCny: item.priceCny != null ? Number(item.priceCny) : null,
+            priceBrl: item.priceBrl != null ? Number(item.priceBrl) : null,
+            source: String(item.source ?? "1688").trim(),
+            category: String(item.category ?? "outros").trim(),
+            slug,
+            featured: Boolean(item.featured),
+          },
+        });
+        created++;
+      } catch (err) {
+        if ((err as { code?: string })?.code === "P2002") {
+          skipped++;
+        } else {
+          errors.push(`Erro ${url}: ${String(err)}`);
+        }
+      }
+    }
+
+    res.json({ created, skipped, errors });
+  } catch (err) {
+    console.error("Bulk import:", err);
+    res.status(500).json({ error: safeErrorMessage(err, "Erro ao importar produtos") });
   }
 });
 

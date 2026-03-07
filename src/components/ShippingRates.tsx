@@ -1,32 +1,28 @@
-import { Zap, Truck, Ship } from "lucide-react";
+import { TrendingDown, MapPin, Eye } from "lucide-react";
+import { Link } from "react-router-dom";
+import FreightEstimator from "@/components/FreightEstimator";
 
-const methods = [
+const benefits = [
   {
-    method: "FJ-BR-EXP",
-    icon: Zap,
-    weight: "0-3KG",
-    firstWeight: "CN¥50 / 100G",
-    additionalWeight: "CN¥10.5 / 100G",
-    deliveryTime: "12-30 dias",
-    tag: "Mais Popular",
+    icon: Eye,
+    title: "Veja o custo antes de pagar",
+    description:
+      "O valor exato do frete em reais aparece no carrinho antes de qualquer cobrança. Sem surpresa, sem taxa escondida.",
+    highlight: null,
   },
   {
-    method: "BR-EMS",
-    icon: Truck,
-    weight: "0-20KG",
-    firstWeight: "CN¥80 / 500G",
-    additionalWeight: "CN¥25 / 500G",
-    deliveryTime: "15-40 dias",
-    tag: "Econômico",
+    icon: TrendingDown,
+    title: "Quanto mais, menor o custo",
+    description:
+      "O frete é proporcional ao peso total. Agrupar produtos no mesmo pedido dilui o custo — vale juntar tudo numa encomenda só.",
+    highlight: "Dica: junte itens e economize",
   },
   {
-    method: "BR-SEA",
-    icon: Ship,
-    weight: "5-30KG",
-    firstWeight: "CN¥120 / 1KG",
-    additionalWeight: "CN¥18 / 1KG",
-    deliveryTime: "40-60 dias",
-    tag: "Marítimo",
+    icon: MapPin,
+    title: "Rastreado do China ao seu CEP",
+    description:
+      "Código de rastreio assim que sai do armazém. Você acompanha cada etapa até a sua porta. Prazo médio: 15–30 dias.",
+    highlight: "Entrega para todo o Brasil",
   },
 ];
 
@@ -35,63 +31,49 @@ const ShippingRates = () => {
     <section id="shipping" className="py-20 bg-background">
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
-          <span className="text-xs font-bold text-gold uppercase tracking-widest">Logística</span>
+          <span className="text-xs font-bold text-gold uppercase tracking-widest">Entrega</span>
           <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mt-2 mb-3">
-            Envio Direto para o Brasil 🇧🇷
+            Da China direto na sua porta 🇧🇷
           </h2>
-          <p className="text-muted-foreground text-lg mb-6">
-            Diversas opções de frete da China para o Brasil com rastreamento completo
+          <p className="text-muted-foreground text-lg max-w-lg mx-auto">
+            Frete calculado automaticamente — você vê o valor em reais antes de pagar.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-          {methods.map((m, i) => (
-            <div
-              key={i}
-              className={`relative bg-background border rounded-2xl p-7 shadow-card hover:shadow-card-hover transition-all duration-300 hover:-translate-y-1 ${
-                i === 0 ? "border-china-red/40 ring-1 ring-china-red/20" : "border-border"
-              }`}
-            >
-              {m.tag && (
-                <span className={`absolute -top-3 left-6 text-xs font-bold px-3 py-1 rounded-full ${
-                  i === 0
-                    ? "bg-china-red text-white"
-                    : "bg-gold/20 text-gold"
-                }`}>
-                  {m.tag}
-                </span>
-              )}
-              <div className="flex items-center gap-3 mb-6 mt-2">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-china-red to-gold flex items-center justify-center shadow-md">
-                  <m.icon className="w-5 h-5 text-white" />
+        <div className="flex flex-col lg:flex-row gap-8 max-w-5xl mx-auto items-start">
+          {/* Benefits */}
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+            {benefits.map((b, i) => (
+              <div
+                key={i}
+                className="flex gap-4 p-5 bg-background border border-border rounded-2xl shadow-card hover:shadow-card-hover transition-all"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-china-red to-gold flex items-center justify-center shrink-0 shadow-md">
+                  <b.icon className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h4 className="font-heading font-bold text-foreground text-lg">{m.method}</h4>
-                  <span className="text-xs text-muted-foreground">{m.weight}</span>
+                  <h4 className="font-heading font-bold text-foreground text-sm mb-1">{b.title}</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{b.description}</p>
+                  {b.highlight && (
+                    <p className="mt-2 text-xs font-semibold text-china-red">✓ {b.highlight}</p>
+                  )}
                 </div>
               </div>
+            ))}
+          </div>
 
-              <div className="space-y-3 mb-5">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Peso Inicial</span>
-                  <span className="font-bold text-china-red">{m.firstWeight}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Peso Adicional</span>
-                  <span className="font-bold text-china-red">{m.additionalWeight}</span>
-                </div>
-                <div className="border-t border-border pt-3 flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Prazo</span>
-                  <span className="font-bold text-foreground">{m.deliveryTime}</span>
-                </div>
-              </div>
-
-              <a href="#" className="block text-center text-sm text-china-red font-semibold hover:underline">
-                Ver detalhes →
-              </a>
-            </div>
-          ))}
+          {/* Estimator */}
+          <div className="w-full lg:w-auto lg:shrink-0">
+            <FreightEstimator />
+          </div>
         </div>
+
+        <p className="text-center text-xs text-muted-foreground mt-8 max-w-lg mx-auto">
+          Valor exato aparece no carrinho antes do pagamento.{" "}
+          <Link to="/servicos" className="text-china-red hover:underline font-medium">
+            Saiba mais sobre como funciona →
+          </Link>
+        </p>
       </div>
     </section>
   );

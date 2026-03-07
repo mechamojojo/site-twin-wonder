@@ -25,6 +25,20 @@ export function whatsAppUrl(message?: string): string {
 /** E-mail de contato */
 export const CONTACT_EMAIL = "contato@compraschina.com.br";
 
+/**
+ * CNPJ da empresa — exibido na TrustBar e no rodapé.
+ * Preencha com o CNPJ real no formato "XX.XXX.XXX/0001-XX".
+ * Deixe null para ocultar até obter o registro.
+ */
+export const CNPJ: string | null = null;
+
+/** URLs de busca nos marketplaces chineses (abre em nova aba para o usuário escolher onde buscar). */
+export const MARKETPLACE_SEARCH_URLS: Record<string, (q: string) => string> = {
+  "1688": (q) => `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(q)}`,
+  "Taobao": (q) => `https://s.taobao.com/search?q=${encodeURIComponent(q)}`,
+  "Weidian": (q) => `https://shopsearch.weidian.com/search?keyword=${encodeURIComponent(q)}`,
+};
+
 /** Mercado Pago - Chave pública (para tokenização de cartão no frontend).
  * Obtenha em: https://www.mercadopago.com.br/developers/panel/app > Credenciais
  * Use import.meta.env.VITE_MP_PUBLIC_KEY ou defina aqui

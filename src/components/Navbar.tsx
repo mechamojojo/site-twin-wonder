@@ -7,6 +7,7 @@ import {
   User,
   LogOut,
   Heart,
+  Package,
 } from "lucide-react";
 import { useState } from "react";
 import { looksLikeUrl } from "@/lib/urlValidation";
@@ -169,20 +170,39 @@ const Navbar = () => {
               >
                 <Heart className="w-4 h-4" />
               </Link>
-              <Link
-                to="/meus-pedidos"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-china-red"
-              >
-                <User className="w-4 h-4" />
-                {user.name.split(" ")[0]}
-              </Link>
-              <button
-                onClick={() => logout()}
-                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                aria-label="Sair"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              <div className="relative group">
+                <button className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-china-red px-1 py-1">
+                  <User className="w-4 h-4" />
+                  {user.name.split(" ")[0]}
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                </button>
+                <div className="absolute right-0 top-full pt-1 hidden group-hover:block z-50">
+                  <div className="bg-background border border-border rounded-xl shadow-lg py-1 min-w-[160px]">
+                    <Link
+                      to="/minha-conta"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                    >
+                      <User className="w-3.5 h-3.5 text-muted-foreground" />
+                      Minha conta
+                    </Link>
+                    <Link
+                      to="/meus-pedidos"
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Package className="w-3.5 h-3.5 text-muted-foreground" />
+                      Meus pedidos
+                    </Link>
+                    <div className="border-t border-border my-1" />
+                    <button
+                      onClick={() => logout()}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted w-full transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      Sair
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <>
@@ -235,6 +255,14 @@ const Navbar = () => {
                 {user && (
                   <>
                     <Link
+                      to="/minha-conta"
+                      onClick={() => setMobileOpen(false)}
+                      className="touch-target flex items-center gap-2 text-foreground font-medium hover:text-china-red transition-colors py-3 px-2 -mx-2 rounded-lg active:bg-muted/50"
+                    >
+                      <User className="w-4 h-4" />
+                      Minha conta
+                    </Link>
+                    <Link
                       to="/produtos-salvos"
                       onClick={() => setMobileOpen(false)}
                       className="touch-target flex items-center gap-2 text-foreground font-medium hover:text-china-red transition-colors py-3 px-2 -mx-2 rounded-lg active:bg-muted/50"
@@ -247,7 +275,7 @@ const Navbar = () => {
                       onClick={() => setMobileOpen(false)}
                       className="touch-target flex items-center gap-2 text-foreground font-medium hover:text-china-red transition-colors py-3 px-2 -mx-2 rounded-lg active:bg-muted/50"
                     >
-                      <User className="w-4 h-4" />
+                      <Package className="w-4 h-4" />
                       Meus pedidos
                     </Link>
                   </>

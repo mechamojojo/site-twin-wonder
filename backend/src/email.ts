@@ -27,6 +27,78 @@ export async function sendVerificationEmail(email: string, name: string, token: 
   });
 }
 
+export async function sendOrderStatusEmail(
+  email: string,
+  name: string,
+  orderId: string,
+  status: string,
+  productTitle: string | null
+): Promise<boolean> {
+  const STATUS_LABELS: Record<string, { label: string; message: string }> = {
+    PAGO: {
+      label: "Pago ✓",
+      message: "Recebemos a confirmação do seu pagamento. Seu pedido está em processamento.",
+    },
+    COMPRADO: {
+      label: "Comprado",
+      message: "Seu produto foi comprado no fornecedor e está sendo preparado para envio ao Brasil.",
+    },
+    NO_ESTOQUE: {
+      label: "No estoque",
+      message: "Seu produto chegou ao nosso estoque na China e será enviado em breve.",
+    },
+    AGUARDANDO_ENVIO: {
+      label: "Aguardando envio",
+      message: "Seu pedido está embalado e aguardando despacho para o Brasil.",
+    },
+    EM_ENVIO: {
+      label: "Em envio 🚀",
+      message: "Seu pedido foi despachado para o Brasil! Em breve você receberá o código de rastreamento.",
+    },
+    CONCLUIDO: {
+      label: "Entregue 🎉",
+      message: "Seu pedido foi concluído! Obrigado por comprar na ComprasChina.",
+    },
+    CANCELADO: {
+      label: "Cancelado",
+      message: "Seu pedido foi cancelado. Entre em contato conosco se precisar de ajuda.",
+    },
+  };
+
+  const info = STATUS_LABELS[status];
+  if (!info) return true; // not a user-visible status, skip email
+
+  const link = `${SITE_URL.replace(/\/$/, "")}/pedido-confirmado/${orderId}`;
+  const productName = productTitle || "seu produto";
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111">
+      <h2 style="color:#b22222;margin-bottom:4px">ComprasChina</h2>
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0 20px">
+      <p>Olá, ${escapeHtml(name)}!</p>
+      <p>Seu pedido foi atualizado:</p>
+      <div style="background:#f7f7f7;border-left:4px solid #b22222;padding:12px 16px;border-radius:4px;margin:16px 0">
+        <p style="margin:0 0 6px;font-weight:600">${escapeHtml(productName)}</p>
+        <p style="margin:0;font-size:15px">Status: <strong>${escapeHtml(info.label)}</strong></p>
+      </div>
+      <p>${escapeHtml(info.message)}</p>
+      <p style="margin-top:24px">
+        <a href="${escapeHtml(link)}" style="background:#b22222;color:#fff;padding:10px 20px;border-radius:20px;text-decoration:none;font-weight:bold;font-size:14px">
+          Ver detalhes do pedido →
+        </a>
+      </p>
+      <hr style="border:none;border-top:1px solid #eee;margin:28px 0 12px">
+      <p style="font-size:12px;color:#888">ComprasChina — Intermediário brasileiro de compras na China</p>
+    </div>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject: `Pedido atualizado: ${info.label} — ComprasChina`,
+    html,
+  });
+}
+
 export async function sendPasswordResetEmail(email: string, name: string, token: string): Promise<boolean> {
   const link = `${SITE_URL.replace(/\/$/, "")}/redefinir-senha?token=${encodeURIComponent(token)}`;
   const html = `

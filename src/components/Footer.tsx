@@ -64,8 +64,17 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="border-t border-background/10 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-background/30">
-          <span>© {new Date().getFullYear()} ComprasChina. Todos os direitos reservados.</span>
+        <div className="border-t border-background/10 mt-12 pt-8 flex flex-col gap-4 text-sm text-background/30">
+          <p className="text-xs leading-relaxed text-background/25 max-w-3xl">
+            <strong className="text-background/40">Aviso Legal:</strong> A ComprasChina atua como intermediária de compras (mandatária), adquirindo produtos indicados pelo cliente em marketplaces chineses (Taobao, 1688, Weidian, TMALL etc.) em seu nome. Não somos vendedores, distribuidores nem importadores comerciais. Os produtos exibidos neste site são exemplos de itens comprados por clientes e não constituem oferta, recomendação ou endosso. Não verificamos autenticidade, originalidade ou conformidade de produtos. A responsabilidade pela legalidade de cada importação, incluindo direitos de propriedade intelectual e normas aduaneiras, é exclusivamente do cliente.
+          </p>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+            <span>© {new Date().getFullYear()} ComprasChina. Todos os direitos reservados.</span>
+            <div className="flex gap-4">
+              <Link to="/termos-de-servico" className="hover:text-background/60 transition-colors">Termos de Serviço</Link>
+              <Link to="/politica-de-privacidade" className="hover:text-background/60 transition-colors">Privacidade</Link>
+            </div>
+          </div>
         </div>
       </div>
     </footer>
