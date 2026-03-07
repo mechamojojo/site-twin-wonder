@@ -15,19 +15,46 @@
  *   node scripts/sync-titles-to-prod.mjs
  *
  * Variáveis de ambiente:
- *   LOCAL_API_URL  – URL do backend local     (padrão: http://localhost:4000)
- *   PROD_API_URL   – URL do backend produção  (obrigatório)
- *   ADMIN_SECRET   – Senha admin              (padrão: compraschina)
+ *   LOCAL_API_URL    – URL do backend local     (padrão: http://localhost:4000)
+ *   PROD_API_URL     – URL do backend produção  (obrigatório)
+ *   LOCAL_ADMIN_SECRET – Senha do admin no backend LOCAL (para buscar produtos)
+ *   PROD_ADMIN_SECRET  – Senha do admin no backend PRODUÇÃO (para enviar títulos)
+ *   Se não definir LOCAL_ ou PROD_, usa ADMIN_SECRET para ambos (padrão: compraschina)
  */
 
 const LOCAL_API = process.env.LOCAL_API_URL ?? "http://localhost:4000";
 const PROD_API  = process.env.PROD_API_URL;
-const SECRET    = process.env.ADMIN_SECRET ?? "compraschina";
+const LOCAL_SECRET = process.env.LOCAL_ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? "compraschina";
+const PROD_SECRET  = process.env.PROD_ADMIN_SECRET ?? process.env.ADMIN_SECRET ?? "compraschina";
 
 if (!PROD_API) {
   console.error("❌  Defina a variável PROD_API_URL antes de rodar.");
   console.error("    Exemplo:");
   console.error("    PROD_API_URL=https://seu-backend.railway.app node scripts/sync-titles-to-prod.mjs");
+  process.exit(1);
+}
+
+async function getAdminToken(baseUrl, password) {
+  const res = await fetch(`${baseUrl}/api/admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) {
+    throw new Error(`Login falhou (${res.status}): ${await res.text()}`);
+  }
+  const data = await res.json();
+  return data.token;
+}
+
+// ── 0. Obter tokens de admin (local e prod) ───────────────────
+console.log("🔐  Fazendo login no backend LOCAL...");
+let localToken;
+try {
+  localToken = await getAdminToken(LOCAL_API, LOCAL_SECRET);
+  console.log("✅  Login local OK.\n");
+} catch (e) {
+  console.error("❌  Falha no login local:", e.message);
   process.exit(1);
 }
 
@@ -41,7 +68,7 @@ const allProducts = [];
 while (true) {
   const res = await fetch(
     `${LOCAL_API}/api/admin/products?limit=${PAGE}&offset=${(page - 1) * PAGE}`,
-    { headers: { "x-admin-secret": SECRET } }
+    { headers: { "x-admin-token": localToken } }
   );
   if (!res.ok) {
     console.error("❌  Falha ao buscar produtos locais:", res.status, await res.text());
@@ -62,12 +89,28 @@ if (allProducts.length === 0) {
   process.exit(0);
 }
 
-// ── 2. Montar payload { slug, title } ─────────────────────────
+// ── 2. Montar payload { slug, title, titlePt } ──────────────────
 const payload = allProducts
   .filter((p) => p.slug && p.title)
-  .map((p) => ({ slug: p.slug, title: p.title }));
+  .map((p) => ({
+    slug: p.slug,
+    title: p.title,
+    titlePt: p.titlePt ?? p.title,
+  }));
 
 console.log(`📝  Enviando ${payload.length} títulos para PRODUÇÃO (${PROD_API})...\n`);
+
+// ── 2b. Login no prod ──────────────────────────────────────────
+console.log("🔐  Fazendo login no backend de PRODUÇÃO...");
+let prodToken;
+try {
+  prodToken = await getAdminToken(PROD_API, PROD_SECRET);
+  console.log("✅  Login produção OK.\n");
+} catch (e) {
+  console.error("❌  Falha no login em produção:", e.message);
+  console.error("    Verifique PROD_API_URL e PROD_ADMIN_SECRET (senha do admin em produção).");
+  process.exit(1);
+}
 
 // ── 3. Enviar para o backend de produção ───────────────────────
 // Envia em lotes de 100 para não sobrecarregar
@@ -86,7 +129,7 @@ for (let i = 0; i < payload.length; i += BATCH) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-admin-secret": SECRET,
+      "x-admin-token": prodToken,
     },
     body: JSON.stringify({ products: batch }),
   });

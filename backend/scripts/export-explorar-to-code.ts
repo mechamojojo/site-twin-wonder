@@ -1,9 +1,9 @@
 /**
- * Exporta os produtos em destaque do banco para um JSON no frontend.
- * Assim, as alterações feitas no Admin (imagem principal, títulos, etc.) ficam no código e vão para produção.
+ * Exporta os produtos do banco LOCAL para um JSON no frontend.
+ * Assim, os nomes (e demais dados) que você editou no Admin ficam no código e vão para produção no deploy.
  *
  * Uso: cd backend && npm run export-explorar-to-code
- * Depois: commitar src/data/explorarProducts.export.json
+ * Depois: commitar src/data/explorarProducts.export.json e fazer deploy.
  */
 import "dotenv/config";
 import * as fs from "fs";
@@ -14,15 +14,9 @@ const prisma = new PrismaClient();
 
 const OUT_PATH = path.join(__dirname, "../../src/data/explorarProducts.export.json");
 
-function itemId(url: string): string {
-  const m = url.match(/itemID=(\d+)/);
-  return m ? m[1] : url;
-}
-
 async function main() {
   const products = await prisma.product.findMany({
-    where: { featured: true },
-    orderBy: { sortOrder: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
 
   const exported = products.map((p) => ({

@@ -1063,7 +1063,9 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
 // Admin: atualizar títulos em massa por slug (para sync local→prod)
 app.post("/api/admin/products/bulk-update-titles", requireAdmin, async (req, res) => {
   try {
-    const { products } = (req.body ?? {}) as { products?: { slug: string; title: string }[] };
+    const { products } = (req.body ?? {}) as {
+      products?: { slug: string; title: string; titlePt?: string | null }[];
+    };
     if (!Array.isArray(products) || products.length === 0) {
       return res.status(400).json({ error: "Array 'products' obrigatório" });
     }
@@ -1073,9 +1075,11 @@ app.post("/api/admin/products/bulk-update-titles", requireAdmin, async (req, res
     for (const item of products) {
       if (!item.slug || !item.title) continue;
       try {
+        const data: { title: string; titlePt?: string | null } = { title: item.title };
+        if (item.titlePt !== undefined) data.titlePt = item.titlePt?.trim() || null;
         const result = await prisma.product.updateMany({
           where: { slug: item.slug },
-          data: { title: item.title },
+          data,
         });
         if (result.count > 0) updated++;
         else notFound++;
