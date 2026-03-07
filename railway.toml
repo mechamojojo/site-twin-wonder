@@ -1,0 +1,11 @@
+# Usado quando o build roda na raiz do repo (sem Root Directory no serviço).
+# Dockerfile na raiz faz COPY backend/ e builda o backend.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
