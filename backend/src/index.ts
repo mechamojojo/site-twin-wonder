@@ -1060,6 +1060,36 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: atualizar títulos em massa por slug (para sync local→prod)
+app.post("/api/admin/products/bulk-update-titles", requireAdmin, async (req, res) => {
+  try {
+    const { products } = (req.body ?? {}) as { products?: { slug: string; title: string }[] };
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ error: "Array 'products' obrigatório" });
+    }
+    let updated = 0;
+    let notFound = 0;
+    const errors: string[] = [];
+    for (const item of products) {
+      if (!item.slug || !item.title) continue;
+      try {
+        const result = await prisma.product.updateMany({
+          where: { slug: item.slug },
+          data: { title: item.title },
+        });
+        if (result.count > 0) updated++;
+        else notFound++;
+      } catch (err) {
+        errors.push(`${item.slug}: ${String(err)}`);
+      }
+    }
+    res.json({ updated, notFound, errors });
+  } catch (err) {
+    console.error("Bulk update titles:", err);
+    res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar títulos") });
+  }
+});
+
 // Admin: adicionar produto ao catálogo (protegido)
 app.post("/api/admin/products", requireAdmin, async (req, res) => {
   try {

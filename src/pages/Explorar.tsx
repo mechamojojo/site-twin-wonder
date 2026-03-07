@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
+import { EXPLORAR_PRODUCTS, CURATED_TITLE_BY_CANONICAL_KEY } from "@/data/explorarProducts";
 import { MARKETPLACE_SEARCH_URLS } from "@/data/siteConfig";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
@@ -133,6 +133,9 @@ const Explorar = () => {
   const sourceList = useMemo(() => {
     const apiWithTitles = apiProducts.map((p) => {
       const key = productUrlToCanonicalKey(p.originalUrl || p.url);
+      const curated = key ? CURATED_TITLE_BY_CANONICAL_KEY.get(key) : undefined;
+      if (curated)
+        return { ...p, title: curated, titlePt: curated };
       const explorar = key ? explorarTitleByKey.get(key) : undefined;
       if (explorar)
         return { ...p, title: explorar.title, titlePt: explorar.titlePt };

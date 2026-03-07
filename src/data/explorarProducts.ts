@@ -5,6 +5,7 @@
  */
 import exportedFromAdmin from "./explorarProducts.export.json";
 import { FEATURED_PRODUCTS } from "./featuredProducts";
+import { productUrlToCanonicalKey } from "@/lib/utils";
 
 const RATE_CNY = 0.75;
 
@@ -109,6 +110,11 @@ const RAW: { url: string; titlePt: string; priceCny: number | null; category: st
   { url: "https://weidian.com/item.html?itemID=7423321207", titlePt: "Bolsa Feminina Quadrada Minimalista", priceCny: 136, category: "acessorios" },
   { url: "https://weidian.com/item.html?itemID=7464711086", titlePt: "Relógio Feminino Clássico Pulseira Couro Genuíno", priceCny: 460, category: "acessorios" },
 ];
+
+/** Títulos curados (RAW) por chave canônica — sempre prevalecem sobre export/API. */
+export const CURATED_TITLE_BY_CANONICAL_KEY = new Map<string, string>(
+  RAW.map((r) => [productUrlToCanonicalKey(r.url), r.titlePt]).filter(([k]) => Boolean(k)),
+);
 
 const slugCount = new Map<string, number>();
 function uniqueSlug(titlePt: string): string {

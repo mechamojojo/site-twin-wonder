@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
+import { EXPLORAR_PRODUCTS, CURATED_TITLE_BY_CANONICAL_KEY } from "@/data/explorarProducts";
 import { CATEGORY_LABELS as CATALOG_CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
@@ -96,6 +96,9 @@ export default function FeaturedProductsSection() {
   const allProducts = useMemo(() => {
     const apiWithTitles = apiProducts.map((p) => {
       const key = productUrlToCanonicalKey(p.originalUrl || p.url);
+      const curated = key ? CURATED_TITLE_BY_CANONICAL_KEY.get(key) : undefined;
+      if (curated)
+        return { ...p, title: curated, titlePt: curated };
       const explorar = key ? explorarTitleByKey.get(key) : undefined;
       if (explorar)
         return { ...p, title: explorar.title, titlePt: explorar.titlePt };
