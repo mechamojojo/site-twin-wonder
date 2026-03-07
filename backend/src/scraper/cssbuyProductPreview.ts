@@ -1220,6 +1220,16 @@ export async function getCssbuyProductPreview(
     if (sizeSet.size > 0 && data.sizeValues.length === 0) {
       data.sizeValues = Array.from(sizeSet);
     }
+    // Guard: if ALL "size" values are plain 1–2 digit integers and there are already 4+ color/model
+    // variants, those integers are sequential model IDs (e.g. bag style numbers), not real sizes.
+    // Real sizes always include letters (M/XL/EU34-48) or come with an explicit "Size" label.
+    if (
+      data.sizeValues.length > 0 &&
+      data.colorValues.length >= 4 &&
+      data.sizeValues.every((v) => /^\d{1,2}$/.test(v.trim()))
+    ) {
+      data.sizeValues = [];
+    }
     if (colorSet.size > 0 && data.colorValues.length === 0) {
       data.colorValues = Array.from(colorSet);
       const colorImgs: string[] = [];
