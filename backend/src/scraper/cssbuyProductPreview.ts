@@ -1287,6 +1287,24 @@ export async function getCssbuyProductPreview(
       data.colorImages = colorImagesFiltered;
     }
 
+    // Don't show "Tamanho" when we have color/model options and "sizes" are really option IDs (e.g. 10–40 for bags/cases)
+    const allNumericSizes = (vals: string[]) =>
+      vals.length > 0 && vals.every((v) => /^\d+$/.test(v.trim()));
+    const hasLowOptionIds = (vals: string[]) =>
+      vals.some((v) => {
+        const n = parseInt(v.trim(), 10);
+        return !Number.isNaN(n) && n >= 10 && n <= 34;
+      });
+    const tooManyNumericOptions = (vals: string[]) =>
+      vals.length > 8 && allNumericSizes(vals);
+    if (data.colorValues.length > 0 && data.sizeValues.length > 0) {
+      if (tooManyNumericOptions(data.sizeValues)) {
+        data.sizeValues = [];
+      } else if (allNumericSizes(data.sizeValues) && hasLowOptionIds(data.sizeValues)) {
+        data.sizeValues = [];
+      }
+    }
+
     const colorGroup: OptionGroup = {
       name: data.colorValues.length > 0 ? "Cor / Estilo" : "Cor",
       values: data.colorValues.length > 0 ? data.colorValues : [],
