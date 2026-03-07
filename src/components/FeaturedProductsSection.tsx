@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
 import { CATEGORY_LABELS as CATALOG_CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { apiUrl } from "@/lib/api";
-import { ensureHttpsImage, referrerPolicyForImage } from "@/lib/utils";
+import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
 
@@ -84,18 +84,32 @@ export default function FeaturedProductsSection() {
       .catch(() => setLoaded(true));
   }, []);
 
+  const explorarTitleByKey = useMemo(() => {
+    const m = new Map<string, { title: string; titlePt: string }>();
+    for (const p of EXPLORAR_PRODUCTS) {
+      const k = productUrlToCanonicalKey(p.url);
+      if (k) m.set(k, { title: p.title, titlePt: p.titlePt });
+    }
+    return m;
+  }, []);
+
   const allProducts = useMemo(() => {
-    if (apiProducts.length === 0) return EXPLORAR_PRODUCTS;
-    const apiUrls = new Set(
-      apiProducts.map((p) => (p.originalUrl || p.url || "").replace(/\?.*$/, "")),
-    );
+    const apiWithTitles = apiProducts.map((p) => {
+      const key = productUrlToCanonicalKey(p.originalUrl || p.url);
+      const explorar = key ? explorarTitleByKey.get(key) : undefined;
+      if (explorar)
+        return { ...p, title: explorar.title, titlePt: explorar.titlePt };
+      return p;
+    });
+    if (apiWithTitles.length === 0) return EXPLORAR_PRODUCTS;
+    const apiKeys = new Set(apiWithTitles.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url)));
     const extra = EXPLORAR_PRODUCTS.filter(
-      (p) => !apiUrls.has((p.url || "").replace(/\?.*$/, "")),
+      (p) => !apiKeys.has(productUrlToCanonicalKey(p.url)),
     );
-    return [...apiProducts, ...extra];
-  }, [apiProducts]);
+    return [...apiWithTitles, ...extra];
+  }, [apiProducts, explorarTitleByKey]);
   const apiUrlSet = useMemo(
-    () => new Set(apiProducts.map((p) => (p.originalUrl || p.url || "").replace(/\?.*$/, ""))),
+    () => new Set(apiProducts.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url))),
     [apiProducts],
   );
   const categoriesWithProducts = Array.from(new Set(allProducts.map((p) => p.category))).sort((a, b) => {
@@ -189,7 +203,7 @@ export default function FeaturedProductsSection() {
                 <ProductCard
                   key={product.id}
                   product={product}
-                  useSlug={apiUrlSet.has((product.originalUrl || product.url || "").replace(/\?.*$/, ""))}
+                  useSlug={apiUrlSet.has(productUrlToCanonicalKey(product.originalUrl || product.url))}
                 />
               ))}
             </div>

@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
 import { MARKETPLACE_SEARCH_URLS } from "@/data/siteConfig";
 import { apiUrl } from "@/lib/api";
-import { ensureHttpsImage, referrerPolicyForImage } from "@/lib/utils";
+import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ShoppingBag, Search, Loader2, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -121,19 +121,33 @@ const Explorar = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  const explorarTitleByKey = useMemo(() => {
+    const m = new Map<string, { title: string; titlePt: string }>();
+    for (const p of EXPLORAR_PRODUCTS) {
+      const k = productUrlToCanonicalKey(p.url);
+      if (k) m.set(k, { title: p.title, titlePt: p.titlePt });
+    }
+    return m;
+  }, []);
+
   const sourceList = useMemo(() => {
-    if (apiProducts.length === 0) return EXPLORAR_PRODUCTS;
-    const apiUrls = new Set(
-      apiProducts.map((p) => (p.originalUrl || p.url || "").replace(/\?.*$/, "")),
-    );
+    const apiWithTitles = apiProducts.map((p) => {
+      const key = productUrlToCanonicalKey(p.originalUrl || p.url);
+      const explorar = key ? explorarTitleByKey.get(key) : undefined;
+      if (explorar)
+        return { ...p, title: explorar.title, titlePt: explorar.titlePt };
+      return p;
+    });
+    if (apiWithTitles.length === 0) return EXPLORAR_PRODUCTS;
+    const apiKeys = new Set(apiWithTitles.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url)));
     const extra = EXPLORAR_PRODUCTS.filter(
-      (p) => !apiUrls.has((p.url || "").replace(/\?.*$/, "")),
+      (p) => !apiKeys.has(productUrlToCanonicalKey(p.url)),
     );
-    return [...apiProducts, ...extra];
-  }, [apiProducts]);
+    return [...apiWithTitles, ...extra];
+  }, [apiProducts, explorarTitleByKey]);
 
   const apiUrlSet = useMemo(
-    () => new Set(apiProducts.map((p) => (p.originalUrl || p.url || "").replace(/\?.*$/, ""))),
+    () => new Set(apiProducts.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url))),
     [apiProducts],
   );
 
@@ -290,7 +304,7 @@ const Explorar = () => {
                 <ExplorarProductCard
                   key={p.id}
                   p={p}
-                  to={p.slug && apiUrlSet.has((p.originalUrl ?? p.url ?? "").replace(/\?.*$/, "")) ? `/produto/${p.slug}` : `/pedido?url=${encodeURIComponent(p.originalUrl ?? p.url ?? "")}`}
+                  to={p.slug && apiUrlSet.has(productUrlToCanonicalKey(p.originalUrl ?? p.url)) ? `/produto/${p.slug}` : `/pedido?url=${encodeURIComponent(p.originalUrl ?? p.url ?? "")}`}
                 />
               ))}
             </div>

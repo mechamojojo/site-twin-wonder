@@ -22,3 +22,24 @@ export function referrerPolicyForImage(url: string): HTMLImageElement["referrerP
   }
   return "no-referrer";
 }
+
+/**
+ * Chave canônica para identificar o mesmo produto em URLs de marketplaces diferentes.
+ * Usado para fazer merge de títulos do Explorar com produtos da API (ex.: prod vs localhost).
+ */
+export function productUrlToCanonicalKey(url: string | undefined): string {
+  if (!url || !url.trim()) return "";
+  const u = url.trim().toLowerCase();
+  const weidianId = u.match(/itemid=(\d+)/i)?.[1] ?? u.match(/item-micro-(\d+)/)?.[1];
+  if (weidianId) return `weidian:${weidianId}`;
+  const taobaoId = u.match(/[?&]id=(\d+)/)?.[1];
+  if (taobaoId) return `taobao:${taobaoId}`;
+  const offerId = u.match(/offer\/(\d+)/i)?.[1] ?? u.match(/item-(\d+)\./)?.[1];
+  if (offerId) return `1688:${offerId}`;
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}${parsed.search}`.slice(0, 200);
+  } catch {
+    return url.slice(0, 200);
+  }
+}
