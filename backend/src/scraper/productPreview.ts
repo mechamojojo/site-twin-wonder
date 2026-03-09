@@ -146,6 +146,7 @@ const OPTION_NAME_ZH_TO_PT: Record<string, string> = {
   "货号": "Ref.",
   "品牌": "Marca",
   "等级": "Qualidade",
+  "品质等级": "Quality grade",
   "净含量": "Peso / Volume",
   "适用": "Uso",
 };

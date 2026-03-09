@@ -721,7 +721,7 @@ app.get("/api/products", async (req, res) => {
     const q = (req.query.q as string)?.trim().toLowerCase();
     const category = (req.query.category as string)?.trim();
     const featured = req.query.featured === "true";
-    const limit = Math.min(Number(req.query.limit) || 48, 2000);
+    const limit = Math.min(Number(req.query.limit) || 48, 500);
     const offset = Math.max(0, Number(req.query.offset) || 0);
 
     const where: Record<string, unknown> = {};
@@ -891,7 +891,7 @@ async function ensureProductFromOrder(order: {
 // Admin: listar produtos do catálogo (protegido) — ordenação só por sortOrder para reordenar em qualquer posição
 app.get("/api/admin/products", requireAdmin, async (req, res) => {
   try {
-    const limit = Math.min(Number(req.query.limit) || 500, 2000);
+    const limit = Math.min(Number(req.query.limit) || 500, 500);
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const products = await prisma.product.findMany({
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -1327,12 +1327,13 @@ app.get("/api/orders/:id", async (req, res) => {
   }
 });
 
-// Cache simples para preview de produto (URL -> { data, expires })
+// Cache simples para preview de produto (URL -> { data, expires }). Tamanho limitado para evitar OOM.
 const productPreviewCache = new Map<
   string,
   { data: Awaited<ReturnType<typeof import("./scraper/productPreview").getProductPreview>>; expires: number }
 >();
 const PRODUCT_PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min (permite re-scrape após ajustes)
+const PRODUCT_PREVIEW_CACHE_MAX_SIZE = 80; // evita crescimento ilimitado em memória
 
 // Resposta vazia quando o scrape não consegue dados (frontend ainda mostra a página)
 const emptyProductPreview = {
@@ -1369,6 +1370,10 @@ app.get("/api/product/preview", async (req, res) => {
     const { getProductPreview } = await import("./scraper/productPreview");
     const data = await getProductPreview(url);
     if (data) {
+      if (productPreviewCache.size >= PRODUCT_PREVIEW_CACHE_MAX_SIZE) {
+        const oldestKey = productPreviewCache.keys().next().value;
+        if (oldestKey != null) productPreviewCache.delete(oldestKey);
+      }
       productPreviewCache.set(url, { data, expires: Date.now() + PRODUCT_PREVIEW_CACHE_TTL_MS });
       return res.json(data);
     }

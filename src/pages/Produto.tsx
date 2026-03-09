@@ -77,7 +77,10 @@ const Produto = () => {
         <Navbar />
         <main className="container mx-auto px-4 py-12 max-w-4xl text-center">
           <p className="text-muted-foreground mb-4">Produto não encontrado.</p>
-          <Link to="/explorar" className="text-china-red font-medium hover:underline">
+          <Link
+            to="/explorar"
+            className="text-china-red font-medium hover:underline"
+          >
             Voltar ao Explorar
           </Link>
         </main>
@@ -88,7 +91,11 @@ const Produto = () => {
 
   const displayTitle = product.titlePt || product.title;
   const priceStr =
-    product.priceBrl != null ? `R$ ${Number(product.priceBrl).toFixed(2)}` : product.priceCny != null ? `CNY ¥ ${Number(product.priceCny)}` : "Consultar";
+    product.priceBrl != null
+      ? `R$ ${Number(product.priceBrl).toFixed(2)}`
+      : product.priceCny != null
+        ? `CNY ¥ ${Number(product.priceCny)}`
+        : "Consultar";
 
   return (
     <div className="min-h-screen bg-background">
@@ -107,9 +114,13 @@ const Produto = () => {
             />
           </div>
           <div>
-            <p className="text-xs font-semibold text-china-red uppercase tracking-wider">{product.source}</p>
+            <p className="text-xs font-semibold text-china-red uppercase tracking-wider">
+              {product.source}
+            </p>
             <div className="flex items-start gap-2 mt-2">
-              <h1 className="text-2xl font-heading font-bold text-foreground flex-1">{displayTitle}</h1>
+              <h1 className="text-2xl font-heading font-bold text-foreground flex-1">
+                {displayTitle}
+              </h1>
               {slug && <SaveProductHeart slug={slug} variant="inline" />}
             </div>
             <p className="text-2xl font-bold text-china-red mt-4">{priceStr}</p>
@@ -132,9 +143,13 @@ const Produto = () => {
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-4">
-              "Ver opções" abre a página completa do produto para você escolher cor, tamanho e outras variantes.
+              "Ver opções" abre a página completa do produto para você escolher
+              cor, tamanho e outras variantes.
             </p>
-            <Link to="/explorar" className="inline-block mt-6 text-sm text-china-red hover:underline">
+            <Link
+              to="/explorar"
+              className="inline-block mt-6 text-sm text-china-red hover:underline"
+            >
               ← Voltar ao Explorar
             </Link>
           </div>

@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { apiUrl } from "@/lib/api";
 
-/** Cache de URL do produto -> primeira imagem do preview (evita refetch na mesma sessão). */
+/** Cache de URL do produto -> primeira imagem do preview (evita refetch na mesma sessão). Limitado para evitar uso excessivo de memória. */
 const imageCache = new Map<string, string>();
+const IMAGE_CACHE_MAX = 60;
 
 /**
  * Retorna [imageUrl, containerRef].
@@ -39,6 +40,10 @@ export function useLazyProductImage(
           .then((data) => {
             const first = data?.images?.[0];
             if (first && typeof first === "string") {
+              if (imageCache.size >= IMAGE_CACHE_MAX) {
+                const firstKey = imageCache.keys().next().value;
+                if (firstKey != null) imageCache.delete(firstKey);
+              }
               imageCache.set(productUrl, first);
               setFetchedImage(first);
             }

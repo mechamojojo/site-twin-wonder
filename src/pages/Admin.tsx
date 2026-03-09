@@ -202,7 +202,7 @@ const Admin = () => {
     if (!token) return Promise.resolve();
     setCatalogLoading(true);
     const mergeWithPrevious = options?.mergeWithPrevious ?? false;
-    return fetch(apiUrl("/api/admin/products?limit=2000"), {
+    return fetch(apiUrl("/api/admin/products?limit=500"), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : { products: [] }))

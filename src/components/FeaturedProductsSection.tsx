@@ -73,7 +73,7 @@ export default function FeaturedProductsSection() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    fetch(apiUrl("/api/products?limit=2000"))
+    fetch(apiUrl("/api/products?limit=300"))
       .then((r) => r.json())
       .then((data) => {
         const list = data.products ?? [];

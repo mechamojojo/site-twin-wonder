@@ -29,6 +29,10 @@ const isSizeGroup = (name: string, values?: string[]) => {
   return /tamanho|size|尺码|尺寸|尺码选择/i.test(name);
 };
 
+/** Grupo de nível de qualidade (não deve ser usado como galeria de imagens). */
+const isQualityGradeGroup = (name: string) =>
+  /^Quality grade$/i.test(name) || /品质等级|quality\s*level|quality\s*grade|nível\s*de\s*qualidade/i.test(name.trim());
+
 const getSourceLabel = (url: string) => {
   try {
     const host = new URL(url).hostname.toLowerCase();
@@ -180,15 +184,18 @@ const Order = () => {
     fetchPreview();
   }, [url]);
 
-  // Preço efetivo: da variante selecionada (quando cada modelo tem preço no CSSBuy) ou preço base
+  // Preço efetivo: da variante selecionada (quando o grupo tem priceByValue, ex. Weidian "ws" ou Cor/Estilo) ou preço base
   const effectivePriceCny = (() => {
     if (!productPreview?.priceCny) return null;
-    const colorGroup = productPreview.optionGroups?.find((g) =>
-      /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name),
-    );
-    const selected = colorGroup ? selectedOptionByGroup[colorGroup.name] : undefined;
-    if (selected && colorGroup?.priceByValue?.[selected] != null)
-      return colorGroup.priceByValue[selected];
+    const groupWithPrice = productPreview.optionGroups?.find((g) => {
+      const selected = selectedOptionByGroup[g.name];
+      return selected && g.priceByValue?.[selected] != null;
+    });
+    if (groupWithPrice) {
+      const selected = selectedOptionByGroup[groupWithPrice.name];
+      if (selected && groupWithPrice.priceByValue?.[selected] != null)
+        return groupWithPrice.priceByValue[selected];
+    }
     return productPreview.priceCny;
   })();
 
@@ -310,21 +317,21 @@ const Order = () => {
               {!productPreviewLoading && productPreview && (productPreview.images.length > 0 || productPreview.title || productPreview.titlePt || (productPreview.specs?.length ?? 0) > 0 || productPreview.description) && (
                 <>
                   <div className="bg-[#f5f5f5] overflow-hidden">
-                    {(productPreview.images.length > 0 || productPreview.optionGroups?.some((g) => /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name) && g.images?.some(Boolean))) ? (
+                    {(productPreview.images.length > 0 || productPreview.optionGroups?.some((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && g.images?.some(Boolean))) ? (
                       <>
-                        {/* Imagem principal — atualiza quando usuário escolhe cor (com imagem); senão usa galeria */}
+                        {/* Imagem principal — segue a miniatura clicada (grupo com imagens ou galeria) */}
                         <div className="aspect-square sm:aspect-[4/3] max-h-[420px] flex items-center justify-center p-4 sm:p-6 bg-white border-b border-[#e8e8e8]">
                           <img
                             src={ensureHttpsImage((() => {
-                              const colorGroup = productPreview.optionGroups?.find((g) => /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name) && g.images?.some(Boolean));
-                              const selectedColorVal = colorGroup ? selectedOptionByGroup[colorGroup.name] : undefined;
-                              const colorImgIdx = selectedColorVal && colorGroup ? colorGroup.values.indexOf(selectedColorVal) : -1;
-                              const selectedColorImg = colorGroup && colorImgIdx >= 0 ? colorGroup.images?.[colorImgIdx] : null;
-                              if (selectedColorImg) return selectedColorImg;
+                              const imageGroup = productPreview.optionGroups?.find((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && g.images?.some(Boolean));
+                              const selectedVal = imageGroup ? selectedOptionByGroup[imageGroup.name] : undefined;
+                              const imgIdx = selectedVal && imageGroup ? imageGroup.values.indexOf(selectedVal) : -1;
+                              const optionImg = imageGroup && imgIdx >= 0 ? imageGroup.images?.[imgIdx] : null;
+                              if (optionImg) return optionImg;
                               if (productPreview.images.length > 0) {
                                 return productPreview.images[Math.min(selectedImageIndex, productPreview.images.length - 1)];
                               }
-                              return colorGroup?.images?.[0] || "";
+                              return imageGroup?.images?.[0] || "";
                             })())}
                             alt=""
                             className="max-w-full max-h-full w-auto h-auto object-contain"
@@ -333,19 +340,19 @@ const Order = () => {
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
                         </div>
-                        {/* Galeria de miniaturas — cores (se houver) ou imagens do produto */}
+                        {/* Miniaturas: clicar atualiza a opção e a imagem principal */}
                         <div className="p-3 flex gap-2 overflow-x-auto border-t border-[#e8e8e8] bg-white">
                           {(() => {
-                            const colorGroup = productPreview.optionGroups?.find((g) => /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name) && g.images?.some(Boolean));
-                            if (colorGroup && colorGroup.images?.some(Boolean)) {
-                              return colorGroup.values.map((value, i) => {
-                                const thumb = colorGroup.images?.[i];
-                                const isSelected = selectedOptionByGroup[colorGroup.name] === value;
+                            const imageGroup = productPreview.optionGroups?.find((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && g.images?.some(Boolean));
+                            if (imageGroup && imageGroup.images?.some(Boolean)) {
+                              return imageGroup.values.map((value, i) => {
+                                const thumb = imageGroup.images?.[i];
+                                const isSelected = selectedOptionByGroup[imageGroup.name] === value;
                                 return (
                                   <button
                                     key={i}
                                     type="button"
-                                    onClick={() => setSelectedOptionByGroup((prev) => ({ ...prev, [colorGroup.name]: prev[colorGroup.name] === value ? "" : value }))}
+                                    onClick={() => setSelectedOptionByGroup((prev) => ({ ...prev, [imageGroup.name]: value }))}
                                     className={`shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border-2 overflow-hidden bg-[#fafafa] transition-colors ${isSelected ? "border-china-red ring-2 ring-china-red/30" : "border-[#e0e0e0] hover:border-[#bdbdbd]"}`}
                                     title={value}
                                   >

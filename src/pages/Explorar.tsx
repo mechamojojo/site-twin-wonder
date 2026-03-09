@@ -111,7 +111,7 @@ const Explorar = () => {
   useEffect(() => setSearchInput(q), [q]);
 
   useEffect(() => {
-    fetch(apiUrl("/api/products?limit=2000"))
+    fetch(apiUrl("/api/products?limit=300"))
       .then((r) => r.json())
       .then((data) => {
         const list = data.products ?? [];

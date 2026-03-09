@@ -61,6 +61,14 @@ Em **Variables** do serviço backend, configure:
 - Aguarde o primeiro deploy terminar e verifique se o healthcheck responde:  
   `https://sua-url.railway.app/api/health`
 
+### 1.6 Memória (se o backend ficar sem memória)
+
+O endpoint `/api/product/preview` usa scraping (Playwright) e pode consumir bastante RAM quando muitos usuários abrem vários produtos ao mesmo tempo. Se o serviço ficar sem memória (OOM):
+
+1. No Railway: abra o **projeto** → clique no **serviço backend** → **Settings** → **Resources** (ou **Usage**).
+2. Aumente a **memória** do plano (ex.: upgrade para um plano com mais RAM ou ajuste o limite do serviço, se disponível no seu plano).
+3. O código já limita: lista de produtos (máx. 500 por request), cache de preview (80 entradas) e o frontend carrega menos produtos por página (300), reduzindo picos de uso.
+
 ---
 
 ## 2. Frontend na Vercel
@@ -160,3 +168,4 @@ Veja [MERCADO-PAGO.md](MERCADO-PAGO.md) e [TELEGRAM-E-WEBHOOK.md](TELEGRAM-E-WEB
 | 404 nas rotas | Vercel não está usando o `vercel.json`; confira o rewrite para `/index.html` |
 | API não responde | Verifique `VITE_API_URL` e se o backend está rodando no Railway |
 | PIX/Cartão falha | Confirme `MP_ACCESS_TOKEN` e `VITE_MP_PUBLIC_KEY` em produção |
+| Backend sem memória (OOM) | Aumente a RAM do serviço no Railway (Settings → Resources). O código limita cache e listagens para reduzir picos. |

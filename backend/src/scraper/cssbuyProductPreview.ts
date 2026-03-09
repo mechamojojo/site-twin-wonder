@@ -68,34 +68,40 @@ export async function getCssbuyProductPreview(
         const o = json as Record<string, unknown>;
         const has = (x: unknown, k: string) =>
           x && typeof x === "object" && k in x;
+        const d = o.data as Record<string, unknown> | unknown[] | undefined;
+        // Formato Weidian/micro: { code, msg, data: [ productObject, ... ] } — productObject tem props_list + props_img
+        if (d && Array.isArray(d) && d.length > 0) {
+          const first = d[0];
+          if (first && typeof first === "object" && (has(first, "props_list") || has(first, "skus") || has(first, "prop_imgs"))) {
+            capturedApiResponses.push(first);
+          }
+        }
         if (
           url.includes("/web/item") ||
           url.includes("/item") ||
           url.includes("itemId") ||
           url.includes("item/detail") ||
-          url.includes("product/detail")
+          url.includes("product/detail") ||
+          url.includes("micro") ||
+          url.includes("weidian")
         ) {
-          const d = o.data;
-          if (d && Array.isArray(d) && d.length > 0) {
-            capturedApiResponses.push(d[0]);
-            if (d.length > 1 && typeof d[1] === "object")
-              capturedApiResponses.push(d[1]);
+          if (d && Array.isArray(d) && d.length > 0 && typeof d[0] === "object") {
+            if (!capturedApiResponses.includes(d[0])) capturedApiResponses.push(d[0]);
           } else if (d && typeof d === "object" && !Array.isArray(d)) {
             capturedApiResponses.push(d);
           }
         }
-        const d = o.data as Record<string, unknown> | undefined;
-        const payload = d ?? o;
+        const payload = (Array.isArray(d) ? d[0] : d) ?? o;
         if (
           has(o, "itemInfo") ||
           has(o, "skus") ||
           has(o, "props_list") ||
           has(o, "skuProps") ||
-          (d &&
-            typeof d === "object" &&
-            (has(d, "itemInfo") || has(d, "skus") || has(d, "props_list")))
+          (payload &&
+            typeof payload === "object" &&
+            (has(payload, "itemInfo") || has(payload, "skus") || has(payload, "props_list")))
         ) {
-          if (!Array.isArray(payload)) capturedApiResponses.push(payload);
+          if (!Array.isArray(payload) && payload && !capturedApiResponses.includes(payload)) capturedApiResponses.push(payload);
         }
       } catch {
         // ignore
@@ -158,6 +164,39 @@ export async function getCssbuyProductPreview(
         )
         .catch(() => {});
       await page.waitForTimeout(1500);
+      // Dar tempo para a API que traz todas as opções (ex.: 40 estilos em lotes de 20) responder
+      await page.waitForTimeout(2500);
+      await page.waitForTimeout(3000);
+      // Scroll option containers and click "load more" so all 40 options load (CSSBuy often shows 20 first)
+      try {
+        const scrollAndLoadMore = async () => {
+          const scrollables = await page.$$("[class*='sku'] [class*='scroll'], [class*='prop'] [class*='scroll'], [class*='option'] [class*='list'], .sku-list, [class*='style'] [class*='wrap']");
+          for (const el of scrollables) {
+            await el.evaluate((node) => {
+              (node as HTMLElement).scrollTop = (node as HTMLElement).scrollHeight;
+            }).catch(() => {});
+            await page.waitForTimeout(400);
+          }
+          await page.evaluate(() => {
+            window.scrollTo(0, document.body.scrollHeight / 2);
+          });
+          await page.waitForTimeout(500);
+          await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll("button, a, [role='button'], div[class*='more'], span[class*='more']"));
+            const more = buttons.find((b) => {
+              const t = (b as HTMLElement).innerText?.toLowerCase() || "";
+              return /more|all|view\s*all|show\s*all|展开|更多|全部|load\s*more/i.test(t) && t.length < 30;
+            });
+            if (more) (more as HTMLElement).click();
+          });
+        };
+        await scrollAndLoadMore();
+        await page.waitForTimeout(2000);
+        await scrollAndLoadMore();
+        await page.waitForTimeout(2500);
+      } catch {
+        // ignore
+      }
     }
 
     const data = await page.evaluate(() => {
@@ -169,6 +208,7 @@ export async function getCssbuyProductPreview(
         colorImages: string[];
         sizeValues: string[];
         fabricValues: string[];
+        optionGroups: { name: string; values: string[]; images: string[] }[];
         specs: { key: string; value: string }[];
       } = {
         title: null,
@@ -178,6 +218,7 @@ export async function getCssbuyProductPreview(
         colorImages: [],
         sizeValues: [],
         fabricValues: [],
+        optionGroups: [],
         specs: [],
       };
 
@@ -292,11 +333,19 @@ export async function getCssbuyProductPreview(
               if (urls)
                 result.images = urls
                   .map((u) => u.replace(/^"|"$/g, "").replace(/\\\//g, "/"))
-                  .slice(0, 20);
+                  .slice(0, 80);
             }
-            const propsListMatch = text.match(/"props_list"\s*:\s*(\{[^}]+\})/);
+            const propsListMatch = text.match(/"props_list"\s*:\s*(\{)/);
             if (propsListMatch && result.colorValues.length === 0) {
-              const str = propsListMatch[1];
+              const startIdx = text.indexOf(propsListMatch[1], propsListMatch.index!);
+              let depth = 1;
+              let endIdx = startIdx + 1;
+              while (endIdx < text.length && depth > 0) {
+                if (text[endIdx] === "{") depth++;
+                else if (text[endIdx] === "}") depth--;
+                endIdx++;
+              }
+              const str = depth === 0 ? text.slice(startIdx, endIdx) : "";
               const propRe =
                 /"(\d+:\d+)"\s*:\s*\{[^}]*"(?:value|value1)"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
               let m;
@@ -308,7 +357,7 @@ export async function getCssbuyProductPreview(
                   .replace(/\\"/g, '"')
                   .replace(/\\u002F/g, "/")
                   .trim();
-                if (v && v.length < 50 && !/^\d+$/.test(v)) colors.push(v);
+                if (v && v.length < 80 && !/^\d+$/.test(v)) colors.push(v);
               }
               const imgUrls = str.match(
                 /"https?:\/\/[^"]+\.(jpg|jpeg|png|webp)[^"]*"/gi,
@@ -430,10 +479,63 @@ export async function getCssbuyProductPreview(
                   result.colorImages = imgs.slice(0, vals.length);
                 }
               }
+              // Sempre registrar o grupo com o nome original (ex.: "ws:(Black straps)") para exibir como no CSSBuy
+              if (vals.length > 0) {
+                const normImgs = imgs.slice(0, vals.length).map((u) =>
+                  u ? u.replace(/_(\d{2,3})x(\d{2,3})(\.(jpg|jpeg|png|webp))?/gi, "_200x200$3") : ""
+                );
+                result.optionGroups.push({ name: propName, values: vals, images: normImgs });
+              }
             }
             break;
           }
         }
+      }
+
+      // Sempre extrair grupos de skuProps (nome original + todas as opções) mesmo quando tryExtractFromScripts já preencheu cor/tamanho
+      const scriptsForSku = document.querySelectorAll("script:not([src])");
+      for (const s of scriptsForSku) {
+        const text = s.textContent || "";
+        if (text.indexOf("skuProps") === -1) continue;
+        const idx = text.indexOf('"skuProps":[');
+        if (idx === -1) continue;
+        const start = idx + '"skuProps":'.length;
+        let depth = 1;
+        let i = start;
+        while (i < text.length && depth > 0) {
+          if (text[i] === "[" || text[i] === "{") depth++;
+          else if (text[i] === "]" || text[i] === "}") depth--;
+          i++;
+        }
+        const arrContent = text.slice(start + 1, i - 1);
+        const propNameRe = /"propName"\s*:\s*"([^"]+)"/g;
+        let pm;
+        while ((pm = propNameRe.exec(arrContent)) !== null) {
+          const propName = pm[1].trim();
+          const blockStart = pm.index;
+          const blockEnd = arrContent.indexOf('"propName"', blockStart + 1);
+          const block =
+            blockEnd === -1
+              ? arrContent.slice(blockStart)
+              : arrContent.slice(blockStart, blockEnd);
+          const valueRe = /"value"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+          const imgRe = /"(?:image|imgUrl)"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+          const vals: string[] = [];
+          const imgs: string[] = [];
+          let vm;
+          while ((vm = valueRe.exec(block)) !== null)
+            vals.push(vm[1].replace(/\\"/g, '"').trim());
+          let im;
+          while ((im = imgRe.exec(block)) !== null)
+            imgs.push(im[1].replace(/\\\//g, "/"));
+          if (vals.length > 0) {
+            const normImgs = imgs.slice(0, vals.length).map((u) =>
+              u ? u.replace(/_(\d{2,3})x(\d{2,3})(\.(jpg|jpeg|png|webp))?/gi, "_200x200$3") : ""
+            );
+            result.optionGroups.push({ name: propName, values: vals, images: normImgs });
+          }
+        }
+        break;
       }
 
       // Título: h1, .product-title, [class*="title"]
@@ -508,7 +610,7 @@ export async function getCssbuyProductPreview(
           }
         });
       }
-      result.images = result.images.slice(0, 20);
+      result.images = result.images.slice(0, 80);
 
       function extractColorOptions() {
         const labels = ["Color:", "Style:", "Model:", "Modelo:", "颜色", "款式", "Colour:"];
@@ -705,7 +807,7 @@ export async function getCssbuyProductPreview(
         );
         for (const cont of allSections) {
           const imgs = cont.querySelectorAll("img[src]");
-          if (imgs.length >= 2 && imgs.length <= 40) {
+          if (imgs.length >= 2 && imgs.length <= 80) {
             imgs.forEach((img, i) => {
               const src = (img as HTMLImageElement).src;
               if (
@@ -879,25 +981,12 @@ export async function getCssbuyProductPreview(
     };
 
     function mergeFromApiResponses(apiList: unknown[]) {
-      let bestPropsList:
-        | Record<
-            string,
-            {
-              value?: string;
-              value1?: string;
-              image?: string;
-              properties?: string;
-            }
-          >
-        | undefined;
-      let bestSkuProps:
-        | Array<{ propName?: string; value?: string; values?: unknown }>
-        | undefined;
-      let bestSkuList: Array<{
-        properties?: string;
-        price?: number;
-        quantity?: number;
-      }> = [];
+      type SkuPropItem = { propName?: string; prop?: string; value?: string; values?: Array<{ value?: string; image?: string }> };
+      type SkuPropsType = SkuPropItem[];
+      type SkuListType = Array<{ properties?: string; price?: number; quantity?: number }>;
+      let mergedPropsList: Record<string, unknown> = {};
+      const skuPropsByGroupName = new Map<string, { values: string[]; images: string[] }>();
+      const skuByProps = new Map<string, unknown>();
 
       function findInObj(obj: unknown, keys: string[], depth = 0): unknown {
         if (depth > 4 || !obj || typeof obj !== "object") return undefined;
@@ -923,43 +1012,70 @@ export async function getCssbuyProductPreview(
         const pl = (itemInfo?.props_list ??
           r.props_list ??
           findInObj(r, ["props_list", "propsList"])) as
-          | typeof bestPropsList
+          | Record<string, unknown>
           | undefined;
         let sp = (r.skuProps ??
           itemInfo?.skuProps ??
-          findInObj(r, ["skuProps"])) as typeof bestSkuProps | undefined;
+          findInObj(r, ["skuProps"])) as SkuPropsType | undefined;
         if (!sp) {
           const skuCore = findInObj(r, ["skuCore"]) as
             | Record<string, unknown>
             | unknown[]
             | undefined;
           if (skuCore && Array.isArray(skuCore))
-            sp = skuCore as typeof bestSkuProps;
+            sp = skuCore as SkuPropsType;
           else if (
             skuCore &&
             typeof skuCore === "object" &&
             "skuProps" in skuCore
           )
-            sp = (skuCore as { skuProps: unknown })
-              .skuProps as typeof bestSkuProps;
+            sp = (skuCore as { skuProps: unknown }).skuProps as SkuPropsType;
         }
         const skObj = r.skus ?? itemInfo?.skus ?? findInObj(r, ["skus"]);
         const sk =
           skObj && typeof skObj === "object" && "sku" in skObj
             ? (skObj as { sku: unknown[] }).sku
             : [];
-        if (
-          pl &&
-          typeof pl === "object" &&
-          Object.keys(pl).length >
-            (bestPropsList ? Object.keys(bestPropsList).length : 0)
-        )
-          bestPropsList = pl;
-        if (sp && Array.isArray(sp) && sp.length > (bestSkuProps?.length ?? 0))
-          bestSkuProps = sp;
-        if (Array.isArray(sk) && sk.length > bestSkuList.length)
-          bestSkuList = sk as typeof bestSkuList;
+        // Merge props_list from all responses so we get 40+ options when page sends multiple batches (e.g. 20+20)
+        if (pl && typeof pl === "object") {
+          for (const [k, v] of Object.entries(pl)) {
+            if (v != null) mergedPropsList[k] = v;
+          }
+        }
+        // Merge skuProps: combine values per group name so we get 40 when multiple responses have 20 each
+        if (sp && Array.isArray(sp)) {
+          for (const prop of sp) {
+            const name = String(prop.propName ?? prop.prop ?? "").trim() || "Opção";
+            const valuesArr = prop.values;
+            if (!valuesArr || !Array.isArray(valuesArr)) continue;
+            const existing = skuPropsByGroupName.get(name) ?? { values: [], images: [] };
+            const seen = new Set(existing.values);
+            for (const v of valuesArr) {
+              const txt = String((v as { value?: string }).value ?? "").trim();
+              if (txt && txt.length < 100 && !seen.has(txt)) {
+                seen.add(txt);
+                existing.values.push(txt);
+                existing.images.push((v as { image?: string }).image ?? "");
+              }
+            }
+            skuPropsByGroupName.set(name, existing);
+          }
+        }
+        // Merge sku list from all responses (dedupe by properties)
+        if (Array.isArray(sk)) {
+          for (const s of sk) {
+            const rec = s as Record<string, unknown>;
+            const key = String(rec?.properties ?? rec?.prop ?? rec);
+            if (key && !skuByProps.has(key)) skuByProps.set(key, s);
+          }
+        }
       }
+      const bestPropsList = Object.keys(mergedPropsList).length > 0 ? mergedPropsList : null;
+      const bestSkuProps: SkuPropsType = Array.from(skuPropsByGroupName.entries()).map(([name, { values, images }]) => ({
+        propName: name,
+        values: values.map((val, i) => ({ value: val, image: images[i] ?? "" })),
+      }));
+      const bestSkuList: SkuListType = Array.from(skuByProps.values()) as SkuListType;
       return { bestPropsList, bestSkuProps, bestSkuList };
     }
 
@@ -1039,7 +1155,7 @@ export async function getCssbuyProductPreview(
     })();
 
     const isSizeLabel = (label: string) =>
-      /^size|尺码|尺寸|tamanho|规格|shoe|鞋码/i.test(label.trim());
+      /^size|尺码|尺寸|tamanho|规格|shoe|鞋码|码选择|选择尺码|spec|lv|码|号|eu|eur|us\s*size|uk\s*size|cn$/i.test(label.trim());
     const isColorLabel = (label: string) =>
       /^color|colour|颜色|款式|style|estilo|cor|model|modelo/i.test(label.trim());
 
@@ -1258,6 +1374,29 @@ export async function getCssbuyProductPreview(
 
     await context.close();
 
+    // Grupos de opções com nomes originais da API (ex.: "ws:(Black straps)") como no CSSBuy
+    const optionGroupsFromApi: OptionGroup[] = [];
+    if (skuProps && Array.isArray(skuProps)) {
+      for (const prop of skuProps) {
+        const name = String((prop as { propName?: string }).propName ?? (prop as { prop?: string }).prop ?? "").trim() || "Opção";
+        const valuesArr = (prop as { values?: Array<{ value?: string; image?: string }> }).values;
+        if (valuesArr && Array.isArray(valuesArr)) {
+          const vals: string[] = [];
+          const imgs: string[] = [];
+          for (const v of valuesArr) {
+            const txt = String(v?.value ?? "").trim();
+            if (txt && txt.length < 100) {
+              vals.push(txt);
+              imgs.push((v as { image?: string }).image ?? "");
+            }
+          }
+          if (vals.length > 0) {
+            optionGroupsFromApi.push({ name, values: vals, images: imgs });
+          }
+        }
+      }
+    }
+
     const fabricValues =
       (data as { fabricValues?: string[] }).fabricValues ?? [];
     const fabricGroup: OptionGroup = {
@@ -1274,9 +1413,11 @@ export async function getCssbuyProductPreview(
         /\b(box|packaging|gift\s*box|case\s*only|accessory|acessório|embalagem|caixa)\b/i.test(v)
       );
     };
+    const isQualityGradeGroup = (name: string): boolean =>
+      /品质等级|quality\s*level|quality\s*grade|nível\s*de\s*qualidade|qualidade/i.test(name.trim());
     let colorValuesFiltered = data.colorValues.filter((v) => !isPackagingOrAccessory(v));
-    // When there are many options, packaging is often at the end; keep at most 15 model options to avoid trailing non-product images
-    const MAX_MODEL_OPTIONS = 15;
+    // Mostrar todas as opções de estilo (ex.: 40+ no link); limite alto para não cortar
+    const MAX_MODEL_OPTIONS = 80;
     if (colorValuesFiltered.length > MAX_MODEL_OPTIONS)
       colorValuesFiltered = colorValuesFiltered.slice(0, MAX_MODEL_OPTIONS);
     const colorImagesFiltered = colorValuesFiltered.map(
@@ -1470,10 +1611,234 @@ export async function getCssbuyProductPreview(
       }
     }
 
-    const optionGroups: OptionGroup[] = [];
-    if (fabricGroup.values.length > 0) optionGroups.push(fabricGroup);
-    if (colorGroup.values.length > 0) optionGroups.push(colorGroup);
-    if (sizeGroup.values.length > 0) optionGroups.push(sizeGroup);
+    // Preferir a fonte com MAIS opções (DOM pode ter 6, API às vezes só 2) para exibir todas como no CSSBuy
+    const fromDom = (data as { optionGroups?: { name: string; values: string[]; images: string[] }[] }).optionGroups;
+    const domGroups = fromDom?.length ? fromDom.map((g) => ({ name: g.name, values: g.values, images: g.images ?? [] })) : [];
+    const totalFromApi = optionGroupsFromApi.reduce((s, g) => s + g.values.length, 0);
+    const totalFromDom = domGroups.reduce((s, g) => s + g.values.length, 0);
+
+    // Se props_list da API tiver mais entradas que skuProps (ex.: 6 estilos), montar grupos (estilo + tamanho) a partir dele
+    const optionGroupsFromPropsList: OptionGroup[] = [];
+    if (propsList && typeof propsList === "object") {
+      const plEntries = Object.entries(propsList) as [string, string | { value?: string; value1?: string; image?: string }][];
+      const styleValues: string[] = [];
+      const styleImages: string[] = [];
+      let styleGroupName = "Estilo";
+      const qualityValues: string[] = [];
+      const sizeValues: string[] = [];
+      const sizeImages: string[] = [];
+      let sizeGroupName = "Tamanho";
+      for (const [propKey, v] of plEntries) {
+        if (v == null) continue;
+        let raw: string;
+        let img: string | undefined;
+        if (typeof v === "string") {
+          raw = v;
+          img = (propsImg as Record<string, string> | undefined)?.[propKey];
+        } else {
+          raw = String((v as { value?: string }).value ?? (v as { value1?: string }).value1 ?? "");
+          img = (v as { image?: string }).image ?? (propsImg as Record<string, string> | undefined)?.[propKey];
+        }
+        const colonIdx = raw.indexOf(":");
+        const label = colonIdx >= 0 ? raw.slice(0, colonIdx).trim() : "";
+        const val = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
+        if (!val || val.length > 80) continue;
+        if (label && isSizeLabel(label) && isSizeLike(val)) {
+          if (!sizeValues.includes(val)) {
+            sizeValues.push(val);
+            sizeImages.push(img ?? "");
+          }
+          if (sizeGroupName === "Tamanho" && label) sizeGroupName = label;
+          continue;
+        }
+        if (label && isQualityGradeGroup(label)) {
+          if (!qualityValues.includes(val)) qualityValues.push(val);
+          continue;
+        }
+        if (styleGroupName === "Estilo" && label) styleGroupName = label;
+        if (!styleValues.includes(val)) {
+          styleValues.push(val);
+          styleImages.push(img ?? "");
+        }
+      }
+      if (qualityValues.length > 0) optionGroupsFromPropsList.push({ name: "Quality grade", values: qualityValues, images: [] });
+      if (styleValues.length > 0) optionGroupsFromPropsList.push({ name: styleGroupName, values: styleValues, images: styleImages });
+      if (sizeValues.length > 0) {
+        const numericSizes = sizeValues.filter((v) => /^\d+(\.5)?$/.test(v.trim()));
+        const otherSizes = sizeValues.filter((v) => !/^\d+(\.5)?$/.test(v.trim()));
+        if (numericSizes.length > 0) {
+          numericSizes.sort((a, b) => parseFloat(a) - parseFloat(b));
+          const reordered = [...numericSizes, ...otherSizes];
+          const reorderedImages = reordered.map((val) => {
+            const i = sizeValues.indexOf(val);
+            return sizeImages[i] ?? "";
+          });
+          optionGroupsFromPropsList.push({ name: sizeGroupName, values: reordered, images: reorderedImages });
+        } else {
+          optionGroupsFromPropsList.push({ name: sizeGroupName, values: sizeValues, images: sizeImages });
+        }
+      }
+    }
+    // Preço por variante (Weidian): skus.sku tem properties "0:xxx" e price; props_list dá o nome de exibição
+    if (optionGroupsFromPropsList.length > 0 && propsList && typeof propsList === "object" && skuList && Array.isArray(skuList)) {
+      const priceByValue: Record<string, number> = {};
+      const propKeyToDisplay: Record<string, string> = {};
+      for (const [propKey, v] of Object.entries(propsList) as [string, string | { value?: string; value1?: string }][]) {
+        const raw = typeof v === "string" ? v : String((v as { value?: string }).value ?? (v as { value1?: string }).value1 ?? "");
+        const colonIdx = raw.indexOf(":");
+        const displayVal = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
+        if (displayVal) propKeyToDisplay[propKey] = displayVal;
+      }
+      for (const sku of skuList) {
+        const propKey = String((sku as { properties?: string }).properties ?? "").trim();
+        const priceRaw = (sku as { price?: number }).price ?? (sku as { orginal_price?: number }).orginal_price;
+        const price = typeof priceRaw === "number" && priceRaw > 0 ? priceRaw : null;
+        if (!propKey || price == null) continue;
+        const displayVal = propKeyToDisplay[propKey];
+        if (displayVal && !(displayVal in priceByValue)) priceByValue[displayVal] = price;
+      }
+      if (Object.keys(priceByValue).length > 0) {
+        const firstStyleGroup = optionGroupsFromPropsList.find(
+          (g) => !isQualityGradeGroup(g.name) && !/tamanho|size|尺码|尺寸/i.test(g.name),
+        );
+        if (firstStyleGroup) firstStyleGroup.priceByValue = priceByValue;
+      }
+    }
+    // Estoque por (estilo, tamanho) para Weidian com dois grupos — a partir de skuList
+    const styleGroupFromProps = optionGroupsFromPropsList.find(
+      (g) => !isQualityGradeGroup(g.name) && !/tamanho|size|尺码|尺寸/i.test(g.name),
+    );
+    const sizeGroupFromProps = optionGroupsFromPropsList.find((g) => /tamanho|size|尺码|尺寸/i.test(g.name));
+    if (styleGroupFromProps && sizeGroupFromProps && propsList && typeof propsList === "object" && skuList && Array.isArray(skuList)) {
+      const propKeyToDisplay: Record<string, string> = {};
+      for (const [propKey, v] of Object.entries(propsList) as [string, string | { value?: string; value1?: string }][]) {
+        const raw = typeof v === "string" ? v : String((v as { value?: string }).value ?? (v as { value1?: string }).value1 ?? "");
+        const colonIdx = raw.indexOf(":");
+        const displayVal = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
+        if (displayVal) propKeyToDisplay[propKey] = displayVal;
+      }
+      const styleSet = new Set(styleGroupFromProps.values);
+      const sizeSet = new Set(sizeGroupFromProps.values);
+      const inventoryByColorAndValue: Record<string, Record<string, number>> = {};
+      for (const sku of skuList) {
+        const propsStr = String((sku as { properties?: string }).properties ?? "").trim();
+        const qty = typeof (sku as { quantity?: number }).quantity === "number"
+          ? (sku as { quantity: number }).quantity
+          : parseInt(String((sku as Record<string, unknown>).quantity ?? (sku as Record<string, unknown>).stock ?? 0), 10) || 0;
+        if (qty < 0) continue;
+        const parts = propsStr.split(/[;，,]/).map((p) => p.trim()).filter(Boolean);
+        const displays = parts.map((p) => propKeyToDisplay[p]).filter(Boolean);
+        let styleVal = "";
+        let sizeVal = "";
+        for (const d of displays) {
+          if (styleSet.has(d)) styleVal = d;
+          if (sizeSet.has(d)) sizeVal = d;
+        }
+        if (styleVal && sizeVal) {
+          if (!inventoryByColorAndValue[styleVal]) inventoryByColorAndValue[styleVal] = {};
+          inventoryByColorAndValue[styleVal][sizeVal] = (inventoryByColorAndValue[styleVal][sizeVal] ?? 0) + qty;
+        }
+      }
+      if (Object.keys(inventoryByColorAndValue).length > 0)
+        sizeGroupFromProps.inventoryByColorAndValue = inventoryByColorAndValue;
+    }
+    const totalFromPropsList = optionGroupsFromPropsList.reduce((s, g) => s + g.values.length, 0);
+
+    let optionGroups: OptionGroup[] = [];
+    if (totalFromPropsList > totalFromApi && totalFromPropsList > totalFromDom && optionGroupsFromPropsList.length > 0) {
+      optionGroups = optionGroupsFromPropsList;
+      const hasSizeGroup = optionGroups.some((g) => /tamanho|size|尺码|尺寸/i.test(g.name));
+      if (!hasSizeGroup && sizeGroup.values.length > 0) optionGroups = [...optionGroups, sizeGroup];
+    } else if (totalFromDom > totalFromApi && domGroups.length > 0) {
+      optionGroups = domGroups;
+    } else if (optionGroupsFromApi.length > 0) {
+      optionGroups = optionGroupsFromApi;
+      if (colorGroup.priceByValue && Object.keys(colorGroup.priceByValue).length > 0) {
+        const firstWithValues = optionGroups.find((g) => g.values.length > 0);
+        if (firstWithValues) firstWithValues.priceByValue = colorGroup.priceByValue;
+      }
+    } else if (domGroups.length > 0) {
+      optionGroups = domGroups;
+    } else if (optionGroupsFromPropsList.length > 0) {
+      optionGroups = optionGroupsFromPropsList;
+      const hasSizeGroup = optionGroups.some((g) => /tamanho|size|尺码|尺寸/i.test(g.name));
+      if (!hasSizeGroup && sizeGroup.values.length > 0) optionGroups = [...optionGroups, sizeGroup];
+    } else {
+      if (fabricGroup.values.length > 0) optionGroups.push(fabricGroup);
+      if (colorGroup.values.length > 0) optionGroups.push(colorGroup);
+      if (sizeGroup.values.length > 0) optionGroups.push(sizeGroup);
+    }
+
+    // Incluir "Quality grade" quando existir na API ou DOM mas não estiver nos grupos escolhidos (ex.: escolhemos props_list que não tem qualidade)
+    const hasQualityGroup = optionGroups.some((g) => isQualityGradeGroup(g.name));
+    if (!hasQualityGroup) {
+      const fromApi = optionGroupsFromApi.find((g) => isQualityGradeGroup(g.name));
+      const fromDom = domGroups.find((g) => isQualityGradeGroup(g.name));
+      const qualityGroup = fromApi ?? fromDom;
+      if (qualityGroup && qualityGroup.values.length > 0) {
+        optionGroups.push({ name: "Quality grade", values: qualityGroup.values, images: qualityGroup.images ?? [] });
+      }
+    }
+
+    // Nomes amigáveis: "品质等级" / "Quality level" → "Quality grade"
+    for (const g of optionGroups) {
+      if (isQualityGradeGroup(g.name)) g.name = "Quality grade";
+    }
+
+    // Traduzir valores das opções (chinês/inglês → português)
+    const uniqueValues = new Set<string>();
+    for (const g of optionGroups) {
+      for (const v of g.values) if (v && v.trim()) uniqueValues.add(v.trim());
+    }
+    const valueToPt: Record<string, string> = {};
+    const BATCH = 5;
+    const arr = Array.from(uniqueValues);
+    for (let i = 0; i < arr.length; i += BATCH) {
+      const chunk = arr.slice(i, i + BATCH);
+      await Promise.all(
+        chunk.map(async (val) => {
+          const pt = await translateToPortuguese(val);
+          valueToPt[val] = pt && pt !== val ? pt : val;
+        }),
+      );
+    }
+    for (const g of optionGroups) {
+      g.values = g.values.map((v) => (v && valueToPt[v.trim()]) || v);
+    }
+    // Re-key priceByValue e inventários para usar valores traduzidos
+    for (const g of optionGroups) {
+      if (g.priceByValue && typeof g.priceByValue === "object") {
+        const next: Record<string, number> = {};
+        for (const [k, v] of Object.entries(g.priceByValue)) {
+          next[valueToPt[k.trim()] || k] = v;
+        }
+        g.priceByValue = next;
+      }
+      if (g.inventoryByValue && typeof g.inventoryByValue === "object") {
+        const next: Record<string, number> = {};
+        for (const [k, v] of Object.entries(g.inventoryByValue)) {
+          next[valueToPt[k.trim()] || k] = v;
+        }
+        g.inventoryByValue = next;
+      }
+      if (g.inventoryByColorAndValue && typeof g.inventoryByColorAndValue === "object") {
+        const next: Record<string, Record<string, number>> = {};
+        for (const [colorKey, byVal] of Object.entries(g.inventoryByColorAndValue)) {
+          const ptColor = valueToPt[colorKey.trim()] || colorKey;
+          next[ptColor] = {};
+          for (const [valKey, num] of Object.entries(byVal)) {
+            next[ptColor][valueToPt[valKey.trim()] || valKey] = num;
+          }
+        }
+        g.inventoryByColorAndValue = next;
+      }
+    }
+
+    // Último recurso: ainda só 2 opções mas data.colorValues tem mais (ex.: 6) — usar colorValues
+    const totalNow = optionGroups.reduce((s, g) => s + g.values.length, 0);
+    if (totalNow <= 2 && data.colorValues.length > totalNow) {
+      optionGroups = [{ name: "Estilo", values: data.colorValues, images: data.colorImages.slice(0, data.colorValues.length) }];
+    }
 
     let titlePt: string | null = null;
     if (data.title && data.title.trim().length > 0) {
@@ -1488,7 +1853,7 @@ export async function getCssbuyProductPreview(
     // Prefer variant (model/color) images as main gallery to avoid showing grid of product+packaging shots
     const mainImages =
       colorGroup.images.length > 0
-        ? colorGroup.images.filter(Boolean).slice(0, 40)
+        ? colorGroup.images.filter(Boolean).slice(0, 80)
         : (data.images || []).slice(0, 12);
 
     return {
