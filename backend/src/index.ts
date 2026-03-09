@@ -26,8 +26,8 @@ const prisma = new PrismaClient();
 const app = express();
 
 const defaultOrigins = [
-  "https://compraschinatest.vercel.app",
   "https://compraschina.com.br",
+  "https://www.compraschina.com.br",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://127.0.0.1:3000",
