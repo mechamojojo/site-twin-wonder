@@ -179,54 +179,50 @@ export async function getCssbuyProductPreview(
       await page
         .waitForSelector(
           "[class*='sku'], [class*='prop'], [class*='size'], [class*='color'], [class*='style']",
-          { timeout: 3000 },
+          { timeout: 5000 },
         )
         .catch(() => {});
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(2000);
       // Dar tempo para a API que traz todas as opções (ex.: 40 estilos em lotes de 20) responder
-      await page.waitForTimeout(2500);
-      await page.waitForTimeout(3000);
-      // Scroll option containers and click "load more" so all 40 options load (CSSBuy often shows 20 first)
-      try {
-        const scrollAndLoadMore = async () => {
-          const scrollables = await page.$$(
-            "[class*='sku'] [class*='scroll'], [class*='prop'] [class*='scroll'], [class*='option'] [class*='list'], .sku-list, [class*='style'] [class*='wrap']",
+      await page.waitForTimeout(3500);
+      // Scroll option containers and click "load more" so all options load (CSSBuy/Weidian often show 20 first)
+      const scrollAndLoadMore = async () => {
+        const scrollables = await page.$$(
+          "[class*='sku'] [class*='scroll'], [class*='prop'] [class*='scroll'], [class*='option'] [class*='list'], .sku-list, [class*='style'] [class*='wrap']",
+        );
+        for (const el of scrollables) {
+          await el
+            .evaluate((node) => {
+              (node as HTMLElement).scrollTop = (node as HTMLElement).scrollHeight;
+            })
+            .catch(() => {});
+          await page.waitForTimeout(400);
+        }
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+        await page.waitForTimeout(500);
+        await page.evaluate(() => {
+          const buttons = Array.from(
+            document.querySelectorAll(
+              "button, a, [role='button'], div[class*='more'], span[class*='more']",
+            ),
           );
-          for (const el of scrollables) {
-            await el
-              .evaluate((node) => {
-                (node as HTMLElement).scrollTop = (
-                  node as HTMLElement
-                ).scrollHeight;
-              })
-              .catch(() => {});
-            await page.waitForTimeout(400);
-          }
-          await page.evaluate(() => {
-            window.scrollTo(0, document.body.scrollHeight / 2);
-          });
-          await page.waitForTimeout(500);
-          await page.evaluate(() => {
-            const buttons = Array.from(
-              document.querySelectorAll(
-                "button, a, [role='button'], div[class*='more'], span[class*='more']",
-              ),
+          const more = buttons.find((b) => {
+            const t = (b as HTMLElement).innerText?.toLowerCase() || "";
+            return (
+              /more|all|view\s*all|show\s*all|展开|更多|全部|load\s*more/i.test(t) &&
+              t.length < 30
             );
-            const more = buttons.find((b) => {
-              const t = (b as HTMLElement).innerText?.toLowerCase() || "";
-              return (
-                /more|all|view\s*all|show\s*all|展开|更多|全部|load\s*more/i.test(
-                  t,
-                ) && t.length < 30
-              );
-            });
-            if (more) (more as HTMLElement).click();
           });
-        };
-        await scrollAndLoadMore();
-        await page.waitForTimeout(2000);
+          if (more) (more as HTMLElement).click();
+        });
+      };
+      try {
         await scrollAndLoadMore();
         await page.waitForTimeout(2500);
+        await scrollAndLoadMore();
+        await page.waitForTimeout(3000);
+        await scrollAndLoadMore();
+        await page.waitForTimeout(2000);
       } catch {
         // ignore
       }
@@ -1747,6 +1743,8 @@ export async function getCssbuyProductPreview(
 
     // Se props_list da API tiver mais entradas que skuProps (ex.: 6 estilos), montar grupos (estilo + tamanho) a partir dele
     const optionGroupsFromPropsList: OptionGroup[] = [];
+    /** Map prop key to group name and display value — used to assign priceByValue per group (including Quality grade). */
+    const propKeyToGroupAndValue: Record<string, { groupName: string; value: string }> = {};
     if (propsList && typeof propsList === "object") {
       const plEntries = Object.entries(propsList) as [
         string,
@@ -1780,23 +1778,30 @@ export async function getCssbuyProductPreview(
         const label = colonIdx >= 0 ? raw.slice(0, colonIdx).trim() : "";
         const val = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
         if (!val || val.length > 80) continue;
-        if (label && isSizeLabel(label) && isSizeLike(val)) {
+        // Options with images are product variations (colors/styles) — keep under 颜色, never as Tamanho
+        const hasImage = !!(img && String(img).trim().length > 0);
+        if (label && isSizeLabel(label) && isSizeLike(val) && !hasImage) {
           if (!sizeValues.includes(val)) {
             sizeValues.push(val);
             sizeImages.push(img ?? "");
           }
           if (sizeGroupName === "Tamanho" && label) sizeGroupName = label;
+          propKeyToGroupAndValue[propKey] = { groupName: sizeGroupName, value: val };
           continue;
         }
         if (label && isQualityGradeGroup(label)) {
           if (!qualityValues.includes(val)) qualityValues.push(val);
+          propKeyToGroupAndValue[propKey] = { groupName: "Quality grade", value: val };
           continue;
         }
-        if (styleGroupName === "Estilo" && label) styleGroupName = label;
+        if (styleGroupName === "Estilo" && label && !isSizeLabel(label)) styleGroupName = label;
+        if (hasImage && isSizeLabel(label)) styleGroupName = "颜色";
+        // Any option with an image or without a size label goes to style/color (颜色)
         if (!styleValues.includes(val)) {
           styleValues.push(val);
           styleImages.push(img ?? "");
         }
+        propKeyToGroupAndValue[propKey] = { groupName: styleGroupName, value: val };
       }
       if (qualityValues.length > 0)
         optionGroupsFromPropsList.push({
@@ -1838,35 +1843,16 @@ export async function getCssbuyProductPreview(
         }
       }
     }
-    // Preço por variante (Weidian): skus.sku tem properties "0:xxx" e price; props_list dá o nome de exibição
+    // Preço por variante (Weidian): skus.sku tem properties "0" ou "0;1" (style;quality) e price; usar propKeyToGroupAndValue para cada grupo
     if (
       optionGroupsFromPropsList.length > 0 &&
-      propsList &&
-      typeof propsList === "object" &&
+      Object.keys(propKeyToGroupAndValue).length > 0 &&
       skuList &&
       Array.isArray(skuList)
     ) {
-      const priceByValue: Record<string, number> = {};
-      const propKeyToDisplay: Record<string, string> = {};
-      for (const [propKey, v] of Object.entries(propsList) as [
-        string,
-        string | { value?: string; value1?: string },
-      ][]) {
-        const raw =
-          typeof v === "string"
-            ? v
-            : String(
-                (v as { value?: string }).value ??
-                  (v as { value1?: string }).value1 ??
-                  "",
-              );
-        const colonIdx = raw.indexOf(":");
-        const displayVal =
-          colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
-        if (displayVal) propKeyToDisplay[propKey] = displayVal;
-      }
+      const priceByGroup: Record<string, Record<string, number>> = {};
       for (const sku of skuList) {
-        const propKey = String(
+        const propsStr = String(
           (sku as { properties?: string }).properties ?? "",
         ).trim();
         const priceRaw =
@@ -1874,18 +1860,19 @@ export async function getCssbuyProductPreview(
           (sku as { orginal_price?: number }).orginal_price;
         const price =
           typeof priceRaw === "number" && priceRaw > 0 ? priceRaw : null;
-        if (!propKey || price == null) continue;
-        const displayVal = propKeyToDisplay[propKey];
-        if (displayVal && !(displayVal in priceByValue))
-          priceByValue[displayVal] = price;
+        if (!propsStr || price == null) continue;
+        const parts = propsStr.split(/[;，,]/).map((p) => p.trim()).filter(Boolean);
+        for (const part of parts) {
+          const entry = propKeyToGroupAndValue[part];
+          if (!entry) continue;
+          if (!priceByGroup[entry.groupName]) priceByGroup[entry.groupName] = {};
+          if (!(entry.value in priceByGroup[entry.groupName]))
+            priceByGroup[entry.groupName][entry.value] = price;
+        }
       }
-      if (Object.keys(priceByValue).length > 0) {
-        const firstStyleGroup = optionGroupsFromPropsList.find(
-          (g) =>
-            !isQualityGradeGroup(g.name) &&
-            !/tamanho|size|尺码|尺寸/i.test(g.name),
-        );
-        if (firstStyleGroup) firstStyleGroup.priceByValue = priceByValue;
+      for (const g of optionGroupsFromPropsList) {
+        const byValue = priceByGroup[g.name];
+        if (byValue && Object.keys(byValue).length > 0) g.priceByValue = byValue;
       }
     }
     // Estoque por (estilo, tamanho) para Weidian com dois grupos — a partir de skuList
@@ -2033,7 +2020,8 @@ export async function getCssbuyProductPreview(
       if (isQualityGradeGroup(g.name)) g.name = "Quality grade";
     }
 
-    // Separar tamanhos misturados no grupo de cor/estilo (ex.: 颜色 com M,L,XL,XXL junto das imagens) — só quando o grupo de tamanho estiver vazio
+    // Separar tamanhos misturados no grupo de cor/estilo (ex.: 颜色 com M,L,XL,XXL) — só quando o grupo de tamanho estiver vazio
+    // Não separar quando o grupo tem imagens: são variações de produto (relógios, bolsas) que devem ficar todas em 颜色
     const sizeGroupExisting = optionGroups.find((g) =>
       /tamanho|size|尺码|尺寸/i.test(g.name),
     );
@@ -2043,6 +2031,8 @@ export async function getCssbuyProductPreview(
       for (const g of optionGroups) {
         if (isQualityGradeGroup(g.name)) continue;
         if (/tamanho|size|尺码|尺寸/i.test(g.name)) continue;
+        const hasProductImages = (g.images ?? []).some((url) => url && String(url).trim().length > 0);
+        if (hasProductImages) continue;
         const sizeLikeIndices: number[] = [];
         const nonSizeLikeIndices: number[] = [];
         g.values.forEach((val, i) => {
@@ -2163,11 +2153,25 @@ export async function getCssbuyProductPreview(
       ? normalizeProductTitle(displayTitle)
       : null;
 
-    // Prefer variant (model/color) images as main gallery to avoid showing grid of product+packaging shots
+    // Prefer the option group that has product variation images (颜色) for main gallery and variants
+    const imageBasedGroup = optionGroups.find(
+      (g) =>
+        !isQualityGradeGroup(g.name) &&
+        !/tamanho|size|尺码|尺寸/i.test(g.name) &&
+        (g.images ?? []).some((url) => url && String(url).trim().length > 0),
+    );
     const mainImages =
-      colorGroup.images.length > 0
-        ? colorGroup.images.filter(Boolean).slice(0, 80)
-        : (data.images || []).slice(0, 12);
+      imageBasedGroup && (imageBasedGroup.images ?? []).length > 0
+        ? (imageBasedGroup.images ?? []).filter(Boolean).slice(0, 80)
+        : colorGroup.images.length > 0
+          ? colorGroup.images.filter(Boolean).slice(0, 80)
+          : (data.images || []).slice(0, 12);
+    const variantColorValues = imageBasedGroup?.values.length
+      ? imageBasedGroup.values
+      : colorGroup.values;
+    const variantColorImages = imageBasedGroup?.images?.length
+      ? imageBasedGroup.images
+      : colorGroup.images;
 
     return {
       title: data.title || null,
@@ -2176,9 +2180,9 @@ export async function getCssbuyProductPreview(
       images:
         mainImages.length > 0 ? mainImages : (data.images || []).slice(0, 12),
       variants: {
-        color: colorGroup.values.length ? colorGroup.values : undefined,
+        color: variantColorValues.length ? variantColorValues : undefined,
         size: sizeGroup.values.length ? sizeGroup.values : undefined,
-        colorImages: colorGroup.images.length ? colorGroup.images : undefined,
+        colorImages: variantColorImages.length ? variantColorImages : undefined,
       },
       optionGroups,
       specs: data.specs || [],

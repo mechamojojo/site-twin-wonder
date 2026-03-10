@@ -185,13 +185,15 @@ const Order = () => {
     fetchPreview();
   }, [url]);
 
-  // Preço efetivo: da variante selecionada (quando o grupo tem priceByValue, ex. Weidian "ws" ou Cor/Estilo) ou preço base
+  // Preço efetivo: da variante selecionada (priceByValue por grupo). Prioriza Quality grade quando selecionado, depois Cor/Estilo, depois base.
   const effectivePriceCny = (() => {
     if (!productPreview?.priceCny) return null;
-    const groupWithPrice = productPreview.optionGroups?.find((g) => {
+    const groupsWithPrice = (productPreview.optionGroups ?? []).filter((g) => {
       const selected = selectedOptionByGroup[g.name];
       return selected && g.priceByValue?.[selected] != null;
     });
+    const qualityGroup = groupsWithPrice.find((g) => isQualityGradeGroup(g.name));
+    const groupWithPrice = qualityGroup ?? groupsWithPrice[0];
     if (groupWithPrice) {
       const selected = selectedOptionByGroup[groupWithPrice.name];
       if (selected && groupWithPrice.priceByValue?.[selected] != null)
