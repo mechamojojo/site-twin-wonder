@@ -86,6 +86,7 @@ const Order = () => {
       name: string;
       values: string[];
       images: string[];
+      displayAsImages?: boolean;
       inventoryByValue?: Record<string, number>;
       inventoryByColorAndValue?: Record<string, Record<string, number>>;
       priceByValue?: Record<string, number>;
@@ -317,13 +318,13 @@ const Order = () => {
               {!productPreviewLoading && productPreview && (productPreview.images.length > 0 || productPreview.title || productPreview.titlePt || (productPreview.specs?.length ?? 0) > 0 || productPreview.description) && (
                 <>
                   <div className="bg-[#f5f5f5] overflow-hidden">
-                    {(productPreview.images.length > 0 || productPreview.optionGroups?.some((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && g.images?.some(Boolean))) ? (
+                    {(productPreview.images.length > 0 || productPreview.optionGroups?.some((g) => (g.displayAsImages === true || (g.displayAsImages !== false && g.images?.some(Boolean))) && !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name))) ? (
                       <>
                         {/* Imagem principal — segue a miniatura clicada (grupo com imagens ou galeria) */}
                         <div className="aspect-square sm:aspect-[4/3] max-h-[420px] flex items-center justify-center p-4 sm:p-6 bg-white border-b border-[#e8e8e8]">
                           <img
                             src={ensureHttpsImage((() => {
-                              const imageGroup = productPreview.optionGroups?.find((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && g.images?.some(Boolean));
+                              const imageGroup = productPreview.optionGroups?.find((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && (g.displayAsImages === true || (g.displayAsImages !== false && g.images?.some(Boolean))));
                               const selectedVal = imageGroup ? selectedOptionByGroup[imageGroup.name] : undefined;
                               const imgIdx = selectedVal && imageGroup ? imageGroup.values.indexOf(selectedVal) : -1;
                               const optionImg = imageGroup && imgIdx >= 0 ? imageGroup.images?.[imgIdx] : null;
@@ -343,10 +344,12 @@ const Order = () => {
                         {/* Miniaturas: clicar atualiza a opção e a imagem principal */}
                         <div className="p-3 flex gap-2 overflow-x-auto border-t border-[#e8e8e8] bg-white">
                           {(() => {
-                            const imageGroup = productPreview.optionGroups?.find((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && g.images?.some(Boolean));
-                            if (imageGroup && imageGroup.images?.some(Boolean)) {
-                              return imageGroup.values.map((value, i) => {
-                                const thumb = imageGroup.images?.[i];
+                            const imageGroup = productPreview.optionGroups?.find((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && (g.displayAsImages === true || (g.displayAsImages !== false && g.images?.some(Boolean))));
+                            if (imageGroup && (imageGroup.displayAsImages === true || imageGroup.images?.some(Boolean))) {
+                              const withThumbs = imageGroup.values
+                                .map((value, i) => ({ value, i, thumb: imageGroup.images?.[i] }))
+                                .filter(({ thumb }) => thumb && String(thumb).trim() !== "");
+                              return withThumbs.map(({ value, i, thumb }) => {
                                 const isSelected = selectedOptionByGroup[imageGroup.name] === value;
                                 return (
                                   <button
@@ -356,7 +359,7 @@ const Order = () => {
                                     className={`shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border-2 overflow-hidden bg-[#fafafa] transition-colors ${isSelected ? "border-china-red ring-2 ring-china-red/30" : "border-[#e0e0e0] hover:border-[#bdbdbd]"}`}
                                     title={value}
                                   >
-                                    {thumb && <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+                                    <img src={ensureHttpsImage(thumb!)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                                   </button>
                                 );
                               });
@@ -604,11 +607,13 @@ const Order = () => {
                         /* Grupos não-tamanho: grid com miniaturas (cor) ou pills (Fabric etc) */
                         <div key={gIdx}>
                           <p className="text-xs font-semibold text-muted-foreground mb-2">{group.name}:</p>
-                          {group.images?.some(Boolean) ? (
+                          {(group.displayAsImages === true || (group.displayAsImages !== false && group.images?.some(Boolean))) ? (
                             <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 gap-2">
-                              {group.values.map((value, i) => {
+                              {group.values
+                                .map((value, i) => ({ value, i, thumb: group.images?.[i] || "" }))
+                                .filter(({ thumb }) => thumb && thumb.trim() !== "")
+                                .map(({ value, i, thumb }) => {
                                 const isSelected = selectedOptionByGroup[group.name] === value;
-                                const thumb = group.images?.[i] || "";
                                 return (
                                   <button
                                     key={i}
@@ -620,11 +625,7 @@ const Order = () => {
                                     title={value}
                                   >
                                     <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
-                                      {thumb ? (
-                                        <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
-                                      ) : (
-                                        <span className="text-[10px] font-medium text-muted-foreground">{value.slice(0, 4)}</span>
-                                      )}
+                                      <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
                                     </div>
                                   </button>
                                 );

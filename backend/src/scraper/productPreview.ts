@@ -12,6 +12,8 @@ export interface OptionGroup {
   name: string;
   values: string[];
   images: string[];
+  /** When true, always show as image grid (e.g. Color); when false, always show as pills (e.g. Size, Quality grade). When undefined, use presence of images. */
+  displayAsImages?: boolean;
   /** Inventory per value (e.g. size "M" -> 10). Used when no color selection needed. */
   inventoryByValue?: Record<string, number>;
   /** When product has color+size: inventory per (color, size). Outer key = color value. */
