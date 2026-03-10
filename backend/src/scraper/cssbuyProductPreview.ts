@@ -89,7 +89,10 @@ export async function getCssbuyProductPreview(
           url.includes("item/detail") ||
           url.includes("product/detail") ||
           url.includes("micro") ||
-          url.includes("weidian")
+          url.includes("weidian") ||
+          url.includes("1688") ||
+          url.includes("offer") ||
+          url.includes("detail.1688")
         ) {
           if (
             d &&
@@ -113,7 +116,8 @@ export async function getCssbuyProductPreview(
             typeof payload === "object" &&
             (has(payload, "itemInfo") ||
               has(payload, "skus") ||
-              has(payload, "props_list")))
+              has(payload, "props_list") ||
+              has(payload, "skuProps")))
         ) {
           if (
             !Array.isArray(payload) &&
@@ -172,8 +176,19 @@ export async function getCssbuyProductPreview(
     await page.waitForTimeout(1200);
 
     await page.waitForSelector("img[src]", { timeout: 10000 }).catch(() => {});
-    const baseWait = isItemMicro ? 3000 : 2500;
+    const isItem1688 = /item-1688-/.test(cssbuyUrl);
+    const baseWait = isItemMicro ? 3000 : isItem1688 ? 3500 : 2500;
     await page.waitForTimeout(baseWait);
+
+    if (isItem1688) {
+      await page
+        .waitForSelector(
+          "[class*='sku'], [class*='prop'], [class*='size'], [class*='color'], [class*='option'], [class*='spec']",
+          { timeout: 5000 },
+        )
+        .catch(() => {});
+      await page.waitForTimeout(1500);
+    }
 
     if (isItemMicro) {
       await page
@@ -541,10 +556,11 @@ export async function getCssbuyProductPreview(
       const scriptsForSku = document.querySelectorAll("script:not([src])");
       for (const s of scriptsForSku) {
         const text = s.textContent || "";
-        if (text.indexOf("skuProps") === -1) continue;
-        const idx = text.indexOf('"skuProps":[');
+        const skuPropsKey = text.indexOf('"skuProps":') !== -1 ? '"skuProps":' : text.indexOf('"sku_props":') !== -1 ? '"sku_props":' : null;
+        if (skuPropsKey === null) continue;
+        const idx = text.indexOf(skuPropsKey);
         if (idx === -1) continue;
-        const start = idx + '"skuProps":'.length;
+        const start = idx + skuPropsKey.length;
         let depth = 1;
         let i = start;
         while (i < text.length && depth > 0) {
@@ -889,6 +905,20 @@ export async function getCssbuyProductPreview(
       }
 
       function extractSizeOptions() {
+        // CSSBuy 1688: "S size is suitable 50-60kg", "M size is suitable 65-70kg", "Xl size...", "Xxl size..."
+        const bodyText = document.body?.innerText || "";
+        const sizeSuitableRe = /\b(S|M|L|Xl|Xxl|XL|XXL|2XL|3XL|XS)\s+size\s+is\s+suitable/gi;
+        let match;
+        const fromSuitable: string[] = [];
+        while ((match = sizeSuitableRe.exec(bodyText)) !== null) {
+          const size = match[1];
+          if (!fromSuitable.some((x) => x.toLowerCase() === size.toLowerCase())) fromSuitable.push(size);
+        }
+        if (fromSuitable.length > 0) {
+          if (result.sizeValues.length === 0) result.sizeValues = fromSuitable;
+          else fromSuitable.forEach((s) => { if (!result.sizeValues.some((x) => x.toLowerCase() === s.toLowerCase())) result.sizeValues.push(s); });
+        }
+
         let foundSizeSection = false;
         const labels = ["Size:", "Shoe size:", "尺码", "规格", "Tamanho:"];
         for (const label of labels) {
@@ -1428,6 +1458,20 @@ export async function getCssbuyProductPreview(
     if (sizeSet.size > 0 && data.sizeValues.length === 0) {
       data.sizeValues = Array.from(sizeSet);
     }
+    // Fallback: use sizes from DOM optionGroups (e.g. 1688 on CSSBuy when API wasn't captured)
+    if (
+      data.sizeValues.length === 0 &&
+      Array.isArray((data as { optionGroups?: { name: string; values: string[] }[] }).optionGroups)
+    ) {
+      const domGroups = (data as { optionGroups: { name: string; values: string[] }[] }).optionGroups;
+      const sizeGrp = domGroups.find((g) =>
+        /尺码|尺寸|size|tamanho|规格|码选择|选择尺码|spec/i.test(g.name),
+      );
+      if (sizeGrp?.values?.length) {
+        const vals = sizeGrp.values.filter((v) => v && String(v).trim().length > 0);
+        if (vals.length > 0) data.sizeValues = vals;
+      }
+    }
     if (colorSet.size > 0 && data.colorValues.length === 0) {
       data.colorValues = Array.from(colorSet);
       const colorImgs: string[] = [];
@@ -1778,9 +1822,21 @@ export async function getCssbuyProductPreview(
         const label = colonIdx >= 0 ? raw.slice(0, colonIdx).trim() : "";
         const val = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
         if (!val || val.length > 80) continue;
-        // Options with images are product variations (colors/styles) — keep under 颜色, never as Tamanho
+        // Options with images are product variations (colors/styles) — keep under 颜色, unless value is clearly a real size (S/M/L, 36-48)
         const hasImage = !!(img && String(img).trim().length > 0);
-        if (label && isSizeLabel(label) && isSizeLike(val) && !hasImage) {
+        const isOptionIdLike = (v: string) => /^([1-9]|[1-3]\d|40)$/.test(v.trim());
+        const isClearlyRealSize = (v: string) => {
+          const t = v.trim();
+          return (
+            /^(M|L|XL|XXL|2XL|3XL|4XL|S|XS)$/i.test(t) ||
+            /^(Large|Medium|Small|One\s*Size|Free\s*Size)$/i.test(t) ||
+            /^(大|中|小|均码|自由)$/.test(t) ||
+            /^(3[4-9]|4[0-8])(\.5)?(\s*(men|women|男|女))?$/i.test(t) ||
+            /^\d+码$/i.test(t) || /^\d+号$/i.test(t)
+          );
+        };
+        const addToSize = label && isSizeLabel(label) && isSizeLike(val) && (!hasImage || isClearlyRealSize(val));
+        if (addToSize) {
           if (!sizeValues.includes(val)) {
             sizeValues.push(val);
             sizeImages.push(img ?? "");
@@ -1995,6 +2051,13 @@ export async function getCssbuyProductPreview(
       if (colorGroup.values.length > 0) optionGroups.push(colorGroup);
       if (sizeGroup.values.length > 0) optionGroups.push(sizeGroup);
     }
+
+    // Always include Tamanho when we have sizes from API (e.g. 1688) even if the chosen source didn't have a size group
+    const hasSizeInOptionGroups = optionGroups.some((g) =>
+      /tamanho|size|尺码|尺寸/i.test(g.name),
+    );
+    if (!hasSizeInOptionGroups && sizeGroup.values.length > 0)
+      optionGroups = [...optionGroups, sizeGroup];
 
     // Incluir "Quality grade" quando existir na API ou DOM mas não estiver nos grupos escolhidos (ex.: escolhemos props_list que não tem qualidade)
     const hasQualityGroup = optionGroups.some((g) =>
