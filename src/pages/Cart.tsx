@@ -164,12 +164,12 @@ const Cart = () => {
               <div className="flex items-center gap-2 mb-1">
                 <Truck className="w-4 h-4 text-muted-foreground" />
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Estimativa de frete
+                  Frete
                 </p>
               </div>
               <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex justify-between">
-                  <span>Peso total estimado</span>
+                  <span>Peso total</span>
                   <span>
                     {shipping.totalWeightG >= 1000
                       ? `${(shipping.totalWeightG / 1000).toFixed(2)} kg`
@@ -181,7 +181,7 @@ const Cart = () => {
                   <span>R$ {shipping.chinaFreightBrl.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Entrega doméstica (estimativa)</span>
+                  <span>Entrega doméstica</span>
                   <span>R$ {shipping.domesticBrl.toFixed(2)}</span>
                 </div>
                 {shipping.keepBoxSurchargeBrl > 0 && (
@@ -192,7 +192,7 @@ const Cart = () => {
                 )}
               </div>
               <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold">
-                <span>Frete estimado</span>
+                <span>Frete</span>
                 <span className="text-foreground">R$ {shipping.totalBrl.toFixed(2)}</span>
               </div>
               {totalBrl > 0 && (
@@ -209,8 +209,11 @@ const Cart = () => {
                   Valores em BRL serão calculados no checkout com base na cotação do dia.
                 </p>
               )}
-              <p className="text-[10px] text-muted-foreground/60 pt-1">
-                * Estimativa baseada em pesos padrão por categoria. Valores finais serão confirmados após inspeção do produto.
+              <p className="text-xs text-muted-foreground pt-2 flex items-start gap-2">
+                <span className="text-china-red mt-0.5 shrink-0">💡</span>
+                <span>
+                  <strong>Dica:</strong> Juntar mais itens no pedido dilui o frete por unidade.
+                </span>
               </p>
             </div>
 
