@@ -25,6 +25,9 @@ import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
 const prisma = new PrismaClient();
 const app = express();
 
+// Necessário quando o app está atrás de proxy (Railway, Vercel, etc.) para o rate-limit usar X-Forwarded-For
+app.set("trust proxy", 1);
+
 const defaultOrigins = [
   "https://compraschina.com.br",
   "https://www.compraschina.com.br",
