@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  EXPLORAR_PRODUCTS,
-  CURATED_TITLE_BY_CANONICAL_KEY,
-} from "@/data/explorarProducts";
+import { EXPLORAR_PRODUCTS, CURATED_TITLE_BY_CANONICAL_KEY } from "@/data/explorarProducts";
 import { CATEGORY_LABELS as CATALOG_CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { apiUrl } from "@/lib/api";
-import {
-  ensureHttpsImage,
-  referrerPolicyForImage,
-  productUrlToCanonicalKey,
-} from "@/lib/utils";
+import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
@@ -19,50 +12,17 @@ import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
 /** Número de produtos exibidos antes de "Ver mais" (≈ 8 linhas no desktop com 5 colunas). */
 const INITIAL_VISIBLE = 40;
 
-const PLACEHOLDER_IMAGE =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext fill='%2394a3b8' font-family='sans-serif' font-size='18' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3EProduto%3C/text%3E%3C/svg%3E";
+const PLACEHOLDER_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext fill='%2394a3b8' font-family='sans-serif' font-size='18' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3EProduto%3C/text%3E%3C/svg%3E";
 
-type ProductLike = {
-  id: string;
-  url?: string;
-  originalUrl?: string;
-  title: string;
-  titlePt?: string | null;
-  image?: string | null;
-  priceCny?: number | null;
-  priceBrl?: number | null;
-  source: string;
-  slug?: string;
-  category: string;
-  brand?: string;
-  storeName?: string;
-  isChineseBrand?: boolean;
-};
+type ProductLike = { id: string; url?: string; originalUrl?: string; title: string; titlePt?: string | null; image?: string | null; priceCny?: number | null; priceBrl?: number | null; source: string; slug?: string; category: string; brand?: string; storeName?: string; isChineseBrand?: boolean };
 
-function ProductCard({
-  product,
-  useSlug = false,
-}: {
-  product: ProductLike;
-  useSlug?: boolean;
-}) {
+function ProductCard({ product, useSlug = false }: { product: ProductLike; useSlug?: boolean }) {
   const url = product.originalUrl ?? product.url ?? "";
-  const [lazyImage, containerRef] = useLazyProductImage(
-    url || undefined,
-    product.image ?? undefined,
-  );
+  const [lazyImage, containerRef] = useLazyProductImage(url || undefined, product.image ?? undefined);
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER_IMAGE;
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
-  const priceStr =
-    displayBrl != null
-      ? `R$ ${displayBrl.toFixed(2)}`
-      : product.priceCny != null
-        ? `CNY ¥ ${Number(product.priceCny)}`
-        : "Consultar";
-  const to =
-    useSlug && product.slug
-      ? `/produto/${product.slug}`
-      : `/pedido?url=${encodeURIComponent(url)}`;
+  const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : product.priceCny != null ? `CNY ¥ ${Number(product.priceCny)}` : "Consultar";
+  const to = useSlug && product.slug ? `/produto/${product.slug}` : `/pedido?url=${encodeURIComponent(url)}`;
 
   return (
     <div ref={containerRef} className="h-full">
@@ -80,46 +40,32 @@ function ProductCard({
               }}
             />
           </div>
-          <CardContent className="p-3 flex-1 flex flex-col">
-            {(product.isChineseBrand || product.brand || product.storeName) && (
-              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                {product.isChineseBrand && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
-                    <ShieldCheck className="w-2.5 h-2.5" /> Marca chinesa
-                  </span>
-                )}
-                {product.brand && (
-                  <span
-                    className="text-[10px] font-medium text-muted-foreground truncate"
-                    title={product.brand}
-                  >
-                    {product.brand}
-                  </span>
-                )}
-                {product.storeName && (
-                  <span
-                    className="text-[10px] text-muted-foreground truncate"
-                    title={product.storeName}
-                  >
-                    {product.storeName}
-                  </span>
-                )}
-              </div>
-            )}
-            <h3 className="font-medium text-foreground text-sm line-clamp-2">
-              {product.titlePt || product.title}
-            </h3>
-            <div className="mt-auto pt-2 flex items-center justify-between">
-              <span className="text-base font-bold text-china-red">
-                {priceStr}
-              </span>
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground group-hover:text-china-red transition-colors">
-                Pedir <ShoppingBag className="w-3.5 h-3.5" />
-              </span>
+        <CardContent className="p-3 flex-1 flex flex-col">
+          {(product.isChineseBrand || product.brand || product.storeName) && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+              {product.isChineseBrand && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                  <ShieldCheck className="w-2.5 h-2.5" /> Marca chinesa
+                </span>
+              )}
+              {product.brand && (
+                <span className="text-[10px] font-medium text-muted-foreground truncate" title={product.brand}>{product.brand}</span>
+              )}
+              {product.storeName && (
+                <span className="text-[10px] text-muted-foreground truncate" title={product.storeName}>{product.storeName}</span>
+              )}
             </div>
-          </CardContent>
-        </Link>
-      </Card>
+          )}
+          <h3 className="font-medium text-foreground text-sm line-clamp-2">{product.titlePt || product.title}</h3>
+          <div className="mt-auto pt-2 flex items-center justify-between">
+            <span className="text-base font-bold text-china-red">{priceStr}</span>
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground group-hover:text-china-red transition-colors">
+              Pedir <ShoppingBag className="w-3.5 h-3.5" />
+            </span>
+          </div>
+        </CardContent>
+      </Link>
+    </Card>
     </div>
   );
 }
@@ -153,44 +99,26 @@ export default function FeaturedProductsSection() {
     const apiWithTitles = apiProducts.map((p) => {
       const key = productUrlToCanonicalKey(p.originalUrl || p.url);
       const curated = key ? CURATED_TITLE_BY_CANONICAL_KEY.get(key) : undefined;
-      if (curated) return { ...p, title: curated, titlePt: curated };
+      if (curated)
+        return { ...p, title: curated, titlePt: curated };
       const explorar = key ? explorarTitleByKey.get(key) : undefined;
       if (explorar)
         return { ...p, title: explorar.title, titlePt: explorar.titlePt };
       return p;
     });
     if (apiWithTitles.length === 0) return EXPLORAR_PRODUCTS;
-    const apiKeys = new Set(
-      apiWithTitles.map((p) =>
-        productUrlToCanonicalKey(p.originalUrl || p.url),
-      ),
-    );
+    const apiKeys = new Set(apiWithTitles.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url)));
     const extra = EXPLORAR_PRODUCTS.filter(
       (p) => !apiKeys.has(productUrlToCanonicalKey(p.url)),
     );
     return [...apiWithTitles, ...extra];
   }, [apiProducts, explorarTitleByKey]);
   const apiUrlSet = useMemo(
-    () =>
-      new Set(
-        apiProducts.map((p) =>
-          productUrlToCanonicalKey(p.originalUrl || p.url),
-        ),
-      ),
+    () => new Set(apiProducts.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url))),
     [apiProducts],
   );
-  const categoriesWithProducts = Array.from(
-    new Set(allProducts.map((p) => p.category)),
-  ).sort((a, b) => {
-    const order = [
-      "marcas-chinesas",
-      "moda",
-      "eletronicos",
-      "acessorios",
-      "beleza",
-      "casa",
-      "outros",
-    ];
+  const categoriesWithProducts = Array.from(new Set(allProducts.map((p) => p.category))).sort((a, b) => {
+    const order = ["marcas-chinesas", "moda", "eletronicos", "acessorios", "beleza", "casa", "outros"];
     return order.indexOf(a) - order.indexOf(b);
   });
 
@@ -203,9 +131,7 @@ export default function FeaturedProductsSection() {
       ? allProducts
       : allProducts.filter((p) => p.category === selectedCategory);
 
-  const visibleProducts = expanded
-    ? products
-    : products.slice(0, INITIAL_VISIBLE);
+  const visibleProducts = expanded ? products : products.slice(0, INITIAL_VISIBLE);
   const hasMore = products.length > INITIAL_VISIBLE;
 
   const handleCategoryChange = (cat: string) => {
@@ -230,10 +156,7 @@ export default function FeaturedProductsSection() {
               O que nossos clientes estão trazendo da China.
             </p>
           </div>
-          <Link
-            to="/explorar"
-            className="text-china-red font-semibold text-sm hover:underline shrink-0"
-          >
+          <Link to="/explorar" className="text-china-red font-semibold text-sm hover:underline shrink-0">
             Ver todos →
           </Link>
         </div>
@@ -271,10 +194,7 @@ export default function FeaturedProductsSection() {
         {!loaded ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div
-                key={i}
-                className="aspect-[3/4] bg-muted rounded-sm animate-pulse"
-              />
+              <div key={i} className="aspect-[3/4] bg-muted rounded-sm animate-pulse" />
             ))}
           </div>
         ) : products.length === 0 ? (
@@ -288,11 +208,7 @@ export default function FeaturedProductsSection() {
                 <ProductCard
                   key={product.id}
                   product={product}
-                  useSlug={apiUrlSet.has(
-                    productUrlToCanonicalKey(
-                      product.originalUrl || product.url,
-                    ),
-                  )}
+                  useSlug={apiUrlSet.has(productUrlToCanonicalKey(product.originalUrl || product.url))}
                 />
               ))}
             </div>
@@ -303,13 +219,7 @@ export default function FeaturedProductsSection() {
                   onClick={() => {
                     if (expanded) {
                       setExpanded(false);
-                      setTimeout(
-                        () =>
-                          verMaisRef.current?.scrollIntoView({
-                            block: "center",
-                          }),
-                        80,
-                      );
+                      setTimeout(() => verMaisRef.current?.scrollIntoView({ block: "center" }), 80);
                     } else {
                       setExpanded(true);
                     }
@@ -318,13 +228,11 @@ export default function FeaturedProductsSection() {
                 >
                   {expanded ? (
                     <>
-                      Ver menos{" "}
-                      <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                      Ver menos <ChevronDown className="w-3.5 h-3.5 rotate-180" />
                     </>
                   ) : (
                     <>
-                      Ver mais ({products.length - INITIAL_VISIBLE}){" "}
-                      <ChevronDown className="w-3.5 h-3.5" />
+                      Ver mais ({products.length - INITIAL_VISIBLE}) <ChevronDown className="w-3.5 h-3.5" />
                     </>
                   )}
                 </button>
