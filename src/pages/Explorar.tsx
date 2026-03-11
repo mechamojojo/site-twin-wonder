@@ -52,7 +52,7 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER;
   const displayTitle = p.titlePt || p.title;
   const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
-  const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : p.priceCny != null ? `CNY ¥ ${Number(p.priceCny)}` : "Consultar";
+  const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
 
   return (
     <div ref={containerRef} className="h-full">

@@ -8,6 +8,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
 import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
+import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
 import { toast } from "sonner";
 
 const getQueryParam = (search: string, key: string) => {
@@ -513,14 +514,14 @@ const Order = () => {
                     </p>
                     {preview.productPriceCny != null && (
                       <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-                        Referência na loja: CNY ¥ {preview.productPriceCny.toFixed(2)}
+                        Preço em reais (já inclui nosso serviço)
                       </p>
                     )}
                   </>
                 ) : productPreview?.priceCny != null ? (
                   <div className="flex flex-wrap items-baseline gap-2">
                     <span className="text-2xl font-heading font-bold text-china-red">
-                      CNY ¥ {productPreview.priceCny.toFixed(2)}
+                      R$ {priceCnyToBrl(productPreview.priceCny).toFixed(2)}
                     </span>
                   </div>
                 ) : (productPreviewLoading || previewLoading) ? (
@@ -565,7 +566,7 @@ const Order = () => {
                               const selectedColor = colorGroup ? selectedOptionByGroup[colorGroup.name] : "";
                               const stock = group.inventoryByColorAndValue?.[selectedColor]?.[value] ?? group.inventoryByValue?.[value];
                               const maxQty = stock != null ? Math.min(99, stock) : 99;
-                              const priceStr = preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—";
+                              const priceStr = preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `R$ ${priceCnyToBrl(productPreview.priceCny).toFixed(2)}` : "—";
                               return (
                                 <li key={value} className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-3 last:border-0 last:pb-0">
                                   <span className="text-sm font-medium text-foreground min-w-[64px]">{value}</span>
@@ -657,7 +658,7 @@ const Order = () => {
                             </div>
                           )}
                           <p className="text-[11px] text-muted-foreground mt-2">
-                            {preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—"} · Inventário: consultar
+                            {preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `R$ ${priceCnyToBrl(productPreview.priceCny).toFixed(2)}` : "—"} · Inventário: consultar
                           </p>
                         </div>
                       )
@@ -704,7 +705,7 @@ const Order = () => {
                           })}
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-2">
-                          {preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—"} · Inventário: consultar
+                          {preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `R$ ${priceCnyToBrl(productPreview.priceCny).toFixed(2)}` : "—"} · Inventário: consultar
                         </p>
                         {!productPreview.variants.size?.length && (
                           <div className="flex items-center gap-0 mt-2">
@@ -726,7 +727,7 @@ const Order = () => {
                             const stock = sizeGroup?.inventoryByColorAndValue?.[selectedColor]?.[value] ?? sizeGroup?.inventoryByValue?.[value];
                             const maxQty = stock != null ? Math.min(99, stock) : 99;
                             const qty = quantityBySize[value] ?? 0;
-                            const priceStr = preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `CNY ¥ ${productPreview.priceCny.toFixed(2)}` : "—";
+                            const priceStr = preview?.totalProductBrl != null ? `R$ ${preview.totalProductBrl.toFixed(2)}` : productPreview.priceCny != null ? `R$ ${priceCnyToBrl(productPreview.priceCny).toFixed(2)}` : "—";
                             return (
                               <li key={value} className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-3 last:border-0 last:pb-0">
                                 <span className="text-sm font-medium text-foreground min-w-[64px]">{value}</span>

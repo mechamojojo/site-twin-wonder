@@ -62,7 +62,7 @@ const TermosServico = () => {
           <section>
             <h2 className="text-lg font-heading font-semibold text-foreground mb-2">5. Preços, Pagamento e Taxa de Serviço</h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Os valores em reais informados na cotação incluem: o custo do produto em yuan convertido pela taxa de câmbio vigente, a taxa de serviço da ComprasChina e o frete internacional estimado. Eventuais impostos de importação cobrados pela Receita Federal não estão incluídos na cotação e são de responsabilidade do cliente. O pagamento é aceito em reais via PIX, boleto bancário e cartão de crédito.
+              Os valores em reais informados na cotação incluem: o custo do produto (convertido para reais pela taxa de câmbio vigente), a taxa de serviço da ComprasChina e o frete internacional estimado. Eventuais impostos de importação cobrados pela Receita Federal não estão incluídos na cotação e são de responsabilidade do cliente. O pagamento é aceito em reais via PIX, boleto bancário e cartão de crédito.
             </p>
           </section>
 

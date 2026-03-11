@@ -21,7 +21,7 @@ function ProductCard({ product, useSlug = false }: { product: ProductLike; useSl
   const [lazyImage, containerRef] = useLazyProductImage(url || undefined, product.image ?? undefined);
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER_IMAGE;
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
-  const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : product.priceCny != null ? `CNY ¥ ${Number(product.priceCny)}` : "Consultar";
+  const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
   const to = useSlug && product.slug ? `/produto/${product.slug}` : `/pedido?url=${encodeURIComponent(url)}`;
 
   return (

@@ -82,7 +82,7 @@ const ProdutosSalvos = () => {
               const priceStr =
                 (() => {
                 const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
-                return displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : p.priceCny != null ? `¥ ${Number(p.priceCny)}` : "Consultar";
+                return displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
               })()
               return (
                 <div

@@ -9,11 +9,15 @@ import {
   categorySupportsKeepBox,
   itemWeightG,
 } from "@/lib/shipping";
+import { getDisplayPriceBrl } from "@/lib/pricing";
 
 const Cart = () => {
   const { items, removeItem, updateQuantity, updateKeepBox } = useCart();
 
-  const totalBrl = items.reduce((acc, i) => acc + (i.priceBrl ?? 0) * i.quantity, 0);
+  const totalBrl = items.reduce(
+    (acc, i) => acc + (getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0) * i.quantity,
+    0
+  );
 
   // Build shipping estimate from current cart items
   const shippingItems = items.map((i) => {
@@ -96,7 +100,7 @@ const Cart = () => {
                         {item.priceBrl != null
                           ? `R$ ${(item.priceBrl * item.quantity).toFixed(2)}`
                           : item.priceCny != null
-                            ? `CNY ¥ ${(item.priceCny * item.quantity).toFixed(2)}`
+                            ? `R$ ${((getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0) * item.quantity).toFixed(2)}`
                             : "—"}
                       </p>
 

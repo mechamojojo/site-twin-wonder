@@ -95,9 +95,7 @@ const Produto = () => {
   const priceStr =
     displayBrl != null
       ? `R$ ${displayBrl.toFixed(2)}`
-      : product.priceCny != null
-        ? `CNY ¥ ${Number(product.priceCny)}`
-        : "Consultar";
+      : "Consultar";
 
   return (
     <div className="min-h-screen bg-background">
