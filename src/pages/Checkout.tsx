@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
+import { priceCnyToBrl } from "@/lib/pricing";
 import { calcCartShipping, detectCategory } from "@/lib/shipping";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -181,7 +182,7 @@ const Checkout = () => {
     const totalProductBrl = items.reduce(
       (acc, i) =>
         acc +
-        (i.priceBrl ?? (i.priceCny != null ? i.priceCny * 0.75 * 1.25 : 100)) *
+        (i.priceBrl ?? (i.priceCny != null ? priceCnyToBrl(i.priceCny) : 100)) *
           i.quantity,
       0,
     );
@@ -192,7 +193,7 @@ const Checkout = () => {
       for (const item of items) {
         const unitBrl =
           item.priceBrl ??
-          (item.priceCny != null ? item.priceCny * 0.75 * 1.25 : 100);
+          (item.priceCny != null ? priceCnyToBrl(item.priceCny) : 100);
         const productTotal = unitBrl * item.quantity;
         // Weight-proportional freight share for this item
         const itemCat = item.category ?? detectCategory(item.titlePt ?? item.title);

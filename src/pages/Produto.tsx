@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
+import { getDisplayPriceBrl } from "@/lib/pricing";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart } from "lucide-react";
 import { SaveProductHeart } from "@/components/SaveProductHeart";
@@ -48,7 +49,7 @@ const Produto = () => {
       title: product.titlePt || product.title,
       titlePt: product.titlePt || product.title,
       priceCny: product.priceCny,
-      priceBrl: product.priceBrl,
+      priceBrl: displayBrl ?? product.priceBrl ?? undefined,
       image: product.image || undefined,
     });
     navigate("/carrinho");
@@ -90,9 +91,10 @@ const Produto = () => {
   }
 
   const displayTitle = product.titlePt || product.title;
+  const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
   const priceStr =
-    product.priceBrl != null
-      ? `R$ ${Number(product.priceBrl).toFixed(2)}`
+    displayBrl != null
+      ? `R$ ${displayBrl.toFixed(2)}`
       : product.priceCny != null
         ? `CNY ¥ ${Number(product.priceCny)}`
         : "Consultar";

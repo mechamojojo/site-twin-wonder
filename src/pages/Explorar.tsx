@@ -7,6 +7,7 @@ import { EXPLORAR_PRODUCTS, CURATED_TITLE_BY_CANONICAL_KEY } from "@/data/explor
 import { MARKETPLACE_SEARCH_URLS } from "@/data/siteConfig";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
+import { getDisplayPriceBrl } from "@/lib/pricing";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ShoppingBag, Search, Loader2, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -50,8 +51,8 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
   const [lazyImage, containerRef] = useLazyProductImage(url || undefined, p.image ?? undefined);
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER;
   const displayTitle = p.titlePt || p.title;
-  const priceStr =
-    p.priceBrl != null ? `R$ ${Number(p.priceBrl).toFixed(2)}` : p.priceCny != null ? `CNY ¥ ${Number(p.priceCny)}` : "Consultar";
+  const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
+  const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : p.priceCny != null ? `CNY ¥ ${Number(p.priceCny)}` : "Consultar";
 
   return (
     <div ref={containerRef} className="h-full">
@@ -168,14 +169,14 @@ const Explorar = () => {
     // Sort
     if (sort === "price-asc") {
       list = [...list].sort((a, b) => {
-        const pa = a.priceBrl ?? a.priceCny ?? Infinity;
-        const pb = b.priceBrl ?? b.priceCny ?? Infinity;
+        const pa = getDisplayPriceBrl(a.priceCny, a.priceBrl) ?? a.priceCny ?? Infinity;
+        const pb = getDisplayPriceBrl(b.priceCny, b.priceBrl) ?? b.priceCny ?? Infinity;
         return pa - pb;
       });
     } else if (sort === "price-desc") {
       list = [...list].sort((a, b) => {
-        const pa = a.priceBrl ?? a.priceCny ?? -Infinity;
-        const pb = b.priceBrl ?? b.priceCny ?? -Infinity;
+        const pa = getDisplayPriceBrl(a.priceCny, a.priceBrl) ?? a.priceCny ?? -Infinity;
+        const pb = getDisplayPriceBrl(b.priceCny, b.priceBrl) ?? b.priceCny ?? -Infinity;
         return pb - pa;
       });
     }

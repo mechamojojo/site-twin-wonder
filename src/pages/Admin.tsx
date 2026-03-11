@@ -187,15 +187,29 @@ const Admin = () => {
   };
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    if (!token) { setLoading(false); return; }
+    const controller = new AbortController();
     setLoading(true);
-    fetchOrders(token)
+    const url = filter === "all"
+      ? apiUrl("/api/admin/orders")
+      : apiUrl(`/api/admin/orders?status=${filter}`);
+    fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+      .then((r) => {
+        if (r.status === 401) {
+          sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+          setToken(null);
+          return [];
+        }
+        return r.ok ? r.json() : [];
+      })
       .then(setOrders)
-      .catch(() => setOrders([]))
+      .catch((e) => { if (e.name !== "AbortError") setOrders([]); })
       .finally(() => setLoading(false));
+
+    return () => controller.abort();
   }, [token, filter]);
 
   const fetchCatalogProducts = useCallback((options?: { mergeWithPrevious?: boolean }) => {

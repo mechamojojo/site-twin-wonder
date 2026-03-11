@@ -11,10 +11,10 @@ import * as path from "path";
 
 const FEATURED_PATH = path.join(__dirname, "../../src/data/featuredProducts.ts");
 
-const RATE_CNY_TO_BRL = 0.75;
-const MARGEM_THRESHOLD_BRL = 40;
-const MARGEM_BAIXA_PERCENT = 35;
-const MARGEM_ALTA_PERCENT = 25;
+const RATE_CNY_TO_BRL = 0.78;
+const MARGEM_THRESHOLD_BRL = 60;
+const MARGEM_BAIXA_PERCENT = 50;
+const MARGEM_ALTA_PERCENT = 35;
 
 function getSourceFromUrl(url: string): string {
   const host = url.toLowerCase();

@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSavedProducts } from "@/context/SavedProductsContext";
 import { getAuthToken } from "@/context/AuthContext";
 import { apiUrl } from "@/lib/api";
+import { getDisplayPriceBrl } from "@/lib/pricing";
 import { ensureHttpsImage, referrerPolicyForImage } from "@/lib/utils";
 import { Heart, ShoppingBag } from "lucide-react";
 
@@ -79,7 +80,10 @@ const ProdutosSalvos = () => {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {products.map((p) => {
               const priceStr =
-                p.priceBrl != null ? `R$ ${Number(p.priceBrl).toFixed(2)}` : p.priceCny != null ? `¥ ${Number(p.priceCny)}` : "Consultar";
+                (() => {
+                const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
+                return displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : p.priceCny != null ? `¥ ${Number(p.priceCny)}` : "Consultar";
+              })()
               return (
                 <div
                   key={p.id}

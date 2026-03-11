@@ -5,6 +5,7 @@ import { EXPLORAR_PRODUCTS, CURATED_TITLE_BY_CANONICAL_KEY } from "@/data/explor
 import { CATEGORY_LABELS as CATALOG_CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
+import { getDisplayPriceBrl } from "@/lib/pricing";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
 
@@ -19,7 +20,8 @@ function ProductCard({ product, useSlug = false }: { product: ProductLike; useSl
   const url = product.originalUrl ?? product.url ?? "";
   const [lazyImage, containerRef] = useLazyProductImage(url || undefined, product.image ?? undefined);
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER_IMAGE;
-  const priceStr = product.priceBrl != null ? `R$ ${Number(product.priceBrl).toFixed(2)}` : product.priceCny != null ? `CNY ¥ ${Number(product.priceCny)}` : "Consultar";
+  const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
+  const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : product.priceCny != null ? `CNY ¥ ${Number(product.priceCny)}` : "Consultar";
   const to = useSlug && product.slug ? `/produto/${product.slug}` : `/pedido?url=${encodeURIComponent(url)}`;
 
   return (

@@ -9,7 +9,7 @@ import { EXPLORAR_PRODUCTS } from "../prisma/seed-explorar-products";
 
 const prisma = new PrismaClient();
 
-const RATE_CNY = 0.75;
+const RATE_CNY = 0.78;
 
 function slugify(s: string): string {
   return s
@@ -53,7 +53,7 @@ async function main() {
     let priceBrl: number | null = null;
     if (priceCny != null && priceCny > 0) {
       const costBrl = priceCny * RATE_CNY;
-      const margin = costBrl < 40 ? 0.35 : 0.25;
+      const margin = costBrl < 60 ? 0.5 : 0.35;
       priceBrl = Math.round(costBrl * (1 + margin) * 100) / 100;
     }
 

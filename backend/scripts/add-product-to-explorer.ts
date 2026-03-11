@@ -12,10 +12,10 @@ import { getProductPreview } from "../src/scraper/productPreview";
 import * as fs from "fs";
 import * as path from "path";
 
-const RATE_CNY_TO_BRL = 0.75;
-const MARGEM_THRESHOLD_BRL = 40;
-const MARGEM_BAIXA_PERCENT = 35;
-const MARGEM_ALTA_PERCENT = 25;
+const RATE_CNY_TO_BRL = 0.78;
+const MARGEM_THRESHOLD_BRL = 60;
+const MARGEM_BAIXA_PERCENT = 50;
+const MARGEM_ALTA_PERCENT = 35;
 
 function getSourceFromUrl(url: string): "1688" | "Taobao" | "Weidian" | "TMALL" | "JD.com" | "Pinduoduo" | "Goofish" | "Dangdang" | "VIP Shop" {
   const lower = url.toLowerCase();

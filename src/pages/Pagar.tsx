@@ -119,11 +119,12 @@ const Pagar = () => {
         mpRef.current = new window.MercadoPago(MP_PUBLIC_KEY, { locale: "pt-BR" });
       }
     };
-    if (document.readyState === "complete") initMp();
-    else window.addEventListener("load", initMp);
-    const t = setInterval(initMp, 300);
+    if (document.readyState === "complete") {
+      initMp();
+    } else {
+      window.addEventListener("load", initMp, { once: true });
+    }
     return () => {
-      clearInterval(t);
       window.removeEventListener("load", initMp);
     };
   }, []);

@@ -6,14 +6,11 @@
 import exportedFromAdmin from "./explorarProducts.export.json";
 import { FEATURED_PRODUCTS } from "./featuredProducts";
 import { productUrlToCanonicalKey } from "@/lib/utils";
-
-const RATE_CNY = 0.75;
+import { priceCnyToBrl } from "@/lib/pricing";
 
 function priceBrl(priceCny: number | null): number | null {
   if (priceCny == null || priceCny <= 0) return null;
-  const costBrl = priceCny * RATE_CNY;
-  const margin = costBrl < 40 ? 0.35 : 0.25;
-  return Math.round(costBrl * (1 + margin) * 100) / 100;
+  return priceCnyToBrl(priceCny);
 }
 
 function slugify(s: string): string {
@@ -456,7 +453,7 @@ const fromFeatured: ExplorarProduct[] = FEATURED_PRODUCTS.filter(
     titlePt: fp.title,
     image: fp.image ?? null,
     priceCny: fp.priceCny ?? null,
-    priceBrl: fp.priceBrl ?? null,
+    priceBrl: fp.priceCny != null ? priceCnyToBrl(fp.priceCny) : fp.priceBrl ?? null,
     category,
     source: fp.source,
     slug,

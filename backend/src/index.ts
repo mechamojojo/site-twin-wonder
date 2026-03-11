@@ -61,7 +61,7 @@ function safeErrorMessage(err: unknown, fallback: string): string {
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "";
 const ADMIN_SESSIONS = new Map<string, number>();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-const RATE_CNY = 0.75;
+const RATE_CNY = 0.78;
 
 function cleanupExpiredSessions() {
   const now = Date.now();
@@ -1127,7 +1127,7 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
     let priceBrl: number | null = null;
     if (priceCny != null && priceCny > 0) {
       const costBrl = priceCny * RATE_CNY;
-      const margin = costBrl < 40 ? 0.35 : 0.25;
+      const margin = costBrl < 60 ? 0.5 : 0.35;
       priceBrl = Math.round(costBrl * (1 + margin) * 100) / 100;
     }
 
@@ -1389,10 +1389,10 @@ app.get("/api/product/preview", async (req, res) => {
 });
 
 // Taxa de câmbio base (custo para nós) — em produção usar API de câmbio
-const RATE_CNY_TO_BRL = 0.75;
-const MARGEM_THRESHOLD_BRL = 40;   // abaixo disso: margem maior
-const MARGEM_BAIXA_PERCENT = 35;   // produto < R$ 40: +35%
-const MARGEM_ALTA_PERCENT = 25;    // produto >= R$ 40: +25%
+const RATE_CNY_TO_BRL = 0.78;
+const MARGEM_THRESHOLD_BRL = 60;   // abaixo disso: margem maior (itens baratos)
+const MARGEM_BAIXA_PERCENT = 50;   // produto < R$ 60: +50%
+const MARGEM_ALTA_PERCENT = 35;    // produto >= R$ 60: +35%
 
 // Preview de preço: custo em yuan → conversão → margem ComprasChina → preço final em reais
 // Query opcional: priceCny — quando informado (ex.: preço da variante no CSSBuy), usa esse valor em vez do cache
