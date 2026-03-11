@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MP_PUBLIC_KEY } from "@/data/siteConfig";
 import { toast } from "sonner";
+import { Copy, CreditCard, QrCode, ChevronLeft } from "lucide-react";
 
 type CardFormData = {
   paymentMethodId: string;
@@ -194,7 +195,8 @@ const Pagar = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao criar pagamento");
       const poi = data.point_of_interaction;
-      setPixData(poi?.transaction_data || poi || {});
+      const txData = poi?.transaction_data ?? poi;
+      setPixData(txData || null);
       if (data.status === "approved") {
         toast.success("Pagamento aprovado!");
         setTimeout(() => (window.location.href = `/pedido-confirmado/${id}`), 2000);
@@ -204,6 +206,12 @@ const Pagar = () => {
     } finally {
       setPaying(false);
     }
+  };
+
+  const copyPixCode = () => {
+    if (!pixData?.qr_code) return;
+    navigator.clipboard.writeText(pixData.qr_code);
+    toast.success("Código PIX copiado!");
   };
 
   if (loading) {
@@ -257,151 +265,209 @@ const Pagar = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="container mx-auto px-4 py-12 max-w-xl">
-        <h1 className="text-xl font-heading font-bold mb-2">Pagamento</h1>
-        <p className="text-sm text-muted-foreground mb-6">Pedido #{order.id.slice(-8)}</p>
-
-        <div className="rounded-xl border border-border bg-card p-4 mb-6">
-          <p className="text-sm text-muted-foreground">Total a pagar</p>
-          <p className="text-2xl font-heading font-bold text-china-red">R$ {totalBrl.toFixed(2)}</p>
-          <p className="text-xs text-muted-foreground mt-1">{order.productDescription}</p>
-        </div>
-
-        <div className="flex gap-2 mb-6">
-          <button
-            type="button"
-            onClick={() => { setPaymentMethod("pix"); setPixData(null); }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              paymentMethod === "pix" ? "bg-china-red text-white" : "border border-border hover:bg-muted"
-            }`}
-          >
-            PIX
-          </button>
-          <button
-            type="button"
-            onClick={() => setPaymentMethod("card")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              paymentMethod === "card" ? "bg-china-red text-white" : "border border-border hover:bg-muted"
-            }`}
-          >
-            Cartão
-          </button>
-        </div>
-
-        {paymentMethod === "pix" && (
-          <form onSubmit={handlePixSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="email">E-mail para receber o QR Code</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={paying}
-              className="w-full bg-china-red text-white py-3 rounded-xl font-bold hover:bg-china-red/90 disabled:opacity-60"
-            >
-              {paying ? "Gerando..." : "Gerar PIX"}
-            </button>
-          </form>
-        )}
-
-        {pixData && (pixData.qr_code || pixData.qr_code_base64 || pixData.ticket_url) && (
-          <div className="mt-6 p-4 rounded-xl border border-border bg-card space-y-3">
-            <p className="text-sm font-semibold">Escaneie o QR Code ou copie o código PIX:</p>
-            {pixData.qr_code_base64 && (
-              <img src={`data:image/png;base64,${pixData.qr_code_base64}`} alt="QR Code PIX" className="mx-auto w-48 h-48" />
-            )}
-            {pixData.qr_code && !pixData.qr_code_base64 && (
-              <p className="text-xs break-all bg-muted p-2 rounded font-mono">{pixData.qr_code}</p>
-            )}
-            {pixData.ticket_url && (
-              <a
-                href={pixData.ticket_url}
-                target="_blank"
-                rel="noreferrer"
-                className="block text-sm text-china-red hover:underline"
-              >
-                Abrir PIX no navegador →
-              </a>
-            )}
-          </div>
-        )}
-
-        {paymentMethod === "card" && (
-          <div className="space-y-4">
-            {!MP_PUBLIC_KEY || MP_PUBLIC_KEY.includes("PLACEHOLDER") ? (
-              <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg">
-                Configure <code className="text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">VITE_MP_PUBLIC_KEY</code> no .env (raiz do projeto) para habilitar pagamento com cartão.
-              </p>
-            ) : (
-              <form id="form-checkout" className="space-y-4">
-                <div>
-                  <Label>Número do cartão</Label>
-                  <div id="form-checkout__cardNumber" className="mt-1 min-h-[40px] w-full rounded-md border border-input bg-background px-3 py-2 [&>iframe]:min-h-[40px]" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Validade</Label>
-                    <div id="form-checkout__expirationDate" className="mt-1 min-h-[40px] rounded-md border border-input bg-background [&>iframe]:min-h-[40px]" />
-                  </div>
-                  <div>
-                    <Label>CVV</Label>
-                    <div id="form-checkout__securityCode" className="mt-1 min-h-[40px] rounded-md border border-input bg-background [&>iframe]:min-h-[40px]" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="form-checkout__cardholderName">Nome no cartão</Label>
-                  <Input id="form-checkout__cardholderName" placeholder="Como está no cartão" className="mt-1" />
-                </div>
-                <div>
-                  <Label htmlFor="form-checkout__cardholderEmail">E-mail</Label>
-                  <Input
-                    id="form-checkout__cardholderEmail"
-                    type="email"
-                    defaultValue={email}
-                    placeholder="seu@email.com"
-                    className="mt-1"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="form-checkout__identificationType">Tipo de documento</Label>
-                  <select id="form-checkout__identificationType" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <Label htmlFor="form-checkout__identificationNumber">CPF</Label>
-                  <Input id="form-checkout__identificationNumber" placeholder="000.000.000-00" className="mt-1" />
-                </div>
-                <div>
-                  <Label htmlFor="form-checkout__issuer">Banco emissor</Label>
-                  <select id="form-checkout__issuer" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <Label htmlFor="form-checkout__installments">Parcelas</Label>
-                  <select id="form-checkout__installments" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                </div>
-                <button
-                  type="submit"
-                  id="form-checkout__submit"
-                  disabled={paying || !cardFormReady}
-                  className="w-full bg-china-red text-white py-3 rounded-xl font-bold hover:bg-china-red/90 disabled:opacity-60"
-                >
-                  {paying ? "Processando..." : "Pagar com cartão"}
-                </button>
-              </form>
-            )}
-          </div>
-        )}
-
-        <Link to={`/pedido-confirmado/${id}`} className="block mt-6 text-sm text-muted-foreground hover:text-china-red">
-          ← Voltar ao pedido
+      <main className="container mx-auto px-4 py-6 md:py-10 max-w-4xl">
+        <Link
+          to={`/pedido-confirmado/${id}`}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
+        >
+          <ChevronLeft className="w-4 h-4" /> Voltar ao pedido
         </Link>
+
+        <h1 className="text-2xl md:text-3xl font-heading font-bold mb-2">Finalizar pagamento</h1>
+        <p className="text-muted-foreground mb-8">Pedido #{order.id.slice(-8)}</p>
+
+        <div className="grid md:grid-cols-[1fr,340px] gap-8">
+          {/* Coluna principal: forma de pagamento */}
+          <div className="space-y-6">
+            <section className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div className="border-b border-border bg-muted/30 px-4 py-3">
+                <h2 className="font-semibold text-foreground">Forma de pagamento</h2>
+              </div>
+              <div className="p-4">
+                {/* Tabs PIX | Cartão */}
+                <div className="flex rounded-xl bg-muted/50 p-1 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMethod("pix"); setPixData(null); }}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-colors ${
+                      paymentMethod === "pix"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <QrCode className="w-4 h-4" /> PIX
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("card")}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-colors ${
+                      paymentMethod === "card"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4" /> Cartão
+                  </button>
+                </div>
+
+                {paymentMethod === "pix" && (
+                  <>
+                    {!pixData ? (
+                      <form onSubmit={handlePixSubmit} className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                          O QR Code será exibido aqui na página. Informe seu e-mail para o comprovante.
+                        </p>
+                        <div>
+                          <Label htmlFor="email">E-mail</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="seu@email.com"
+                            className="mt-1.5"
+                            required
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={paying}
+                          className="w-full bg-china-red text-white py-3.5 rounded-xl font-semibold hover:bg-china-red/90 disabled:opacity-60 transition-opacity"
+                        >
+                          {paying ? "Gerando PIX..." : "Gerar QR Code PIX"}
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="space-y-4">
+                        <p className="text-sm font-medium text-foreground">Escaneie o QR Code com o app do seu banco</p>
+                        <div className="flex flex-col items-center justify-center p-6 rounded-xl bg-muted/30 border border-border">
+                          {pixData.qr_code_base64 && (
+                            <img
+                              src={`data:image/png;base64,${pixData.qr_code_base64}`}
+                              alt="QR Code PIX"
+                              className="w-52 h-52 rounded-lg bg-white p-2"
+                            />
+                          )}
+                          {pixData.qr_code && !pixData.qr_code_base64 && (
+                            <p className="text-xs break-all bg-muted p-3 rounded font-mono max-w-full">
+                              {pixData.qr_code}
+                            </p>
+                          )}
+                          {pixData.qr_code && (
+                            <button
+                              type="button"
+                              onClick={copyPixCode}
+                              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background hover:bg-muted text-sm font-medium"
+                            >
+                              <Copy className="w-4 h-4" /> Copiar código PIX
+                            </button>
+                          )}
+                        </div>
+                        {pixData.ticket_url && (
+                          <a
+                            href={pixData.ticket_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block text-center text-sm text-china-red hover:underline"
+                          >
+                            Abrir PIX no navegador →
+                          </a>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          O pagamento é confirmado em instantes. Esta página será atualizada automaticamente.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {paymentMethod === "card" && (
+                  <div className="space-y-4">
+                    {!MP_PUBLIC_KEY || MP_PUBLIC_KEY.includes("PLACEHOLDER") ? (
+                      <p className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 p-4 rounded-lg">
+                        Pagamento com cartão em configuração. Use PIX ou configure{" "}
+                        <code className="text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">VITE_MP_PUBLIC_KEY</code> no .env.
+                      </p>
+                    ) : (
+                      <form id="form-checkout" className="space-y-4">
+                        <div>
+                          <Label>Número do cartão</Label>
+                          <div id="form-checkout__cardNumber" className="mt-1.5 min-h-[44px] w-full rounded-lg border border-input bg-background px-3 py-2 [&>iframe]:min-h-[44px]" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label>Validade</Label>
+                            <div id="form-checkout__expirationDate" className="mt-1.5 min-h-[44px] rounded-lg border border-input bg-background [&>iframe]:min-h-[44px]" />
+                          </div>
+                          <div>
+                            <Label>CVV</Label>
+                            <div id="form-checkout__securityCode" className="mt-1.5 min-h-[44px] rounded-lg border border-input bg-background [&>iframe]:min-h-[44px]" />
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="form-checkout__cardholderName">Nome no cartão</Label>
+                          <Input id="form-checkout__cardholderName" placeholder="Como está no cartão" className="mt-1.5" />
+                        </div>
+                        <div>
+                          <Label htmlFor="form-checkout__cardholderEmail">E-mail</Label>
+                          <Input
+                            id="form-checkout__cardholderEmail"
+                            type="email"
+                            defaultValue={email}
+                            placeholder="seu@email.com"
+                            className="mt-1.5"
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor="form-checkout__identificationType">Documento</Label>
+                            <select id="form-checkout__identificationType" className="mt-1.5 h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+                          </div>
+                          <div>
+                            <Label htmlFor="form-checkout__identificationNumber">CPF</Label>
+                            <Input id="form-checkout__identificationNumber" placeholder="000.000.000-00" className="mt-1.5" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label htmlFor="form-checkout__issuer">Banco emissor</Label>
+                            <select id="form-checkout__issuer" className="mt-1.5 h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+                          </div>
+                          <div>
+                            <Label htmlFor="form-checkout__installments">Parcelas</Label>
+                            <select id="form-checkout__installments" className="mt-1.5 h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+                          </div>
+                        </div>
+                        <button
+                          type="submit"
+                          id="form-checkout__submit"
+                          disabled={paying || !cardFormReady}
+                          className="w-full bg-china-red text-white py-3.5 rounded-xl font-semibold hover:bg-china-red/90 disabled:opacity-60 transition-opacity"
+                        >
+                          {paying ? "Processando..." : "Pagar com cartão"}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          {/* Resumo do pedido (sidebar) */}
+          <div className="md:sticky md:top-24 h-fit order-first md:order-none">
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <h2 className="font-semibold text-foreground mb-4">Resumo do pedido</h2>
+              <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{order.productDescription}</p>
+              <div className="flex justify-between items-baseline mb-2">
+                <span className="text-muted-foreground">Total</span>
+                <span className="text-xl font-bold text-china-red">R$ {totalBrl.toFixed(2)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Pagamento seguro via Mercado Pago</p>
+            </div>
+          </div>
+        </div>
       </main>
       <Footer />
     </div>

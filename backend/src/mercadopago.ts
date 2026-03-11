@@ -7,6 +7,7 @@ const MP_API = "https://api.mercadopago.com/v1/payments";
 
 export async function createPayment(params: {
   accessToken: string;
+  idempotencyKey: string;
   transactionAmount: number;
   token?: string;
   paymentMethodId: string;
@@ -20,6 +21,7 @@ export async function createPayment(params: {
 }): Promise<{ id: number; status: string; point_of_interaction?: unknown }> {
   const {
     accessToken,
+    idempotencyKey,
     transactionAmount,
     token,
     paymentMethodId,
@@ -66,6 +68,7 @@ export async function createPayment(params: {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
+      "X-Idempotency-Key": idempotencyKey,
     },
     body: JSON.stringify(body),
   });

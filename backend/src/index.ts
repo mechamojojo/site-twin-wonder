@@ -1587,8 +1587,10 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
     }
 
     const { createPayment } = await import("./mercadopago");
+    const idempotencyKey = `${order.id}-${crypto.randomUUID()}`;
     const result = await createPayment({
       accessToken,
+      idempotencyKey,
       transactionAmount: totalBrl,
       token: token || undefined,
       paymentMethodId: isPix ? "pix" : payment_method_id || "visa",
