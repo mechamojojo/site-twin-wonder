@@ -463,8 +463,8 @@ const fromFeatured: ExplorarProduct[] = FEATURED_PRODUCTS.filter(
   };
 });
 
-/** Lista de produtos: base (Admin/embutida) + produtos em destaque (featuredProducts.ts). */
+/** Lista de produtos: base (Admin/embutida) + produtos em destaque (featuredProducts.ts). Ordem invertida: primeiro = Casaco Térmico, último = Produto 1688. */
 export const EXPLORAR_PRODUCTS: ExplorarProduct[] = [
   ...baseList,
   ...fromFeatured,
-];
+].reverse();

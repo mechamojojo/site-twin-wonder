@@ -11,6 +11,7 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import { sendTelegram } from "./telegram";
@@ -33,8 +34,10 @@ const defaultOrigins = [
   "https://www.compraschina.com.br",
   "http://localhost:3000",
   "http://localhost:5173",
+  "http://localhost:8080",
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:8080",
 ];
 const envOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
 const corsOrigins = envOrigins?.length ? [...new Set([...defaultOrigins, ...envOrigins])] : defaultOrigins;
@@ -58,10 +61,32 @@ function safeErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET || "";
+const ADMIN_SECRET = (process.env.ADMIN_SECRET || "").trim();
 const ADMIN_SESSIONS = new Map<string, number>();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_CNY = 0.78;
+
+const ADMIN_JWT_EXPIRES = "7d";
+
+function signAdminToken(): string {
+  if (!ADMIN_SECRET) throw new Error("ADMIN_SECRET not set");
+  return jwt.sign({ admin: true }, ADMIN_SECRET, { expiresIn: ADMIN_JWT_EXPIRES });
+}
+
+/** Token é JWT se tiver 2 pontos (header.payload.signature). */
+function looksLikeJwt(token: string): boolean {
+  return typeof token === "string" && token.split(".").length === 3;
+}
+
+function verifyAdminToken(token: string): boolean {
+  if (!ADMIN_SECRET || !token || !looksLikeJwt(token)) return false;
+  try {
+    jwt.verify(token, ADMIN_SECRET) as { admin: boolean };
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function cleanupExpiredSessions() {
   const now = Date.now();
@@ -75,16 +100,21 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
     return res.status(503).json({ error: "Admin não configurado. Defina ADMIN_SECRET no .env" });
   }
   const auth = req.headers.authorization;
-  const token = auth?.startsWith("Bearer ") ? auth.slice(7) : req.headers["x-admin-token"] as string | undefined;
+  const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : (req.headers["x-admin-token"] as string | undefined)?.trim();
   if (!token) {
     return res.status(401).json({ error: "Token de admin necessário" });
   }
-  const expires = ADMIN_SESSIONS.get(token);
-  if (!expires || expires < Date.now()) {
-    if (expires) ADMIN_SESSIONS.delete(token);
-    return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
+  // JWT: válido após restart do servidor (token tem formato xxx.yyy.zzz)
+  if (looksLikeJwt(token) && verifyAdminToken(token)) {
+    return next();
   }
-  next();
+  // Fallback: sessão em memória (tokens antigos em hex)
+  const expires = ADMIN_SESSIONS.get(token);
+  if (expires && expires > Date.now()) {
+    return next();
+  }
+  if (expires) ADMIN_SESSIONS.delete(token);
+  return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
 }
 
 // Root (alguns proxies fazem healthcheck em /)
@@ -564,10 +594,8 @@ app.post("/api/admin/login", (req, res) => {
   if (password !== ADMIN_SECRET) {
     return res.status(401).json({ error: "Senha incorreta" });
   }
-  cleanupExpiredSessions();
-  const token = crypto.randomBytes(32).toString("hex");
-  ADMIN_SESSIONS.set(token, Date.now() + SESSION_TTL_MS);
-  res.json({ token, expiresIn: SESSION_TTL_MS });
+  const token = signAdminToken();
+  res.json({ token, expiresIn: 7 * 24 * 60 * 60 * 1000 });
 });
 
 // Admin: listar pedidos (protegido)
@@ -742,7 +770,7 @@ app.get("/api/products", async (req, res) => {
     const [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
-        orderBy: [{ featured: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         take: limit,
         skip: offset,
       }),
@@ -1352,6 +1380,35 @@ const emptyProductPreview = {
   _previewUnavailable: true,
 };
 
+/** Normaliza URL de produto para uma chave única (mesmo link = mesma chave para snapshot). */
+function normalizeProductPreviewUrlKey(url: string): string {
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.toLowerCase();
+    // Weidian: canonical = https://weidian.com/item.html?itemID=XXX
+    if (host.includes("weidian")) {
+      const itemID = u.searchParams.get("itemID") || u.searchParams.get("itemid");
+      if (itemID) return `https://weidian.com/item.html?itemID=${itemID}`;
+    }
+    // Taobao/Tmall: id no path ou query
+    if (host.includes("taobao") || host.includes("tmall")) {
+      const id = u.searchParams.get("id") || u.searchParams.get("item_id") || u.pathname.match(/\/item\/(\d+)/)?.[1];
+      if (id) return `https://${host}/item.htm?id=${id}`;
+    }
+    // 1688: offerId ou id
+    if (host.includes("1688")) {
+      const id = u.searchParams.get("offerId") || u.searchParams.get("id") || u.pathname.match(/\/offer\/(\d+)/)?.[1];
+      if (id) return `https://${host}/offer/${id}.html`;
+    }
+    // Default: origin + pathname + sorted query (estável para mesmo produto)
+    const params = Array.from(u.searchParams.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const qs = new URLSearchParams(params).toString();
+    return `${u.origin}${u.pathname}${qs ? `?${qs}` : ""}`;
+  } catch {
+    return url;
+  }
+}
+
 // Preview do produto (scraping): título, preço, imagens, variantes
 app.get("/api/product/preview", async (req, res) => {
   const url = (req.query.url as string)?.trim() || "";
@@ -1364,7 +1421,18 @@ app.get("/api/product/preview", async (req, res) => {
       return res.status(400).json({ error: "URL inválida." });
     }
 
+    const urlKey = normalizeProductPreviewUrlKey(url);
     const nocache = (req.query.nocache as string) === "1";
+
+    // 1) Snapshot salvo pelo admin: sempre serve esse para todos (a menos que nocache=1 para forçar re-scrape)
+    if (!nocache) {
+      const snapshot = await prisma.productPreviewSnapshot.findUnique({ where: { urlKey } });
+      if (snapshot?.data) {
+        const data = snapshot.data as object;
+        return res.json(data);
+      }
+    }
+
     const cached = nocache ? null : productPreviewCache.get(url);
     if (cached && cached.expires > Date.now()) {
       return res.json(cached.data);
@@ -1385,6 +1453,30 @@ app.get("/api/product/preview", async (req, res) => {
   } catch (err) {
     console.error("[preview] ERROR", err);
     res.status(500).json({ error: "Erro ao buscar preview do produto." });
+  }
+});
+
+// Admin: salvar snapshot da página de produto para que todos os usuários vejam a mesma página (sem rodar scrape de novo)
+app.post("/api/admin/product-preview/save", requireAdmin, async (req, res) => {
+  try {
+    const { url: rawUrl, data } = req.body as { url?: string; data?: unknown };
+    const url = (rawUrl && typeof rawUrl === "string") ? rawUrl.trim() : "";
+    if (!url || !url.startsWith("http")) {
+      return res.status(400).json({ error: "Body deve conter 'url' (URL do produto) e 'data' (objeto do preview)." });
+    }
+    if (!data || typeof data !== "object") {
+      return res.status(400).json({ error: "Body deve conter 'data' (objeto do preview do produto)." });
+    }
+    const urlKey = normalizeProductPreviewUrlKey(url);
+    await prisma.productPreviewSnapshot.upsert({
+      where: { urlKey },
+      create: { urlKey, data: data as object },
+      update: { data: data as object, updatedAt: new Date() },
+    });
+    return res.json({ ok: true, urlKey });
+  } catch (err) {
+    console.error("[admin product-preview save] ERROR", err);
+    res.status(500).json({ error: "Erro ao salvar snapshot." });
   }
 });
 

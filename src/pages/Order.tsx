@@ -2,7 +2,7 @@ import { useLocation, Link, useNavigate } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
 import { isValidProductUrl } from "@/lib/urlValidation";
-import { ExternalLink, ShoppingCart, ArrowLeft, RefreshCw, AlertCircle, Search } from "lucide-react";
+import { ExternalLink, ShoppingCart, ArrowLeft, RefreshCw, AlertCircle, Search, Save } from "lucide-react";
 import { useCallback, useEffect, useState, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -15,6 +15,8 @@ const getQueryParam = (search: string, key: string) => {
   const params = new URLSearchParams(search);
   return params.get(key) ?? "";
 };
+
+const ADMIN_TOKEN_KEY = "compraschina-admin-token";
 
 /** Valores que parecem tamanhos (M, L, XL, números 36-46 para calçados, etc.) */
 const SIZE_LIKE = /^(M|L|XL|XXL|2XL|3XL|4XL|S|XS|均码|自由|Free|Large|Medium|Small|One\s*Size)$/i;
@@ -103,7 +105,10 @@ const Order = () => {
   const [quantityBySize, setQuantityBySize] = useState<Record<string, number>>({});
   const [productPreviewLoading, setProductPreviewLoading] = useState(false);
   const [productPreviewError, setProductPreviewError] = useState<string | null>(null);
+  const [saveSnapshotLoading, setSaveSnapshotLoading] = useState(false);
+  const [adminTokenInvalidated, setAdminTokenInvalidated] = useState(false);
 
+  const isAdmin = typeof sessionStorage !== "undefined" && !!sessionStorage.getItem(ADMIN_TOKEN_KEY) && !adminTokenInvalidated;
   const sourceLabel = url ? getSourceLabel(url) : "";
 
   const fetchProductPreview = useCallback(async (forceRefresh = false) => {
@@ -227,6 +232,38 @@ const Order = () => {
     return () => { cancelled = true; };
   }, [url, effectivePriceCny, productPreview?.priceCny, productPreviewLoading]);
 
+  const saveSnapshotForAll = useCallback(async () => {
+    if (!url || !productPreview) return;
+    const token = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(ADMIN_TOKEN_KEY) : null;
+    if (!token) return;
+    try {
+      setSaveSnapshotLoading(true);
+      const res = await fetch(apiUrl("/api/admin/product-preview/save"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          url,
+          data: { ...productPreview, rawUrl: url },
+        }),
+      });
+      if (res.status === 401) {
+        if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+        setAdminTokenInvalidated(true);
+        setSaveSnapshotLoading(false);
+        toast.error("Sessão expirada. Faça login em /admin e clique em \"Salvar para todos\" de novo.");
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Falha ao salvar");
+      }
+      toast.success("Página salva. Todos os usuários verão esta mesma página ao abrir este link.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar página");
+    } finally {
+      setSaveSnapshotLoading(false);
+    }
+  }, [url, productPreview]);
 
   if (!url) {
     return (
@@ -394,6 +431,18 @@ const Order = () => {
                   <div className="p-3 border-t border-border flex items-center justify-between flex-wrap gap-2">
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{sourceLabel}</span>
                     <div className="flex items-center gap-3">
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={saveSnapshotForAll}
+                          disabled={saveSnapshotLoading}
+                          className="text-xs text-amber-600 dark:text-amber-500 hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+                          title="Salvar esta página para que todos os usuários vejam o mesmo conteúdo (sem rodar o scrape de novo)"
+                        >
+                          <Save className={`w-3.5 h-3.5 ${saveSnapshotLoading ? "animate-pulse" : ""}`} />
+                          {saveSnapshotLoading ? "Salvando..." : "Salvar para todos"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => fetchProductPreview(true)}

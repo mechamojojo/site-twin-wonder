@@ -107,6 +107,7 @@ export default function FeaturedProductsSection() {
       return p;
     });
     if (apiWithTitles.length === 0) return EXPLORAR_PRODUCTS;
+    // API order = admin sortOrder (1 to 126); then append explorar items not in catalog
     const apiKeys = new Set(apiWithTitles.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url)));
     const extra = EXPLORAR_PRODUCTS.filter(
       (p) => !apiKeys.has(productUrlToCanonicalKey(p.url)),
