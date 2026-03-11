@@ -1335,8 +1335,21 @@ const productPreviewCache = new Map<
   string,
   { data: Awaited<ReturnType<typeof import("./scraper/productPreview").getProductPreview>>; expires: number }
 >();
-const PRODUCT_PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min (permite re-scrape após ajustes)
+const PRODUCT_PREVIEW_CACHE_TTL_MS = 15 * 60 * 1000; // 15 min — repeat visits load instantly
 const PRODUCT_PREVIEW_CACHE_MAX_SIZE = 80; // evita crescimento ilimitado em memória
+/** URLs sendo revalidadas em background (evita múltiplos scrapes simultâneos para a mesma URL). */
+const productPreviewRevalidating = new Set<string>();
+
+/** Mesmo produto com query diferente (ex. ?promotionCode=) usa o mesmo cache. */
+function productPreviewCacheKey(url: string): string {
+  try {
+    const u = new URL(url);
+    u.search = "";
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
 
 // Resposta vazia quando o scrape não consegue dados (frontend ainda mostra a página)
 const emptyProductPreview = {
@@ -1365,8 +1378,33 @@ app.get("/api/product/preview", async (req, res) => {
     }
 
     const nocache = (req.query.nocache as string) === "1";
-    const cached = nocache ? null : productPreviewCache.get(url);
-    if (cached && cached.expires > Date.now()) {
+    const cacheKey = productPreviewCacheKey(url);
+    const cached = nocache ? null : productPreviewCache.get(cacheKey);
+    const now = Date.now();
+    const isCacheFresh = cached && cached.expires > now;
+
+    // Stale-while-revalidate: se temos cache (mesmo expirado), devolvemos na hora e revalidamos em background
+    if (cached && !nocache) {
+      if (isCacheFresh) {
+        return res.json(cached.data);
+      }
+      // Cache expirado: responde com dados antigos imediatamente; revalida em background
+      if (!productPreviewRevalidating.has(cacheKey)) {
+        productPreviewRevalidating.add(cacheKey);
+        const { getProductPreview } = await import("./scraper/productPreview");
+        getProductPreview(cacheKey)
+          .then((data) => {
+            if (data) {
+              if (productPreviewCache.size >= PRODUCT_PREVIEW_CACHE_MAX_SIZE) {
+                const oldestKey = productPreviewCache.keys().next().value;
+                if (oldestKey != null) productPreviewCache.delete(oldestKey);
+              }
+              productPreviewCache.set(cacheKey, { data, expires: Date.now() + PRODUCT_PREVIEW_CACHE_TTL_MS });
+            }
+          })
+          .catch((err) => console.warn("[preview] background revalidate failed", cacheKey.slice(0, 60), err))
+          .finally(() => productPreviewRevalidating.delete(cacheKey));
+      }
       return res.json(cached.data);
     }
 
@@ -1377,7 +1415,7 @@ app.get("/api/product/preview", async (req, res) => {
         const oldestKey = productPreviewCache.keys().next().value;
         if (oldestKey != null) productPreviewCache.delete(oldestKey);
       }
-      productPreviewCache.set(url, { data, expires: Date.now() + PRODUCT_PREVIEW_CACHE_TTL_MS });
+      productPreviewCache.set(cacheKey, { data, expires: Date.now() + PRODUCT_PREVIEW_CACHE_TTL_MS });
       return res.json(data);
     }
     // Scrape falhou: retorna 200 com dados vazios para a página não quebrar

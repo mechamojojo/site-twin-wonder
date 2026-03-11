@@ -35,7 +35,7 @@ export interface ProductPreviewResult {
   rawUrl: string;
 }
 
-const SCRAPE_TIMEOUT_MS = 45000;
+const SCRAPE_TIMEOUT_MS = 35000;
 const SCRAPE_RETRY_COUNT = 2;
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -265,7 +265,7 @@ export async function getProductPreview(productUrl: string): Promise<ProductPrev
     for (let attempt = 0; attempt <= SCRAPE_RETRY_COUNT; attempt++) {
       if (attempt > 0) {
         console.warn("[scraper] retry attempt", attempt, "for", cssbuyUrl);
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 800));
       }
       try {
         const { getCssbuyProductPreview } = await import("./cssbuyProductPreview");
@@ -281,9 +281,9 @@ export async function getProductPreview(productUrl: string): Promise<ProductPrev
     if (productUrl !== cssbuyUrl) {
       console.log("[scraper] CSSBuy failed, trying original URL:", productUrl.slice(0, 60));
       for (let attempt = 0; attempt <= SCRAPE_RETRY_COUNT; attempt++) {
-        if (attempt > 0) {
-          await new Promise((r) => setTimeout(r, 1500));
-        }
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 800));
+      }
         const directResult = await getProductPreviewOnce(productUrl);
         if (directResult) {
           return { ...directResult, rawUrl: productUrl };
@@ -297,7 +297,7 @@ export async function getProductPreview(productUrl: string): Promise<ProductPrev
   console.log("[scraper] No CSSBuy conversion, scraping marketplace directly:", productUrl.slice(0, 60));
   for (let attempt = 0; attempt <= SCRAPE_RETRY_COUNT; attempt++) {
     if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 800));
     }
     const result = await getProductPreviewOnce(productUrl);
     if (result !== null) return result;
@@ -329,7 +329,7 @@ async function getProductPreviewOnce(productUrl: string): Promise<ProductPreview
       timeout: SCRAPE_TIMEOUT_MS,
     }).catch(() => {});
 
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(900);
 
     const is1688 = is1688Url(productUrl);
     const isWeidian = isWeidianUrl(productUrl);

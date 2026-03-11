@@ -3,11 +3,12 @@ import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
 import { isValidProductUrl } from "@/lib/urlValidation";
 import { ExternalLink, ShoppingCart, ArrowLeft, RefreshCw, AlertCircle, Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
 import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
+import { toast } from "sonner";
 
 const getQueryParam = (search: string, key: string) => {
   const params = new URLSearchParams(search);
@@ -66,6 +67,8 @@ const Order = () => {
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const [disclaimerError, setDisclaimerError] = useState(false);
+  const disclaimerDetailsRef = useRef<HTMLDetailsElement>(null);
   const [keepBox, setKeepBox] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<{
@@ -791,7 +794,13 @@ const Order = () => {
                   />
                 </div>
 
-                <details className="rounded-lg border border-border bg-muted/20 overflow-hidden">
+                <details
+                  ref={disclaimerDetailsRef}
+                  open={disclaimerError}
+                  className={`rounded-lg border overflow-hidden transition-colors ${
+                    disclaimerError ? "border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-500/50" : "border-border bg-muted/20"
+                  }`}
+                >
                   <summary className="px-3 py-2 text-[11px] text-muted-foreground cursor-pointer hover:bg-muted/30">
                     Isenção de responsabilidade
                   </summary>
@@ -799,15 +808,20 @@ const Order = () => {
                     <p className="leading-relaxed">
                       Os produtos são vendidos por lojas nos marketplaces chineses (Taobao, 1688, Weidian etc.). A ComprasChina realiza a compra em seu nome e cuida de todo o envio até o Brasil. A qualidade e as especificações dependem do vendedor na plataforma de origem; verifique as informações antes de finalizar.
                     </p>
-                    <label className="flex items-start gap-2 cursor-pointer">
+                    <label className="flex items-start gap-2 cursor-pointer" onClick={() => setDisclaimerError(false)}>
                       <input
                         type="checkbox"
                         checked={disclaimerAccepted}
-                        onChange={(e) => setDisclaimerAccepted(e.target.checked)}
+                        onChange={(e) => { setDisclaimerAccepted(e.target.checked); setDisclaimerError(false); }}
                         className="mt-0.5 rounded border-border"
                       />
                       <span>Li e concordo com o aviso e os termos de serviço.</span>
                     </label>
+                    {disclaimerError && (
+                      <p className="text-amber-600 dark:text-amber-400 text-[11px] font-medium">
+                        Aceite a isenção de responsabilidade para continuar.
+                      </p>
+                    )}
                   </div>
                 </details>
 
@@ -854,11 +868,13 @@ const Order = () => {
                     const handleAddToCart = () => {
                       if (!url) return;
                       if (!disclaimerAccepted) {
-                        alert("Por favor, abra \"Isenção de responsabilidade\" e aceite para continuar.");
+                        setDisclaimerError(true);
+                        disclaimerDetailsRef.current?.setAttribute("open", "");
+                        disclaimerDetailsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
                         return;
                       }
                       if (effectiveQuantity < 1) {
-                        alert("Selecione pelo menos 1 unidade.");
+                        toast.error("Selecione pelo menos 1 unidade.");
                         return;
                       }
                       addItem({
@@ -902,8 +918,14 @@ const Order = () => {
                           type="button"
                           onClick={() => {
                             if (!url) return;
+                            if (!disclaimerAccepted) {
+                              setDisclaimerError(true);
+                              disclaimerDetailsRef.current?.setAttribute("open", "");
+                              disclaimerDetailsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                              return;
+                            }
                             if (effectiveQuantity < 1) {
-                              alert("Selecione pelo menos 1 unidade.");
+                              toast.error("Selecione pelo menos 1 unidade.");
                               return;
                             }
                             addItem({

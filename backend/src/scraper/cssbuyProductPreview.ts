@@ -7,7 +7,7 @@ import type { ProductPreviewResult, OptionGroup } from "./productPreview";
 import { translateToPortuguese } from "./translate";
 import { normalizeProductTitle } from "./normalizeProductTitle";
 
-const SCRAPE_TIMEOUT_MS = 45000;
+const SCRAPE_TIMEOUT_MS = 35000;
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -144,7 +144,7 @@ export async function getCssbuyProductPreview(
               res.request().method() === "GET")
           );
         },
-        { timeout: 20000 },
+        { timeout: 10000 },
       )
       .then(async (res) => {
         try {
@@ -173,34 +173,33 @@ export async function getCssbuyProductPreview(
       .catch(() => {});
 
     await itemResponsePromise;
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(250);
 
-    await page.waitForSelector("img[src]", { timeout: 10000 }).catch(() => {});
+    await page.waitForSelector("img[src]", { timeout: 4500 }).catch(() => {});
     const isItem1688 = /item-1688-/.test(cssbuyUrl);
-    const baseWait = isItemMicro ? 3000 : isItem1688 ? 3500 : 2500;
+    const baseWait = isItemMicro ? 1000 : isItem1688 ? 1300 : 800;
     await page.waitForTimeout(baseWait);
 
     if (isItem1688) {
       await page
         .waitForSelector(
           "[class*='sku'], [class*='prop'], [class*='size'], [class*='color'], [class*='option'], [class*='spec']",
-          { timeout: 5000 },
+          { timeout: 2500 },
         )
         .catch(() => {});
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(400);
     }
 
     if (isItemMicro) {
       await page
         .waitForSelector(
           "[class*='sku'], [class*='prop'], [class*='size'], [class*='color'], [class*='style']",
-          { timeout: 5000 },
+          { timeout: 2500 },
         )
         .catch(() => {});
-      await page.waitForTimeout(2000);
-      // Dar tempo para a API que traz todas as opções (ex.: 40 estilos em lotes de 20) responder
-      await page.waitForTimeout(3500);
-      // Scroll option containers and click "load more" so all options load (CSSBuy/Weidian often show 20 first)
+      await page.waitForTimeout(600);
+      await page.waitForTimeout(1200);
+      // Scroll + "load more" (2 rounds — enough for most products; saves ~2s)
       const scrollAndLoadMore = async () => {
         const scrollables = await page.$$(
           "[class*='sku'] [class*='scroll'], [class*='prop'] [class*='scroll'], [class*='option'] [class*='list'], .sku-list, [class*='style'] [class*='wrap']",
@@ -211,10 +210,10 @@ export async function getCssbuyProductPreview(
               (node as HTMLElement).scrollTop = (node as HTMLElement).scrollHeight;
             })
             .catch(() => {});
-          await page.waitForTimeout(400);
+          await page.waitForTimeout(120);
         }
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(150);
         await page.evaluate(() => {
           const buttons = Array.from(
             document.querySelectorAll(
@@ -233,11 +232,9 @@ export async function getCssbuyProductPreview(
       };
       try {
         await scrollAndLoadMore();
-        await page.waitForTimeout(2500);
+        await page.waitForTimeout(700);
         await scrollAndLoadMore();
-        await page.waitForTimeout(3000);
-        await scrollAndLoadMore();
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(900);
       } catch {
         // ignore
       }
