@@ -8,7 +8,8 @@ const OPTIONS: Option[] = [
   { label: "Roupa / Camiseta",     example: "ex: camiseta, calça, shorts",         category: "clothing"     },
   { label: "Tênis / Calçado",      example: "ex: tênis, sandália, bota",           category: "shoes"        },
   { label: "Jaqueta / Casaco",     example: "ex: jaqueta, moletom, parka",         category: "jacket"       },
-  { label: "Bolsa / Mochila",      example: "ex: mochila, bolsa, carteira",        category: "bag"          },
+  { label: "Mochila",              example: "ex: mochila, backpack",               category: "backpack"    },
+  { label: "Bolsa / Carteira",     example: "ex: bolsa, carteira, clutch",         category: "bag"          },
   { label: "Eletrônico",           example: "ex: fone, relógio, câmera",           category: "electronics"  },
   { label: "Acessório",            example: "ex: pulseira, óculos, cinto",         category: "accessory"    },
 ];

@@ -15,6 +15,7 @@ export type ProductCategory =
   | "coat"
   | "jacket"
   | "bag"
+  | "backpack"
   | "electronics"
   | "clothing"
   | "accessory"
@@ -25,6 +26,7 @@ const WEIGHT_BY_CATEGORY: Record<ProductCategory, number> = {
   coat: 850,
   jacket: 700,
   bag: 600,
+  backpack: 1000, // mochilas ~1 kg for shipping estimate
   electronics: 500,
   clothing: 350,
   accessory: 200,
@@ -37,6 +39,7 @@ const KEEPBOX_EXTRA_G: Record<ProductCategory, number> = {
   coat: 250,
   jacket: 250,
   bag: 250,
+  backpack: 250,
   electronics: 200,
   clothing: 200,
   accessory: 150,
@@ -49,7 +52,8 @@ const KEEPBOX_EXTRA_G: Record<ProductCategory, number> = {
 const SHOE_RE = /t[eê]nis|sapatilha|bota|sandália|sandalia|sapato|shoe|sneaker|calçado|calcado/i;
 const COAT_RE = /casaco|abrigo|overcoat|trench|parka/i;
 const JACKET_RE = /jaqueta|moletom|blusa de frio|jaquetão|jacket|hoodie/i;
-const BAG_RE = /bolsa|mochila|carteira|bag|backpack|purse|clutch/i;
+const BAG_RE = /bolsa|carteira|bag|purse|clutch/i;
+const BACKPACK_RE = /mochila|backpack|背包|双肩包/i;
 const ELEC_RE = /fone|headphone|earphone|teclado|mouse|notebook|celular|tablet|câmera|camera|eletr/i;
 const CLOTH_RE = /camiseta|camisa|calça|shorts|vestido|saia|blusa|polo|top|legging|dress|shirt|pants/i;
 const ACCESS_RE = /cinto|óculos|óculos|colar|brinco|relógio|pulseira|chapéu|gorro|cachecol|luva|meia|belt|glasses|necklace|watch|bracelet|hat|scarf|glove|sock/i;
@@ -61,6 +65,7 @@ export function detectCategory(title?: string | null, explicitCategory?: string 
     if (c === "coat") return "coat";
     if (c === "jacket") return "jacket";
     if (c === "bag" || c === "bags") return "bag";
+    if (c === "backpack" || c === "mochila" || c === "mochilas") return "backpack";
     if (c === "electronics") return "electronics";
     if (c === "clothing" || c === "roupas") return "clothing";
     if (c === "accessory" || c === "accessories" || c === "acessórios") return "accessory";
@@ -69,6 +74,7 @@ export function detectCategory(title?: string | null, explicitCategory?: string 
   if (SHOE_RE.test(title)) return "shoes";
   if (COAT_RE.test(title)) return "coat";
   if (JACKET_RE.test(title)) return "jacket";
+  if (BACKPACK_RE.test(title)) return "backpack";
   if (BAG_RE.test(title)) return "bag";
   if (ELEC_RE.test(title)) return "electronics";
   if (CLOTH_RE.test(title)) return "clothing";
@@ -78,7 +84,7 @@ export function detectCategory(title?: string | null, explicitCategory?: string 
 
 /** Returns true for categories where keepBox is relevant (bulky original boxes) */
 export function categorySupportsKeepBox(cat: ProductCategory): boolean {
-  return cat === "shoes" || cat === "coat" || cat === "jacket" || cat === "bag";
+  return cat === "shoes" || cat === "coat" || cat === "jacket" || cat === "bag" || cat === "backpack";
 }
 
 // ---------------------------------------------------------------------------
