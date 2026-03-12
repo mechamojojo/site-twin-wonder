@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 
 type OrderResponse = {
   id: string;
@@ -181,12 +182,15 @@ const OrderConfirmed = () => {
                 </p>
               )}
               {order.status === "AGUARDANDO_PAGAMENTO" && order.quote && Number(order.quote.totalBrl) > 0 && (
-                <Link
-                  to={`/pagar/${order.id}`}
-                  className="inline-flex items-center gap-2 bg-china-red text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-china-red/90 transition-colors"
-                >
-                  Pagar agora — R$ {Number(order.quote.totalBrl).toFixed(2)}
-                </Link>
+                <div className="flex flex-col items-start gap-2">
+                  <Link
+                    to={`/pagar/${order.id}`}
+                    className="inline-flex items-center gap-2 bg-china-red text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-china-red/90 transition-colors"
+                  >
+                    Pagar agora — R$ {Number(order.quote.totalBrl).toFixed(2)}
+                  </Link>
+                  <MercadoPagoBadge size="sm" showLabel />
+                </div>
               )}
               <Link
                 to="/"

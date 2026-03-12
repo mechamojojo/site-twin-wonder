@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { MP_PUBLIC_KEY } from "@/data/siteConfig";
 import { toast } from "sonner";
 import { Copy, CreditCard, QrCode, ChevronLeft } from "lucide-react";
+import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 
 type CardFormData = {
   paymentMethodId: string;
@@ -280,8 +281,9 @@ const Pagar = () => {
           {/* Coluna principal: forma de pagamento */}
           <div className="space-y-6">
             <section className="rounded-2xl border border-border bg-card overflow-hidden">
-              <div className="border-b border-border bg-muted/30 px-4 py-3">
+              <div className="border-b border-border bg-muted/30 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                 <h2 className="font-semibold text-foreground">Forma de pagamento</h2>
+                <MercadoPagoBadge size="sm" />
               </div>
               <div className="p-4">
                 {/* Tabs PIX | Cartão */}
@@ -464,7 +466,10 @@ const Pagar = () => {
                 <span className="text-muted-foreground">Total</span>
                 <span className="text-xl font-bold text-china-red">R$ {totalBrl.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-muted-foreground">Pagamento seguro via Mercado Pago</p>
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-muted-foreground">Pagamento processado por</p>
+                <MercadoPagoBadge size="lg" showLabel />
+              </div>
             </div>
           </div>
         </div>

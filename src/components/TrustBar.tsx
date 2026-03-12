@@ -1,5 +1,6 @@
 import { ShieldCheck, Clock, CreditCard, Lock } from "lucide-react";
 import { CNPJ } from "@/data/siteConfig";
+import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 
 const signals = [
   {
@@ -16,6 +17,7 @@ const signals = [
     icon: CreditCard,
     label: "Pagamento seguro",
     detail: "Mercado Pago · PCI DSS",
+    badge: true,
   },
   {
     icon: Lock,
@@ -33,10 +35,15 @@ const TrustBar = () => (
             <div className="w-9 h-9 rounded-lg bg-background border border-border flex items-center justify-center shrink-0 shadow-sm">
               <s.icon className="w-4 h-4 text-china-red" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-foreground leading-tight">{s.label}</p>
-              {s.detail && (
-                <p className="text-[11px] text-muted-foreground truncate">{s.detail}</p>
+              {"badge" in s && s.badge ? (
+                <div className="mt-0.5 flex flex-col gap-0.5">
+                  <MercadoPagoBadge size="sm" />
+                  {s.detail && <p className="text-[10px] text-muted-foreground">PCI DSS</p>}
+                </div>
+              ) : (
+                s.detail && <p className="text-[11px] text-muted-foreground truncate">{s.detail}</p>
               )}
             </div>
           </div>

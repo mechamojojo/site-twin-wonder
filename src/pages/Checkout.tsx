@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { apiUrl } from "@/lib/api";
+import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { useAuth } from "@/context/AuthContext";
 import { getAuthToken } from "@/context/AuthContext";
 
@@ -302,11 +303,15 @@ const Checkout = () => {
         <h1 className="text-xl font-heading font-bold text-foreground mb-2">
           Finalizar pedido
         </h1>
-        <p className="text-sm text-muted-foreground mb-6">
+        <p className="text-sm text-muted-foreground mb-4">
           Preencha seus dados. O CPF e endereço são necessários para envio
           internacional. Entraremos em contato com o orçamento final em reais
           (produto + frete).
         </p>
+        <div className="mb-6 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Pagamento em reais com</span>
+          <MercadoPagoBadge size="sm" />
+        </div>
 
         <div className="rounded-xl border border-border bg-card p-4 mb-6">
           <p className="text-xs font-semibold text-muted-foreground mb-2">

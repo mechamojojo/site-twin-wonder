@@ -8,6 +8,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
 import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
+import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
 import { toast } from "sonner";
 
@@ -579,8 +580,11 @@ const Order = () => {
               </div>
 
               {/* Mensagem de confiança */}
-              <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1">✓ Pagamento em reais</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <MercadoPagoBadge size="sm" />
+                </span>
                 <span className="inline-flex items-center gap-1">✓ Entrega no Brasil</span>
                 <span className="inline-flex items-center gap-1">✓ Você paga pela comunidade</span>
               </div>
