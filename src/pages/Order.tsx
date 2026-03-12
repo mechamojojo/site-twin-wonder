@@ -108,7 +108,7 @@ const Order = () => {
   const [saveSnapshotLoading, setSaveSnapshotLoading] = useState(false);
   const [adminTokenInvalidated, setAdminTokenInvalidated] = useState(false);
 
-  const isAdmin = typeof sessionStorage !== "undefined" && !!sessionStorage.getItem(ADMIN_TOKEN_KEY) && !adminTokenInvalidated;
+  const isAdmin = typeof localStorage !== "undefined" && !!localStorage.getItem(ADMIN_TOKEN_KEY) && !adminTokenInvalidated;
   const sourceLabel = url ? getSourceLabel(url) : "";
 
   const fetchProductPreview = useCallback(async (forceRefresh = false) => {
@@ -234,7 +234,7 @@ const Order = () => {
 
   const saveSnapshotForAll = useCallback(async () => {
     if (!url || !productPreview) return;
-    const token = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(ADMIN_TOKEN_KEY) : null;
+    const token = typeof localStorage !== "undefined" ? localStorage.getItem(ADMIN_TOKEN_KEY) : null;
     if (!token) return;
     try {
       setSaveSnapshotLoading(true);
@@ -247,7 +247,7 @@ const Order = () => {
         }),
       });
       if (res.status === 401) {
-        if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+        if (typeof localStorage !== "undefined") localStorage.removeItem(ADMIN_TOKEN_KEY);
         setAdminTokenInvalidated(true);
         setSaveSnapshotLoading(false);
         toast.error("Sessão expirada. Faça login em /admin (use o mesmo domínio: com ou sem www).");

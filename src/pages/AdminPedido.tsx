@@ -127,7 +127,7 @@ const CSSBUY_ORDER_LIST_URL = "https://www.cssbuy.com/?go=m&name=sendorderlist";
 const AdminPedido = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem(ADMIN_TOKEN_KEY) : null;
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,7 +155,7 @@ const AdminPedido = () => {
     })
       .then((r) => {
         if (r.status === 401) {
-          sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+          localStorage.removeItem(ADMIN_TOKEN_KEY);
           navigate("/admin", { replace: true });
           return null;
         }

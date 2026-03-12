@@ -150,7 +150,7 @@ function toCatalogProduct(p: Record<string, unknown>): CatalogProduct {
 }
 
 const Admin = () => {
-  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(ADMIN_TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => (typeof localStorage !== "undefined" ? localStorage.getItem(ADMIN_TOKEN_KEY) : null));
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -178,7 +178,7 @@ const Admin = () => {
       headers: { Authorization: `Bearer ${authToken}` },
     }).then((r) => {
       if (r.status === 401) {
-        sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
         setToken(null);
         return [];
       }
@@ -199,7 +199,7 @@ const Admin = () => {
     })
       .then((r) => {
         if (r.status === 401) {
-          sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+          localStorage.removeItem(ADMIN_TOKEN_KEY);
           setToken(null);
           return [];
         }
@@ -269,7 +269,7 @@ const Admin = () => {
         setLoginError(data.error || "Senha incorreta");
         return;
       }
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, data.token);
+      localStorage.setItem(ADMIN_TOKEN_KEY, data.token);
       setToken(data.token);
       setPassword("");
     } catch {
@@ -280,7 +280,7 @@ const Admin = () => {
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
     setToken(null);
     setOrders([]);
     toast.success("Sessão encerrada");
