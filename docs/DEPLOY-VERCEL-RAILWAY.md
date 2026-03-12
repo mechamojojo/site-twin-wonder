@@ -61,6 +61,17 @@ Em **Variables** do serviço backend, configure:
 - Aguarde o primeiro deploy terminar e verifique se o healthcheck responde:  
   `https://sua-url.railway.app/api/health`
 
+### 1.5.1 Migration para "Salvar página para todos" (admin)
+
+Para o botão **Salvar para todos** na página do pedido funcionar em produção, a tabela `ProductPreviewSnapshot` precisa existir no banco:
+
+1. No Railway: serviço **backend** → **Settings** → abra um **Shell** (ou use "Run Command" / deploy hook que rode migrations).
+2. Rode: `npx prisma migrate deploy` (no contexto do backend, com `DATABASE_URL` já configurada).
+3. Se o Railway não oferecer shell, rode localmente apontando para o banco de prod:  
+   `DATABASE_URL="sua-url-postgres-railway" npx prisma migrate deploy` (a partir da pasta `backend`).
+
+**Importante:** Use o **mesmo domínio** (com ou sem www) para o admin e para a página do pedido. Ex.: se você faz login em `https://www.compraschina.com.br/admin`, abra o pedido em `https://www.compraschina.com.br/pedido?url=...`. Se usar `https://compraschina.com.br` em um e `https://www.compraschina.com.br` no outro, o token de admin não será compartilhado (sessionStorage é por origem).
+
 ### 1.6 Memória (se o backend ficar sem memória)
 
 O endpoint `/api/product/preview` usa scraping (Playwright) e pode consumir bastante RAM quando muitos usuários abrem vários produtos ao mesmo tempo. Se o serviço ficar sem memória (OOM):

@@ -1476,7 +1476,11 @@ app.post("/api/admin/product-preview/save", requireAdmin, async (req, res) => {
     return res.json({ ok: true, urlKey });
   } catch (err) {
     console.error("[admin product-preview save] ERROR", err);
-    res.status(500).json({ error: "Erro ao salvar snapshot." });
+    const msg = err instanceof Error ? err.message : String(err);
+    const hint = /does not exist|migrate|ProductPreviewSnapshot/i.test(msg)
+      ? " Execute a migration no banco de produção: npx prisma migrate deploy"
+      : "";
+    res.status(500).json({ error: `Erro ao salvar snapshot.${hint}` });
   }
 });
 

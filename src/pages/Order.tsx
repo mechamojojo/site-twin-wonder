@@ -250,7 +250,7 @@ const Order = () => {
         if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(ADMIN_TOKEN_KEY);
         setAdminTokenInvalidated(true);
         setSaveSnapshotLoading(false);
-        toast.error("Sessão expirada. Faça login em /admin e clique em \"Salvar para todos\" de novo.");
+        toast.error("Sessão expirada. Faça login em /admin (use o mesmo domínio: com ou sem www).");
         return;
       }
       if (!res.ok) {
