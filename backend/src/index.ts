@@ -15,9 +15,19 @@ import jwt from "jsonwebtoken";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import { sendTelegram } from "./telegram";
-import { sendVerificationEmail, sendPasswordResetEmail, sendOrderStatusEmail } from "./email";
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+  sendOrderStatusEmail,
+} from "./email";
 import { verifyTurnstile } from "./turnstile";
-import { hashPassword, verifyPassword, signToken, requireUser, optionalUser } from "./auth";
+import {
+  hashPassword,
+  verifyPassword,
+  signToken,
+  requireUser,
+  optionalUser,
+} from "./auth";
 import cors from "cors";
 import { json } from "body-parser";
 import { PrismaClient, OrderStatus } from "@prisma/client";
@@ -39,8 +49,13 @@ const defaultOrigins = [
   "http://127.0.0.1:5173",
   "http://127.0.0.1:8080",
 ];
-const envOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
-const corsOrigins = envOrigins?.length ? [...new Set([...defaultOrigins, ...envOrigins])] : defaultOrigins;
+const envOrigins = (process.env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+const corsOrigins = envOrigins?.length
+  ? [...new Set([...defaultOrigins, ...envOrigins])]
+  : defaultOrigins;
 app.use(cors({ origin: corsOrigins }));
 app.use(json());
 
@@ -70,7 +85,9 @@ const ADMIN_JWT_EXPIRES = "7d";
 
 function signAdminToken(): string {
   if (!ADMIN_SECRET) throw new Error("ADMIN_SECRET not set");
-  return jwt.sign({ admin: true }, ADMIN_SECRET, { expiresIn: ADMIN_JWT_EXPIRES });
+  return jwt.sign({ admin: true }, ADMIN_SECRET, {
+    expiresIn: ADMIN_JWT_EXPIRES,
+  });
 }
 
 /** Token é JWT se tiver 2 pontos (header.payload.signature). */
@@ -95,12 +112,20 @@ function cleanupExpiredSessions() {
   }
 }
 
-function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+function requireAdmin(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
   if (!ADMIN_SECRET) {
-    return res.status(503).json({ error: "Admin não configurado. Defina ADMIN_SECRET no .env" });
+    return res
+      .status(503)
+      .json({ error: "Admin não configurado. Defina ADMIN_SECRET no .env" });
   }
   const auth = req.headers.authorization;
-  const token = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : (req.headers["x-admin-token"] as string | undefined)?.trim();
+  const token = auth?.startsWith("Bearer ")
+    ? auth.slice(7).trim()
+    : (req.headers["x-admin-token"] as string | undefined)?.trim();
   if (!token) {
     return res.status(401).json({ error: "Token de admin necessário" });
   }
@@ -114,11 +139,15 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
     return next();
   }
   if (expires) ADMIN_SESSIONS.delete(token);
-  return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
+  return res
+    .status(401)
+    .json({ error: "Sessão expirada. Faça login novamente." });
 }
 
 // Root (alguns proxies fazem healthcheck em /)
-app.get("/", (_req, res) => res.json({ status: "ok", service: "compraschina-backend" }));
+app.get("/", (_req, res) =>
+  res.json({ status: "ok", service: "compraschina-backend" }),
+);
 
 // Healthcheck
 app.get("/api/health", (_req, res) => {
@@ -147,27 +176,60 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
       turnstileToken,
     } = req.body ?? {};
 
-    if (!email?.trim()) return res.status(400).json({ error: "E-mail obrigatório" });
-    if (!password || String(password).length < 6) return res.status(400).json({ error: "Senha deve ter pelo menos 6 caracteres" });
-    if (!name?.trim()) return res.status(400).json({ error: "Nome obrigatório" });
-    if (!termsAccepted) return res.status(400).json({ error: "Você precisa aceitar os Termos de Serviço e a Política de Privacidade" });
+    if (!email?.trim())
+      return res.status(400).json({ error: "E-mail obrigatório" });
+    if (!password || String(password).length < 6)
+      return res
+        .status(400)
+        .json({ error: "Senha deve ter pelo menos 6 caracteres" });
+    if (!name?.trim())
+      return res.status(400).json({ error: "Nome obrigatório" });
+    if (!termsAccepted)
+      return res
+        .status(400)
+        .json({
+          error:
+            "Você precisa aceitar os Termos de Serviço e a Política de Privacidade",
+        });
 
-    const turnstileOk = await verifyTurnstile(turnstileToken, req.ip || req.socket?.remoteAddress);
-    if (!turnstileOk) return res.status(400).json({ error: "Verificação de segurança falhou. Atualize a página e tente novamente." });
+    const turnstileOk = await verifyTurnstile(
+      turnstileToken,
+      req.ip || req.socket?.remoteAddress,
+    );
+    if (!turnstileOk)
+      return res
+        .status(400)
+        .json({
+          error:
+            "Verificação de segurança falhou. Atualize a página e tente novamente.",
+        });
 
-    const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
-    if (existing) return res.status(400).json({ error: "E-mail já cadastrado" });
+    const existing = await prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+    if (existing)
+      return res.status(400).json({ error: "E-mail já cadastrado" });
 
-    const cpf = typeof customerCpf === "string" ? customerCpf.replace(/\D/g, "") : null;
-    if (!cpf || cpf.length !== 11) return res.status(400).json({ error: "CPF inválido (11 dígitos)" });
-    const wa = typeof customerWhatsapp === "string" ? customerWhatsapp.replace(/\D/g, "") : null;
+    const cpf =
+      typeof customerCpf === "string" ? customerCpf.replace(/\D/g, "") : null;
+    if (!cpf || cpf.length !== 11)
+      return res.status(400).json({ error: "CPF inválido (11 dígitos)" });
+    const wa =
+      typeof customerWhatsapp === "string"
+        ? customerWhatsapp.replace(/\D/g, "")
+        : null;
     if (!wa) return res.status(400).json({ error: "WhatsApp obrigatório" });
     const cepClean = typeof cep === "string" ? cep.replace(/\D/g, "") : null;
-    if (!cepClean || cepClean.length !== 8) return res.status(400).json({ error: "CEP inválido (8 dígitos)" });
-    if (!addressStreet?.trim()) return res.status(400).json({ error: "Endereço obrigatório" });
-    if (!addressNumber?.trim()) return res.status(400).json({ error: "Número obrigatório" });
-    if (!addressCity?.trim()) return res.status(400).json({ error: "Cidade obrigatória" });
-    if (!addressState?.trim()) return res.status(400).json({ error: "Estado obrigatório" });
+    if (!cepClean || cepClean.length !== 8)
+      return res.status(400).json({ error: "CEP inválido (8 dígitos)" });
+    if (!addressStreet?.trim())
+      return res.status(400).json({ error: "Endereço obrigatório" });
+    if (!addressNumber?.trim())
+      return res.status(400).json({ error: "Número obrigatório" });
+    if (!addressCity?.trim())
+      return res.status(400).json({ error: "Cidade obrigatória" });
+    if (!addressState?.trim())
+      return res.status(400).json({ error: "Estado obrigatório" });
 
     const verificationToken = crypto.randomBytes(32).toString("hex");
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -216,7 +278,10 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error("[register]", err);
-    const message = !isProduction && err instanceof Error ? err.message : "Erro ao criar conta";
+    const message =
+      !isProduction && err instanceof Error
+        ? err.message
+        : "Erro ao criar conta";
     res.status(500).json({ error: message });
   }
 });
@@ -225,9 +290,12 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
 app.post("/api/auth/login", authRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body ?? {};
-    if (!email?.trim() || !password) return res.status(400).json({ error: "E-mail e senha obrigatórios" });
+    if (!email?.trim() || !password)
+      return res.status(400).json({ error: "E-mail e senha obrigatórios" });
 
-    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    const user = await prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
     if (!user || !verifyPassword(String(password), user.password)) {
       return res.status(401).json({ error: "E-mail ou senha incorretos" });
     }
@@ -261,22 +329,40 @@ app.post("/api/auth/login", authRateLimiter, async (req, res) => {
 app.post("/api/auth/forgot-password", authRateLimiter, async (req, res) => {
   try {
     const { email, turnstileToken } = req.body ?? {};
-    if (!email?.trim()) return res.status(400).json({ error: "E-mail obrigatório" });
+    if (!email?.trim())
+      return res.status(400).json({ error: "E-mail obrigatório" });
 
-    const turnstileOk = await verifyTurnstile(turnstileToken, req.ip || req.socket?.remoteAddress);
-    if (!turnstileOk) return res.status(400).json({ error: "Verificação de segurança falhou. Atualize a página e tente novamente." });
+    const turnstileOk = await verifyTurnstile(
+      turnstileToken,
+      req.ip || req.socket?.remoteAddress,
+    );
+    if (!turnstileOk)
+      return res
+        .status(400)
+        .json({
+          error:
+            "Verificação de segurança falhou. Atualize a página e tente novamente.",
+        });
 
-    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    const user = await prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
     if (user) {
       const resetToken = crypto.randomBytes(32).toString("hex");
       const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
       await prisma.user.update({
         where: { id: user.id },
-        data: { passwordResetToken: resetToken, passwordResetExpires: resetExpires },
+        data: {
+          passwordResetToken: resetToken,
+          passwordResetExpires: resetExpires,
+        },
       });
       await sendPasswordResetEmail(user.email, user.name, resetToken);
     }
-    res.json({ message: "Se esse e-mail estiver cadastrado, você receberá um link para redefinir sua senha." });
+    res.json({
+      message:
+        "Se esse e-mail estiver cadastrado, você receberá um link para redefinir sua senha.",
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao processar solicitação" });
@@ -288,7 +374,9 @@ app.post("/api/auth/reset-password", async (req, res) => {
   try {
     const { token, newPassword } = req.body ?? {};
     if (!token?.trim() || !newPassword || String(newPassword).length < 6) {
-      return res.status(400).json({ error: "Token e nova senha (mín. 6 caracteres) obrigatórios" });
+      return res
+        .status(400)
+        .json({ error: "Token e nova senha (mín. 6 caracteres) obrigatórios" });
     }
 
     const user = await prisma.user.findFirst({
@@ -297,7 +385,13 @@ app.post("/api/auth/reset-password", async (req, res) => {
         passwordResetExpires: { gt: new Date() },
       },
     });
-    if (!user) return res.status(400).json({ error: "Link inválido ou expirado. Solicite uma nova redefinição de senha." });
+    if (!user)
+      return res
+        .status(400)
+        .json({
+          error:
+            "Link inválido ou expirado. Solicite uma nova redefinição de senha.",
+        });
 
     await prisma.user.update({
       where: { id: user.id },
@@ -327,7 +421,13 @@ app.post("/api/auth/verify-email", async (req, res) => {
         emailVerificationTokenExpires: { gt: new Date() },
       },
     });
-    if (!user) return res.status(400).json({ error: "Link inválido ou expirado. Solicite um novo e-mail de confirmação." });
+    if (!user)
+      return res
+        .status(400)
+        .json({
+          error:
+            "Link inválido ou expirado. Solicite um novo e-mail de confirmação.",
+        });
 
     await prisma.user.update({
       where: { id: user.id },
@@ -369,7 +469,8 @@ app.post("/api/auth/resend-verification", requireUser, async (req, res) => {
     const userId = (req as express.Request & { userId: string }).userId;
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
-    if (user.emailVerified) return res.status(400).json({ error: "E-mail já confirmado" });
+    if (user.emailVerified)
+      return res.status(400).json({ error: "E-mail já confirmado" });
 
     const verificationToken = crypto.randomBytes(32).toString("hex");
     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -381,10 +482,16 @@ app.post("/api/auth/resend-verification", requireUser, async (req, res) => {
       },
     });
     await sendVerificationEmail(user.email, user.name, verificationToken);
-    res.json({ message: "E-mail de confirmação reenviado. Verifique sua caixa de entrada." });
+    res.json({
+      message:
+        "E-mail de confirmação reenviado. Verifique sua caixa de entrada.",
+    });
   } catch (err) {
     console.error("[resend-verification]", err);
-    const message = !isProduction && err instanceof Error ? err.message : "Erro ao reenviar e-mail";
+    const message =
+      !isProduction && err instanceof Error
+        ? err.message
+        : "Erro ao reenviar e-mail";
     res.status(500).json({ error: message });
   }
 });
@@ -442,32 +549,47 @@ app.patch("/api/auth/me", requireUser, async (req, res) => {
       updates.addressNumber = body.addressNumber.trim().slice(0, 20);
     }
     if (typeof body.addressComplement === "string") {
-      updates.addressComplement = body.addressComplement.trim().slice(0, 100) || null;
+      updates.addressComplement =
+        body.addressComplement.trim().slice(0, 100) || null;
     }
-    if (typeof body.addressNeighborhood === "string" && body.addressNeighborhood.trim()) {
-      updates.addressNeighborhood = body.addressNeighborhood.trim().slice(0, 100);
+    if (
+      typeof body.addressNeighborhood === "string" &&
+      body.addressNeighborhood.trim()
+    ) {
+      updates.addressNeighborhood = body.addressNeighborhood
+        .trim()
+        .slice(0, 100);
     }
     if (typeof body.addressCity === "string" && body.addressCity.trim()) {
       updates.addressCity = body.addressCity.trim().slice(0, 100);
     }
-    if (typeof body.addressState === "string" && body.addressState.trim().length === 2) {
+    if (
+      typeof body.addressState === "string" &&
+      body.addressState.trim().length === 2
+    ) {
       updates.addressState = body.addressState.trim().toUpperCase();
     }
 
     // Password change (optional)
     if (typeof body.newPassword === "string" && body.newPassword.length >= 6) {
       if (typeof body.currentPassword !== "string" || !body.currentPassword) {
-        return res.status(400).json({ error: "Senha atual obrigatória para alterar a senha" });
+        return res
+          .status(400)
+          .json({ error: "Senha atual obrigatória para alterar a senha" });
       }
       const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
+      if (!user)
+        return res.status(404).json({ error: "Usuário não encontrado" });
       const valid = await verifyPassword(body.currentPassword, user.password);
-      if (!valid) return res.status(400).json({ error: "Senha atual incorreta" });
+      if (!valid)
+        return res.status(400).json({ error: "Senha atual incorreta" });
       updates.password = hashPassword(body.newPassword);
     }
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: "Nenhum campo válido para atualizar" });
+      return res
+        .status(400)
+        .json({ error: "Nenhum campo válido para atualizar" });
     }
 
     const updated = await prisma.user.update({
@@ -492,7 +614,9 @@ app.patch("/api/auth/me", requireUser, async (req, res) => {
     });
   } catch (err) {
     console.error("Update profile:", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar perfil") });
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao atualizar perfil") });
   }
 });
 
@@ -539,9 +663,11 @@ app.post("/api/auth/me/saved-products", requireUser, async (req, res) => {
   try {
     const userId = (req as express.Request & { userId: string }).userId;
     const slug = typeof req.body?.slug === "string" ? req.body.slug.trim() : "";
-    if (!slug) return res.status(400).json({ error: "Slug do produto obrigatório" });
+    if (!slug)
+      return res.status(400).json({ error: "Slug do produto obrigatório" });
     const product = await prisma.product.findUnique({ where: { slug } });
-    if (!product) return res.status(404).json({ error: "Produto não encontrado" });
+    if (!product)
+      return res.status(404).json({ error: "Produto não encontrado" });
     await prisma.savedProduct.upsert({
       where: { userId_productSlug: { userId, productSlug: slug } },
       create: { userId, productSlug: slug },
@@ -555,39 +681,49 @@ app.post("/api/auth/me/saved-products", requireUser, async (req, res) => {
 });
 
 // Remover dos salvos
-app.delete("/api/auth/me/saved-products/:slug", requireUser, async (req, res) => {
-  try {
-    const userId = (req as express.Request & { userId: string }).userId;
-    const slug = decodeURIComponent(req.params.slug ?? "").trim();
-    if (!slug) return res.status(400).json({ error: "Slug obrigatório" });
-    await prisma.savedProduct.deleteMany({
-      where: { userId, productSlug: slug },
-    });
-    res.json({ message: "Removido dos salvos" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro ao remover" });
-  }
-});
+app.delete(
+  "/api/auth/me/saved-products/:slug",
+  requireUser,
+  async (req, res) => {
+    try {
+      const userId = (req as express.Request & { userId: string }).userId;
+      const slug = decodeURIComponent(req.params.slug ?? "").trim();
+      if (!slug) return res.status(400).json({ error: "Slug obrigatório" });
+      await prisma.savedProduct.deleteMany({
+        where: { userId, productSlug: slug },
+      });
+      res.json({ message: "Removido dos salvos" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erro ao remover" });
+    }
+  },
+);
 
 // Verificar se um slug está salvo (para UI)
-app.get("/api/auth/me/saved-products/check/:slug", requireUser, async (req, res) => {
-  try {
-    const userId = (req as express.Request & { userId: string }).userId;
-    const slug = decodeURIComponent(req.params.slug ?? "").trim();
-    const saved = await prisma.savedProduct.findUnique({
-      where: { userId_productSlug: { userId, productSlug: slug } },
-    });
-    res.json({ saved: !!saved });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro ao verificar" });
-  }
-});
+app.get(
+  "/api/auth/me/saved-products/check/:slug",
+  requireUser,
+  async (req, res) => {
+    try {
+      const userId = (req as express.Request & { userId: string }).userId;
+      const slug = decodeURIComponent(req.params.slug ?? "").trim();
+      const saved = await prisma.savedProduct.findUnique({
+        where: { userId_productSlug: { userId, productSlug: slug } },
+      });
+      res.json({ saved: !!saved });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Erro ao verificar" });
+    }
+  },
+);
 
 // Admin login (senha = ADMIN_SECRET do .env)
 app.post("/api/admin/login", (req, res) => {
-  const password = (req.body?.password != null ? String(req.body.password) : "").trim();
+  const password = (
+    req.body?.password != null ? String(req.body.password) : ""
+  ).trim();
   if (!ADMIN_SECRET) {
     return res.status(503).json({ error: "Admin não configurado." });
   }
@@ -635,8 +771,12 @@ app.get("/api/admin/orders/:id", requireAdmin, async (req, res) => {
 // Admin: URL do produto no CSSBuy (para botão "Processar compra")
 app.get("/api/admin/orders/:id/cssbuy-url", requireAdmin, async (req, res) => {
   try {
-    const order = await prisma.order.findUnique({ where: { id: req.params.id }, select: { originalUrl: true } });
-    if (!order?.originalUrl) return res.status(404).json({ error: "Pedido ou URL não encontrado" });
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { originalUrl: true },
+    });
+    if (!order?.originalUrl)
+      return res.status(404).json({ error: "Pedido ou URL não encontrado" });
     const cssbuyUrl = marketplaceToCssbuyUrl(order.originalUrl);
     res.json({ url: cssbuyUrl });
   } catch (err) {
@@ -650,11 +790,17 @@ app.patch("/api/admin/orders/:id/shipment", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const body = req.body ?? {};
-    const trackingCode = typeof body.trackingCode === "string" ? body.trackingCode.trim() || null : null;
-    const carrier = typeof body.carrier === "string" ? body.carrier.trim() || null : null;
-    const status = typeof body.status === "string" && ["PENDENTE", "EM_TRANSITO", "ENTREGUE"].includes(body.status)
-      ? body.status
-      : undefined;
+    const trackingCode =
+      typeof body.trackingCode === "string"
+        ? body.trackingCode.trim() || null
+        : null;
+    const carrier =
+      typeof body.carrier === "string" ? body.carrier.trim() || null : null;
+    const status =
+      typeof body.status === "string" &&
+      ["PENDENTE", "EM_TRANSITO", "ENTREGUE"].includes(body.status)
+        ? body.status
+        : undefined;
 
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
@@ -663,7 +809,10 @@ app.patch("/api/admin/orders/:id/shipment", requireAdmin, async (req, res) => {
     if (trackingCode !== undefined) shipmentData.trackingCode = trackingCode;
     if (carrier !== undefined) shipmentData.carrier = carrier;
     if (status) shipmentData.status = status;
-    if (status === "EM_TRANSITO" && !(await prisma.shipment.findUnique({ where: { orderId: id } }))?.shippedAt) {
+    if (
+      status === "EM_TRANSITO" &&
+      !(await prisma.shipment.findUnique({ where: { orderId: id } }))?.shippedAt
+    ) {
       shipmentData.shippedAt = new Date();
     }
     if (status === "ENTREGUE") shipmentData.deliveredAt = new Date();
@@ -675,7 +824,8 @@ app.patch("/api/admin/orders/:id/shipment", requireAdmin, async (req, res) => {
         orderId: id,
         trackingCode: trackingCode ?? undefined,
         carrier: carrier ?? undefined,
-        status: (status as "PENDENTE" | "EM_TRANSITO" | "ENTREGUE") ?? "PENDENTE",
+        status:
+          (status as "PENDENTE" | "EM_TRANSITO" | "ENTREGUE") ?? "PENDENTE",
         ...(status === "EM_TRANSITO" && { shippedAt: new Date() }),
         ...(status === "ENTREGUE" && { deliveredAt: new Date() }),
       },
@@ -684,7 +834,9 @@ app.patch("/api/admin/orders/:id/shipment", requireAdmin, async (req, res) => {
     res.json(shipment);
   } catch (err) {
     console.error("Admin update shipment:", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar envio") });
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao atualizar envio") });
   }
 });
 
@@ -706,13 +858,20 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
     }
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: "Nenhum campo válido para atualizar" });
+      return res
+        .status(400)
+        .json({ error: "Nenhum campo válido para atualizar" });
     }
 
     const order = await prisma.order.update({
       where: { id },
       data: updates,
-      include: { quote: true, payment: true, shipment: true, user: { select: { email: true, name: true } } },
+      include: {
+        quote: true,
+        payment: true,
+        shipment: true,
+        user: { select: { email: true, name: true } },
+      },
     });
     if (updates.status === OrderStatus.PAGO) {
       try {
@@ -733,7 +892,7 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
         order.user.name,
         order.id,
         updates.status as string,
-        order.productTitle || order.productDescription
+        order.productTitle || order.productDescription,
       ).catch((err) => console.warn("[email] Order status email failed:", err));
     }
     res.json(order);
@@ -742,7 +901,9 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
       return res.status(404).json({ error: "Pedido não encontrado" });
     }
     console.error("Admin update order:", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar pedido") });
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao atualizar pedido") });
   }
 });
 
@@ -781,7 +942,9 @@ app.get("/api/products", async (req, res) => {
       if (p.image) return p;
       try {
         const parsed = p.images ? JSON.parse(p.images) : null;
-        const first = Array.isArray(parsed) ? parsed.find((x) => typeof x === "string" && x.startsWith("http")) : null;
+        const first = Array.isArray(parsed)
+          ? parsed.find((x) => typeof x === "string" && x.startsWith("http"))
+          : null;
         return { ...p, image: first ?? null };
       } catch {
         return p;
@@ -799,7 +962,9 @@ app.get("/api/products", async (req, res) => {
 app.get("/api/products/most-saved", async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 20, 50);
-    const grouped = await prisma.$queryRaw<{ productSlug: string; saveCount: bigint }[]>`
+    const grouped = await prisma.$queryRaw<
+      { productSlug: string; saveCount: bigint }[]
+    >`
       SELECT "productSlug", COUNT(*)::int AS "saveCount"
       FROM "SavedProduct"
       GROUP BY "productSlug"
@@ -807,7 +972,9 @@ app.get("/api/products/most-saved", async (req, res) => {
       LIMIT ${limit}
     `;
     const slugs = grouped.map((g) => g.productSlug);
-    const countBySlug = new Map(grouped.map((g) => [g.productSlug, Number(g.saveCount)]));
+    const countBySlug = new Map(
+      grouped.map((g) => [g.productSlug, Number(g.saveCount)]),
+    );
     if (slugs.length === 0) return res.json({ items: [], total: 0 });
 
     const products = await prisma.product.findMany({
@@ -820,7 +987,10 @@ app.get("/api/products/most-saved", async (req, res) => {
         if (!product) return null;
         return { product, saveCount: countBySlug.get(slug) ?? 0 };
       })
-      .filter((x): x is { product: (typeof products)[number]; saveCount: number } => x !== null);
+      .filter(
+        (x): x is { product: (typeof products)[number]; saveCount: number } =>
+          x !== null,
+      );
 
     res.json({ items, total: items.length });
   } catch (err) {
@@ -835,7 +1005,8 @@ app.get("/api/products/:idOrSlug", async (req, res) => {
     const product = await prisma.product.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
     });
-    if (!product) return res.status(404).json({ error: "Produto não encontrado" });
+    if (!product)
+      return res.status(404).json({ error: "Produto não encontrado" });
 
     const saveCount = await prisma.savedProduct.count({
       where: { productSlug: product.slug },
@@ -845,7 +1016,9 @@ app.get("/api/products/:idOrSlug", async (req, res) => {
     if (!product.image) {
       try {
         const parsed = product.images ? JSON.parse(product.images) : null;
-        const first = Array.isArray(parsed) ? parsed.find((x) => typeof x === "string" && x.startsWith("http")) : null;
+        const first = Array.isArray(parsed)
+          ? parsed.find((x) => typeof x === "string" && x.startsWith("http"))
+          : null;
         withImage = { ...product, image: first ?? null };
       } catch {
         // keep product
@@ -859,13 +1032,15 @@ app.get("/api/products/:idOrSlug", async (req, res) => {
 });
 
 function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .slice(0, 80) || "produto";
+  return (
+    s
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .slice(0, 80) || "produto"
+  );
 }
 
 function getSourceFromUrl(url: string): string {
@@ -875,7 +1050,8 @@ function getSourceFromUrl(url: string): string {
   if (host.includes("weidian")) return "Weidian";
   if (host.includes("tmall")) return "TMALL";
   if (host.includes("jd.com") || host.includes("jd.")) return "JD.com";
-  if (host.includes("pinduoduo") || host.includes("yangkeduo")) return "Pinduoduo";
+  if (host.includes("pinduoduo") || host.includes("yangkeduo"))
+    return "Pinduoduo";
   if (host.includes("goofish")) return "Goofish";
   if (host.includes("dangdang")) return "Dangdang";
   if (host.includes("vip.com") || host.includes("vipshop")) return "VIP Shop";
@@ -892,9 +1068,13 @@ async function ensureProductFromOrder(order: {
 }) {
   const u = order.originalUrl?.trim();
   if (!u || !u.startsWith("http")) return null;
-  const existing = await prisma.product.findUnique({ where: { originalUrl: u } });
+  const existing = await prisma.product.findUnique({
+    where: { originalUrl: u },
+  });
   if (existing) return existing;
-  const title = (order.productTitle || order.productDescription || "Produto").trim().slice(0, 300);
+  const title = (order.productTitle || order.productDescription || "Produto")
+    .trim()
+    .slice(0, 300);
   const baseSlug = slugify(title);
   let slug = baseSlug;
   let n = 0;
@@ -944,22 +1124,36 @@ app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
     const body = req.body ?? {};
     const updates: Record<string, unknown> = {};
 
-    if (typeof body.title === "string" && body.title.trim()) updates.title = body.title.trim().slice(0, 300);
-    if (typeof body.titlePt === "string") updates.titlePt = body.titlePt.trim().slice(0, 300) || null;
-    if (typeof body.description === "string") updates.description = body.description.slice(0, 2000) || null;
-    if (typeof body.category === "string" && body.category.trim()) updates.category = body.category.trim();
+    if (typeof body.title === "string" && body.title.trim())
+      updates.title = body.title.trim().slice(0, 300);
+    if (typeof body.titlePt === "string")
+      updates.titlePt = body.titlePt.trim().slice(0, 300) || null;
+    if (typeof body.description === "string")
+      updates.description = body.description.slice(0, 2000) || null;
+    if (typeof body.category === "string" && body.category.trim())
+      updates.category = body.category.trim();
     if (typeof body.featured === "boolean") updates.featured = body.featured;
     if (typeof body.sortOrder === "number") updates.sortOrder = body.sortOrder;
-    if (typeof body.originalUrl === "string" && body.originalUrl.startsWith("http")) updates.originalUrl = body.originalUrl.trim();
-    if (typeof body.source === "string" && body.source.trim()) updates.source = body.source.trim();
-    if (typeof body.image === "string") updates.image = body.image.trim() || null;
+    if (
+      typeof body.originalUrl === "string" &&
+      body.originalUrl.startsWith("http")
+    )
+      updates.originalUrl = body.originalUrl.trim();
+    if (typeof body.source === "string" && body.source.trim())
+      updates.source = body.source.trim();
+    if (typeof body.image === "string")
+      updates.image = body.image.trim() || null;
     if (Array.isArray(body.images)) {
-      const urls = body.images.filter((u: unknown) => typeof u === "string" && u.trim().startsWith("http"));
+      const urls = body.images.filter(
+        (u: unknown) => typeof u === "string" && u.trim().startsWith("http"),
+      );
       updates.images = urls.length ? JSON.stringify(urls) : null;
     }
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ error: "Nenhum campo válido para atualizar" });
+      return res
+        .status(400)
+        .json({ error: "Nenhum campo válido para atualizar" });
     }
 
     const product = await prisma.product.update({
@@ -972,7 +1166,9 @@ app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
       return res.status(404).json({ error: "Produto não encontrado" });
     }
     console.error("Admin update product:", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar produto") });
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao atualizar produto") });
   }
 });
 
@@ -981,14 +1177,24 @@ app.post("/api/admin/products/reorder", requireAdmin, async (req, res) => {
   try {
     const order = req.body?.order;
     if (!Array.isArray(order) || order.length === 0) {
-      return res.status(400).json({ error: "Envie { order: string[] } com os ids na ordem desejada" });
+      return res
+        .status(400)
+        .json({
+          error: "Envie { order: string[] } com os ids na ordem desejada",
+        });
     }
-    const ids = order.filter((id: unknown) => id != null && String(id).length > 0).map((id: unknown) => String(id));
+    const ids = order
+      .filter((id: unknown) => id != null && String(id).length > 0)
+      .map((id: unknown) => String(id));
     if (ids.length !== order.length) {
-      return res.status(400).json({ error: "Array 'order' contém ids inválidos" });
+      return res
+        .status(400)
+        .json({ error: "Array 'order' contém ids inválidos" });
     }
     await prisma.$transaction(
-      ids.map((id, index) => prisma.product.update({ where: { id }, data: { sortOrder: index } }))
+      ids.map((id, index) =>
+        prisma.product.update({ where: { id }, data: { sortOrder: index } }),
+      ),
     );
     res.json({ ok: true, count: ids.length });
   } catch (err) {
@@ -1011,7 +1217,9 @@ app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
       return res.status(404).json({ error: "Produto não encontrado" });
     }
     console.error("Admin delete product:", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao excluir produto") });
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao excluir produto") });
   }
 });
 
@@ -1024,15 +1232,17 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
     }
 
     function makeSlug(s: string): string {
-      return (s || "produto")
-        .toLowerCase()
-        .trim()
-        .normalize("NFD")
-        .replace(/\p{Diacritic}/gu, "")
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "")
-        .replace(/-+/g, "-")
-        .slice(0, 80) || "produto";
+      return (
+        (s || "produto")
+          .toLowerCase()
+          .trim()
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "")
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "")
+          .replace(/-+/g, "-")
+          .slice(0, 80) || "produto"
+      );
     }
 
     let created = 0;
@@ -1047,11 +1257,18 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
       }
 
       // Skip duplicates
-      const existing = await prisma.product.findUnique({ where: { originalUrl: url } });
-      if (existing) { skipped++; continue; }
+      const existing = await prisma.product.findUnique({
+        where: { originalUrl: url },
+      });
+      if (existing) {
+        skipped++;
+        continue;
+      }
 
       // Generate unique slug
-      const baseSlug = makeSlug(String(item.titlePt || item.title || "produto"));
+      const baseSlug = makeSlug(
+        String(item.titlePt || item.title || "produto"),
+      );
       let slug = baseSlug;
       let attempt = 0;
       while (await prisma.product.findUnique({ where: { slug } })) {
@@ -1063,8 +1280,13 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
         await prisma.product.create({
           data: {
             originalUrl: url,
-            title: String(item.title ?? "").trim().slice(0, 300) || "Produto",
-            titlePt: item.titlePt ? String(item.titlePt).trim().slice(0, 300) : null,
+            title:
+              String(item.title ?? "")
+                .trim()
+                .slice(0, 300) || "Produto",
+            titlePt: item.titlePt
+              ? String(item.titlePt).trim().slice(0, 300)
+              : null,
             image: item.image ? String(item.image).trim() : null,
             priceCny: item.priceCny != null ? Number(item.priceCny) : null,
             priceBrl: item.priceBrl != null ? Number(item.priceBrl) : null,
@@ -1087,43 +1309,54 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
     res.json({ created, skipped, errors });
   } catch (err) {
     console.error("Bulk import:", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao importar produtos") });
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao importar produtos") });
   }
 });
 
 // Admin: atualizar títulos em massa por slug (para sync local→prod)
-app.post("/api/admin/products/bulk-update-titles", requireAdmin, async (req, res) => {
-  try {
-    const { products } = (req.body ?? {}) as {
-      products?: { slug: string; title: string; titlePt?: string | null }[];
-    };
-    if (!Array.isArray(products) || products.length === 0) {
-      return res.status(400).json({ error: "Array 'products' obrigatório" });
-    }
-    let updated = 0;
-    let notFound = 0;
-    const errors: string[] = [];
-    for (const item of products) {
-      if (!item.slug || !item.title) continue;
-      try {
-        const data: { title: string; titlePt?: string | null } = { title: item.title };
-        if (item.titlePt !== undefined) data.titlePt = item.titlePt?.trim() || null;
-        const result = await prisma.product.updateMany({
-          where: { slug: item.slug },
-          data,
-        });
-        if (result.count > 0) updated++;
-        else notFound++;
-      } catch (err) {
-        errors.push(`${item.slug}: ${String(err)}`);
+app.post(
+  "/api/admin/products/bulk-update-titles",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { products } = (req.body ?? {}) as {
+        products?: { slug: string; title: string; titlePt?: string | null }[];
+      };
+      if (!Array.isArray(products) || products.length === 0) {
+        return res.status(400).json({ error: "Array 'products' obrigatório" });
       }
+      let updated = 0;
+      let notFound = 0;
+      const errors: string[] = [];
+      for (const item of products) {
+        if (!item.slug || !item.title) continue;
+        try {
+          const data: { title: string; titlePt?: string | null } = {
+            title: item.title,
+          };
+          if (item.titlePt !== undefined)
+            data.titlePt = item.titlePt?.trim() || null;
+          const result = await prisma.product.updateMany({
+            where: { slug: item.slug },
+            data,
+          });
+          if (result.count > 0) updated++;
+          else notFound++;
+        } catch (err) {
+          errors.push(`${item.slug}: ${String(err)}`);
+        }
+      }
+      res.json({ updated, notFound, errors });
+    } catch (err) {
+      console.error("Bulk update titles:", err);
+      res
+        .status(500)
+        .json({ error: safeErrorMessage(err, "Erro ao atualizar títulos") });
     }
-    res.json({ updated, notFound, errors });
-  } catch (err) {
-    console.error("Bulk update titles:", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar títulos") });
-  }
-});
+  },
+);
 
 // Admin: adicionar produto ao catálogo (protegido)
 app.post("/api/admin/products", requireAdmin, async (req, res) => {
@@ -1134,16 +1367,22 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "URL inválida" });
     }
 
-    const existing = await prisma.product.findUnique({ where: { originalUrl: u } });
+    const existing = await prisma.product.findUnique({
+      where: { originalUrl: u },
+    });
     if (existing) return res.json(existing);
 
     const { getProductPreview } = await import("./scraper/productPreview");
     const preview = await getProductPreview(u);
     if (!preview) {
-      return res.status(400).json({ error: "Não foi possível obter os dados do produto" });
+      return res
+        .status(400)
+        .json({ error: "Não foi possível obter os dados do produto" });
     }
 
-    const title = (preview.titlePt || preview.title || "Produto").trim().slice(0, 300);
+    const title = (preview.titlePt || preview.title || "Produto")
+      .trim()
+      .slice(0, 300);
     const baseSlug = slugify(title);
     let slug = baseSlug;
     let n = 0;
@@ -1159,7 +1398,9 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
       priceBrl = Math.round(costBrl * (1 + margin) * 100) / 100;
     }
 
-    const maxSort = await prisma.product.aggregate({ _max: { sortOrder: true } }).then((r) => r._max.sortOrder ?? -1);
+    const maxSort = await prisma.product
+      .aggregate({ _max: { sortOrder: true } })
+      .then((r) => r._max.sortOrder ?? -1);
     const sortOrder = maxSort + 1;
 
     const product = await prisma.product.create({
@@ -1183,7 +1424,9 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
     res.status(201).json(product);
   } catch (err) {
     console.error("Admin add product:", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao adicionar produto") });
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao adicionar produto") });
   }
 });
 
@@ -1292,16 +1535,33 @@ app.post("/api/orders", optionalUser, async (req, res) => {
     }
 
     // Aviso ao admin: novo pedido
-    const siteUrl = (process.env.SITE_URL || "https://compraschina.com.br").replace(/\/$/, "");
+    const siteUrl = (
+      process.env.SITE_URL || "https://compraschina.com.br"
+    ).replace(/\/$/, "");
     const orderUrl = `${siteUrl}/admin/pedido/${order.id}`;
-    const produto = (order.productTitle || order.productDescription || "Produto").slice(0, 50);
+    const produto = (
+      order.productTitle ||
+      order.productDescription ||
+      "Produto"
+    ).slice(0, 50);
     sendTelegram(
       "Novo pedido\n" +
-      "Pedido " + order.id.slice(-8) + "\n" +
-      "Produto: " + produto + "\n" +
-      "Cliente: " + (order.customerName || order.customerEmail || "—") + "\n" +
-      "Status: " + (status === OrderStatus.AGUARDANDO_PAGAMENTO ? "Aguardando pagamento" : "Aguardando cotação") + "\n\n" +
-      "Gerenciar: " + orderUrl
+        "Pedido " +
+        order.id.slice(-8) +
+        "\n" +
+        "Produto: " +
+        produto +
+        "\n" +
+        "Cliente: " +
+        (order.customerName || order.customerEmail || "—") +
+        "\n" +
+        "Status: " +
+        (status === OrderStatus.AGUARDANDO_PAGAMENTO
+          ? "Aguardando pagamento"
+          : "Aguardando cotação") +
+        "\n\n" +
+        "Gerenciar: " +
+        orderUrl,
     ).catch(() => {});
 
     res.status(201).json({ id: order.id, status });
@@ -1315,17 +1575,36 @@ app.post("/api/orders", optionalUser, async (req, res) => {
 app.get("/api/recent-purchases", async (_req, res) => {
   try {
     const orders = await prisma.order.findMany({
-      where: { status: { in: [OrderStatus.PAGO, OrderStatus.EM_ENVIO, OrderStatus.CONCLUIDO, OrderStatus.ENVIADO_PARA_CSSBUY, OrderStatus.COMPRADO, OrderStatus.NO_ESTOQUE, OrderStatus.AGUARDANDO_ENVIO] } },
+      where: {
+        status: {
+          in: [
+            OrderStatus.PAGO,
+            OrderStatus.EM_ENVIO,
+            OrderStatus.CONCLUIDO,
+            OrderStatus.ENVIADO_PARA_CSSBUY,
+            OrderStatus.COMPRADO,
+            OrderStatus.NO_ESTOQUE,
+            OrderStatus.AGUARDANDO_ENVIO,
+          ],
+        },
+      },
       orderBy: { updatedAt: "desc" },
       take: 24,
-      select: { originalUrl: true, productTitle: true, productImage: true, productDescription: true },
+      select: {
+        originalUrl: true,
+        productTitle: true,
+        productImage: true,
+        productDescription: true,
+      },
     });
     const urls = orders.map((o) => o.originalUrl);
     const productsInCatalog = await prisma.product.findMany({
       where: { originalUrl: { in: urls } },
       select: { originalUrl: true, slug: true },
     });
-    const slugByUrl = new Map(productsInCatalog.map((p) => [p.originalUrl, p.slug]));
+    const slugByUrl = new Map(
+      productsInCatalog.map((p) => [p.originalUrl, p.slug]),
+    );
     const items = orders.map((o) => ({
       url: o.originalUrl,
       title: o.productTitle || o.productDescription || "Produto",
@@ -1361,7 +1640,12 @@ app.get("/api/orders/:id", async (req, res) => {
 // Cache simples para preview de produto (URL -> { data, expires }). Tamanho limitado para evitar OOM.
 const productPreviewCache = new Map<
   string,
-  { data: Awaited<ReturnType<typeof import("./scraper/productPreview").getProductPreview>>; expires: number }
+  {
+    data: Awaited<
+      ReturnType<typeof import("./scraper/productPreview").getProductPreview>
+    >;
+    expires: number;
+  }
 >();
 const PRODUCT_PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min (permite re-scrape após ajustes)
 const PRODUCT_PREVIEW_CACHE_MAX_SIZE = 80; // evita crescimento ilimitado em memória
@@ -1387,21 +1671,30 @@ function normalizeProductPreviewUrlKey(url: string): string {
     const host = u.hostname.toLowerCase();
     // Weidian: canonical = https://weidian.com/item.html?itemID=XXX
     if (host.includes("weidian")) {
-      const itemID = u.searchParams.get("itemID") || u.searchParams.get("itemid");
+      const itemID =
+        u.searchParams.get("itemID") || u.searchParams.get("itemid");
       if (itemID) return `https://weidian.com/item.html?itemID=${itemID}`;
     }
     // Taobao/Tmall: id no path ou query
     if (host.includes("taobao") || host.includes("tmall")) {
-      const id = u.searchParams.get("id") || u.searchParams.get("item_id") || u.pathname.match(/\/item\/(\d+)/)?.[1];
+      const id =
+        u.searchParams.get("id") ||
+        u.searchParams.get("item_id") ||
+        u.pathname.match(/\/item\/(\d+)/)?.[1];
       if (id) return `https://${host}/item.htm?id=${id}`;
     }
     // 1688: offerId ou id
     if (host.includes("1688")) {
-      const id = u.searchParams.get("offerId") || u.searchParams.get("id") || u.pathname.match(/\/offer\/(\d+)/)?.[1];
+      const id =
+        u.searchParams.get("offerId") ||
+        u.searchParams.get("id") ||
+        u.pathname.match(/\/offer\/(\d+)/)?.[1];
       if (id) return `https://${host}/offer/${id}.html`;
     }
     // Default: origin + pathname + sorted query (estável para mesmo produto)
-    const params = Array.from(u.searchParams.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const params = Array.from(u.searchParams.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
     const qs = new URLSearchParams(params).toString();
     return `${u.origin}${u.pathname}${qs ? `?${qs}` : ""}`;
   } catch {
@@ -1426,7 +1719,9 @@ app.get("/api/product/preview", async (req, res) => {
 
     // 1) Snapshot salvo pelo admin: sempre serve esse para todos (a menos que nocache=1 para forçar re-scrape)
     if (!nocache) {
-      const snapshot = await prisma.productPreviewSnapshot.findUnique({ where: { urlKey } });
+      const snapshot = await prisma.productPreviewSnapshot.findUnique({
+        where: { urlKey },
+      });
       if (snapshot?.data) {
         const data = snapshot.data as object;
         return res.json(data);
@@ -1445,7 +1740,10 @@ app.get("/api/product/preview", async (req, res) => {
         const oldestKey = productPreviewCache.keys().next().value;
         if (oldestKey != null) productPreviewCache.delete(oldestKey);
       }
-      productPreviewCache.set(url, { data, expires: Date.now() + PRODUCT_PREVIEW_CACHE_TTL_MS });
+      productPreviewCache.set(url, {
+        data,
+        expires: Date.now() + PRODUCT_PREVIEW_CACHE_TTL_MS,
+      });
       return res.json(data);
     }
     // Scrape falhou: retorna 200 com dados vazios para a página não quebrar
@@ -1460,12 +1758,21 @@ app.get("/api/product/preview", async (req, res) => {
 app.post("/api/admin/product-preview/save", requireAdmin, async (req, res) => {
   try {
     const { url: rawUrl, data } = req.body as { url?: string; data?: unknown };
-    const url = (rawUrl && typeof rawUrl === "string") ? rawUrl.trim() : "";
+    const url = rawUrl && typeof rawUrl === "string" ? rawUrl.trim() : "";
     if (!url || !url.startsWith("http")) {
-      return res.status(400).json({ error: "Body deve conter 'url' (URL do produto) e 'data' (objeto do preview)." });
+      return res
+        .status(400)
+        .json({
+          error:
+            "Body deve conter 'url' (URL do produto) e 'data' (objeto do preview).",
+        });
     }
     if (!data || typeof data !== "object") {
-      return res.status(400).json({ error: "Body deve conter 'data' (objeto do preview do produto)." });
+      return res
+        .status(400)
+        .json({
+          error: "Body deve conter 'data' (objeto do preview do produto).",
+        });
     }
     const urlKey = normalizeProductPreviewUrlKey(url);
     await prisma.productPreviewSnapshot.upsert({
@@ -1486,9 +1793,9 @@ app.post("/api/admin/product-preview/save", requireAdmin, async (req, res) => {
 
 // Taxa de câmbio base (custo para nós) — em produção usar API de câmbio
 const RATE_CNY_TO_BRL = 0.78;
-const MARGEM_THRESHOLD_BRL = 60;   // abaixo disso: margem maior (itens baratos)
-const MARGEM_BAIXA_PERCENT = 50;   // produto < R$ 60: +50%
-const MARGEM_ALTA_PERCENT = 35;    // produto >= R$ 60: +35%
+const MARGEM_THRESHOLD_BRL = 60; // abaixo disso: margem maior (itens baratos)
+const MARGEM_BAIXA_PERCENT = 50; // produto < R$ 60: +50%
+const MARGEM_ALTA_PERCENT = 35; // produto >= R$ 60: +35%
 
 // Preview de preço: custo em yuan → conversão → margem ComprasChina → preço final em reais
 // Query opcional: priceCny — quando informado (ex.: preço da variante no CSSBuy), usa esse valor em vez do cache
@@ -1498,13 +1805,17 @@ app.get("/api/price/preview", async (req, res) => {
     if (!url) {
       return res.status(400).json({ error: "Parâmetro 'url' é obrigatório." });
     }
-    const paramPrice = req.query.priceCny != null ? parseFloat(String(req.query.priceCny)) : null;
+    const paramPrice =
+      req.query.priceCny != null
+        ? parseFloat(String(req.query.priceCny))
+        : null;
     const productPriceCny =
       paramPrice != null && Number.isFinite(paramPrice) && paramPrice > 0
         ? paramPrice
         : (() => {
             const cached = productPreviewCache.get(url);
-            return cached?.data?.priceCny != null && typeof cached.data.priceCny === "number"
+            return cached?.data?.priceCny != null &&
+              typeof cached.data.priceCny === "number"
               ? cached.data.priceCny
               : null;
           })();
@@ -1521,7 +1832,10 @@ app.get("/api/price/preview", async (req, res) => {
     }
 
     const costBrl = productPriceCny * RATE_CNY_TO_BRL;
-    const marginPercent = costBrl < MARGEM_THRESHOLD_BRL ? MARGEM_BAIXA_PERCENT : MARGEM_ALTA_PERCENT;
+    const marginPercent =
+      costBrl < MARGEM_THRESHOLD_BRL
+        ? MARGEM_BAIXA_PERCENT
+        : MARGEM_ALTA_PERCENT;
     const totalProductBrl = costBrl * (1 + marginPercent / 100);
 
     return res.json({
@@ -1542,7 +1856,14 @@ app.get("/api/price/preview", async (req, res) => {
 app.patch("/api/orders/:id/status", async (req, res) => {
   try {
     const { status } = req.body ?? {};
-    const valid = ["AGUARDANDO_COTACAO", "AGUARDANDO_PAGAMENTO", "PAGO", "EM_ENVIO", "CONCLUIDO", "CANCELADO"];
+    const valid = [
+      "AGUARDANDO_COTACAO",
+      "AGUARDANDO_PAGAMENTO",
+      "PAGO",
+      "EM_ENVIO",
+      "CONCLUIDO",
+      "CANCELADO",
+    ];
     if (!valid.includes(status)) {
       return res.status(400).json({ error: "Status inválido." });
     }
@@ -1560,8 +1881,13 @@ app.patch("/api/orders/:id/status", async (req, res) => {
 // Criar/atualizar cotação (fluxo interno/admin - sem auth por enquanto)
 app.post("/api/orders/:id/quote", async (req, res) => {
   try {
-    const { productsCny, freightCny, serviceFeeBrl, taxesEstimatedBrl, currencyRateCnyToBrl } =
-      req.body ?? {};
+    const {
+      productsCny,
+      freightCny,
+      serviceFeeBrl,
+      taxesEstimatedBrl,
+      currencyRateCnyToBrl,
+    } = req.body ?? {};
 
     if (
       productsCny === undefined ||
@@ -1630,7 +1956,11 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
   try {
     const accessToken = process.env.MP_ACCESS_TOKEN;
     if (!accessToken) {
-      return res.status(500).json({ error: "Mercado Pago não configurado. Defina MP_ACCESS_TOKEN no .env" });
+      return res
+        .status(500)
+        .json({
+          error: "Mercado Pago não configurado. Defina MP_ACCESS_TOKEN no .env",
+        });
     }
 
     const order = await prisma.order.findUnique({
@@ -1644,12 +1974,19 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
 
     if (order.status !== "AGUARDANDO_PAGAMENTO") {
       return res.status(400).json({
-        error: order.status === "PAGO" ? "Este pedido já foi pago." : "Aguardando cotação. O valor será enviado em breve.",
+        error:
+          order.status === "PAGO"
+            ? "Este pedido já foi pago."
+            : "Aguardando cotação. O valor será enviado em breve.",
       });
     }
 
     if (!order.quote) {
-      return res.status(400).json({ error: "Cotação ainda não disponível. Aguarde nosso contato." });
+      return res
+        .status(400)
+        .json({
+          error: "Cotação ainda não disponível. Aguarde nosso contato.",
+        });
     }
 
     if (order.payment?.status === "PAGO") {
@@ -1674,12 +2011,19 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
 
     const payerEmail = payer_email || order.customerEmail;
     if (!payerEmail) {
-      return res.status(400).json({ error: "E-mail do pagador é obrigatório." });
+      return res
+        .status(400)
+        .json({ error: "E-mail do pagador é obrigatório." });
     }
 
     const isPix = payment_method_id?.toLowerCase() === "pix";
     if (!isPix && !token) {
-      return res.status(400).json({ error: "Token do cartão é obrigatório. Use o formulário de pagamento." });
+      return res
+        .status(400)
+        .json({
+          error:
+            "Token do cartão é obrigatório. Use o formulário de pagamento.",
+        });
     }
 
     const { createPayment } = await import("./mercadopago");
@@ -1699,7 +2043,12 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
       identificationNumber: identification_number,
     });
 
-    const paymentStatus = result.status === "approved" ? "PAGO" : result.status === "pending" ? "PENDENTE" : "FALHOU";
+    const paymentStatus =
+      result.status === "approved"
+        ? "PAGO"
+        : result.status === "pending"
+          ? "PENDENTE"
+          : "FALHOU";
 
     await prisma.payment.upsert({
       where: { orderId: order.id },
@@ -1732,22 +2081,47 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
       } catch (err) {
         console.warn("Erro ao adicionar produto ao catálogo:", err);
       }
-      const orderUrl = (process.env.SITE_URL || "https://compraschina.com.br").replace(/\/$/, "") + "/admin/pedido/" + order.id;
+      const orderUrl =
+        (process.env.SITE_URL || "https://compraschina.com.br").replace(
+          /\/$/,
+          "",
+        ) +
+        "/admin/pedido/" +
+        order.id;
       sendTelegram(
         "✅ Pedido confirmado\n" +
-        "Pedido " + order.id.slice(-8) + "\n" +
-        "📦 " + (order.productTitle || order.productDescription).slice(0, 60) + "\n" +
-        "💰 R$ " + totalBrl.toFixed(2) + "\n" +
-        "👤 " + (order.customerName || order.customerEmail || "—") + "\n\n" +
-        "🔗 Gerenciar: " + orderUrl
+          "Pedido " +
+          order.id.slice(-8) +
+          "\n" +
+          "📦 " +
+          (order.productTitle || order.productDescription).slice(0, 60) +
+          "\n" +
+          "💰 R$ " +
+          totalBrl.toFixed(2) +
+          "\n" +
+          "👤 " +
+          (order.customerName || order.customerEmail || "—") +
+          "\n\n" +
+          "🔗 Gerenciar: " +
+          orderUrl,
       ).catch(() => {});
     }
 
-    const poi = result.point_of_interaction as { transaction_data?: { qr_code?: string; qr_code_base64?: string; ticket_url?: string } } | undefined;
+    const poi = result.point_of_interaction as
+      | {
+          transaction_data?: {
+            qr_code?: string;
+            qr_code_base64?: string;
+            ticket_url?: string;
+          };
+        }
+      | undefined;
     res.json({
       paymentId: result.id,
       status: result.status,
-      point_of_interaction: poi?.transaction_data ? { transaction_data: poi.transaction_data } : result.point_of_interaction,
+      point_of_interaction: poi?.transaction_data
+        ? { transaction_data: poi.transaction_data }
+        : result.point_of_interaction,
       orderStatus: result.status === "approved" ? "PAGO" : order.status,
     });
   } catch (err) {
@@ -1785,9 +2159,12 @@ app.post("/api/webhooks/mercadopago", async (req, res) => {
 async function processWebhookPayment(paymentId: string) {
   const accessToken = process.env.MP_ACCESS_TOKEN;
   if (!accessToken) return;
-  const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const res = await fetch(
+    `https://api.mercadopago.com/v1/payments/${paymentId}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
   const payment = await res.json().catch(() => null);
   if (!payment || payment.status !== "approved") return;
   const dbPayment = await prisma.payment.findFirst({
@@ -1810,22 +2187,41 @@ async function processWebhookPayment(paymentId: string) {
     console.warn("Erro ao adicionar produto ao catálogo:", err);
   }
   const totalBrl = Number(dbPayment.amountBrl);
-  const orderUrl = (process.env.SITE_URL || "https://compraschina.com.br").replace(/\/$/, "") + "/admin/pedido/" + dbPayment.order.id;
+  const orderUrl =
+    (process.env.SITE_URL || "https://compraschina.com.br").replace(/\/$/, "") +
+    "/admin/pedido/" +
+    dbPayment.order.id;
   sendTelegram(
     "✅ Pedido confirmado\n" +
-    "Pedido " + dbPayment.order.id.slice(-8) + "\n" +
-    "📦 " + (dbPayment.order.productTitle || dbPayment.order.productDescription).slice(0, 60) + "\n" +
-    "💰 R$ " + totalBrl.toFixed(2) + "\n" +
-    "👤 " + (dbPayment.order.customerName || dbPayment.order.customerEmail || "—") + "\n\n" +
-    "🔗 Gerenciar: " + orderUrl
+      "Pedido " +
+      dbPayment.order.id.slice(-8) +
+      "\n" +
+      "📦 " +
+      (
+        dbPayment.order.productTitle || dbPayment.order.productDescription
+      ).slice(0, 60) +
+      "\n" +
+      "💰 R$ " +
+      totalBrl.toFixed(2) +
+      "\n" +
+      "👤 " +
+      (dbPayment.order.customerName || dbPayment.order.customerEmail || "—") +
+      "\n\n" +
+      "🔗 Gerenciar: " +
+      orderUrl,
   ).catch(() => {});
 }
 
 console.log("[startup] binding to port", PORT);
-app.listen(Number(PORT), "0.0.0.0", () => {
-  console.log(isProduction ? `Backend rodando na porta ${PORT}` : `Backend rodando em http://localhost:${PORT}`);
-}).on("error", (err) => {
-  console.error("[FATAL] app.listen error:", err);
-  process.exit(1);
-});
-
+app
+  .listen(Number(PORT), "0.0.0.0", () => {
+    console.log(
+      isProduction
+        ? `Backend rodando na porta ${PORT}`
+        : `Backend rodando em http://localhost:${PORT}`,
+    );
+  })
+  .on("error", (err) => {
+    console.error("[FATAL] app.listen error:", err);
+    process.exit(1);
+  });

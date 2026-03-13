@@ -9,6 +9,7 @@ import { CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FEATURED_PRODUCTS } from "@/data/featuredProducts";
+import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
 
 type OrderWithDetails = {
   id: string;
@@ -472,14 +473,14 @@ const Admin = () => {
     "marcas-chinesas": { category: "marcas-chinesas", featured: false },
   };
 
-  // Which static products are NOT yet in the DB (compared by URL without query string)
+  // Produtos do Explorar que ainda não estão no catálogo (comparação por URL sem query)
   const dbUrls = useMemo(
     () => new Set(catalogProducts.map((p) => p.originalUrl.replace(/\?.*$/, ""))),
     [catalogProducts]
   );
 
   const unimportedStatic = useMemo(
-    () => FEATURED_PRODUCTS.filter((fp) => !dbUrls.has(fp.url.replace(/\?.*$/, ""))),
+    () => EXPLORAR_PRODUCTS.filter((p) => !dbUrls.has((p.url || "").replace(/\?.*$/, ""))),
     [dbUrls]
   );
 
@@ -488,18 +489,18 @@ const Admin = () => {
     setSyncLoading(true);
     setSyncResult(null);
     try {
-      const payload = unimportedStatic.map((fp) => {
-        const mapped = FEATURED_CAT_MAP[fp.category] ?? { category: "outros", featured: false };
+      const payload = unimportedStatic.map((p) => {
+        const cat = p.category && !["destaques", "mais-vendidos", "tendencias"].includes(p.category) ? p.category : "outros";
         return {
-          url: fp.url,
-          title: fp.title,
-          titlePt: fp.title,
-          image: fp.image ?? null,
-          priceCny: fp.priceCny ?? null,
-          priceBrl: fp.priceBrl ?? null,
-          source: fp.source,
-          category: mapped.category,
-          featured: mapped.featured,
+          url: p.url || "",
+          title: p.title || "",
+          titlePt: p.titlePt ?? p.title ?? "",
+          image: p.image ?? null,
+          priceCny: p.priceCny ?? null,
+          priceBrl: p.priceBrl ?? null,
+          source: p.source || "1688",
+          category: cat,
+          featured: false,
         };
       });
       const res = await fetch(apiUrl("/api/admin/products/bulk-import"), {
@@ -870,24 +871,24 @@ const Admin = () => {
                 <div>
                   <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                     <RefreshCw className="w-5 h-5 text-china-red" />
-                    Sincronizar produtos estáticos
+                    Importar produtos do Explorar
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Importa os produtos definidos no código (<code className="bg-muted px-1 rounded">featuredProducts.ts</code>) para o banco de dados, permitindo editá-los e reordená-los pelo admin.
+                    Importa para o catálogo todos os produtos que aparecem na página Explorar e ainda não estão no banco. Depois você pode ordená-los na lista abaixo.
                   </p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-2xl font-bold text-foreground">{unimportedStatic.length}</p>
-                  <p className="text-xs text-muted-foreground">não importados</p>
+                  <p className="text-xs text-muted-foreground">do Explorar não importados</p>
                 </div>
               </div>
               {unimportedStatic.length > 0 ? (
                 <div className="mt-4">
                   <div className="mb-3 max-h-40 overflow-y-auto rounded-lg border border-border bg-muted/30 p-3 space-y-1">
-                    {unimportedStatic.map((fp) => (
-                      <p key={fp.id} className="text-xs text-muted-foreground truncate">
-                        <span className="text-foreground font-medium">{fp.title}</span>
-                        {" · "}{fp.source}
+                    {unimportedStatic.map((p) => (
+                      <p key={p.url} className="text-xs text-muted-foreground truncate">
+                        <span className="text-foreground font-medium">{p.titlePt || p.title}</span>
+                        {" · "}{p.source}
                       </p>
                     ))}
                   </div>
@@ -907,7 +908,7 @@ const Admin = () => {
                 </div>
               ) : (
                 <p className="mt-3 text-sm text-green-700 dark:text-green-400 font-medium">
-                  ✓ Todos os produtos estáticos já estão no banco de dados.
+                  ✓ Todos os produtos do Explorar já estão no catálogo.
                 </p>
               )}
             </div>
@@ -935,7 +936,9 @@ const Admin = () => {
               {catalogLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando...</p>
               ) : catalogProducts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum produto ainda. Adicione um acima.</p>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>Nenhum produto ainda. Adicione um acima ou use <strong>&quot;Importar X produtos&quot;</strong> para trazer os itens da lista &quot;não importados&quot; para o catálogo — depois você poderá ordená-los aqui.</p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {catalogProducts.map((p, index) => (
