@@ -473,14 +473,14 @@ const Admin = () => {
     "marcas-chinesas": { category: "marcas-chinesas", featured: false },
   };
 
-  // Produtos do Explorar que ainda não estão no catálogo (comparação por URL sem query)
+  // Produtos do Explorar que ainda não estão no catálogo (comparação por URL completa — não remover query, pois itemID etc. identificam o produto)
   const dbUrls = useMemo(
-    () => new Set(catalogProducts.map((p) => p.originalUrl.replace(/\?.*$/, ""))),
+    () => new Set(catalogProducts.map((p) => (p.originalUrl || "").trim())),
     [catalogProducts]
   );
 
   const unimportedStatic = useMemo(
-    () => EXPLORAR_PRODUCTS.filter((p) => !dbUrls.has((p.url || "").replace(/\?.*$/, ""))),
+    () => EXPLORAR_PRODUCTS.filter((p) => !dbUrls.has((p.url || "").trim())),
     [dbUrls]
   );
 
