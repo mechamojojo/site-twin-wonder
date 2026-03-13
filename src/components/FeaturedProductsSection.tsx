@@ -97,6 +97,7 @@ export default function FeaturedProductsSection() {
 
   const allProducts = useMemo(() => {
     const apiWithTitles = apiProducts.map((p) => {
+      if (p.titlePt ?? p.title) return p;
       const key = productUrlToCanonicalKey(p.originalUrl || p.url);
       const curated = key ? CURATED_TITLE_BY_CANONICAL_KEY.get(key) : undefined;
       if (curated)
