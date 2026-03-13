@@ -913,9 +913,20 @@ const Admin = () => {
             </div>
 
             <div className="rounded-xl border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold text-foreground mb-4">Produtos no catálogo (home e Explorar)</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 className="text-lg font-semibold text-foreground">Ordem dos produtos (Home e Explorar)</h2>
+                <a
+                  href="/explorar"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-china-red font-medium hover:underline inline-flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Ver como no Explorar
+                </a>
+              </div>
               <p className="text-xs text-muted-foreground mb-2">
-                Arraste o ícone ≡ para reordenar ou use Subir/Descer. A ordem define a exibição em &quot;Todos&quot; e nas categorias.
+                Esta lista define a ordem em que os produtos aparecem na <strong>seção Explorar da home</strong> e na <strong>página Explorar</strong> (quando o visitante escolhe &quot;Ordem do catálogo&quot;). Arraste o ícone ≡ para reordenar ou use Subir/Descer; o número é a posição (1 = primeiro).
               </p>
               <p className="text-xs text-muted-foreground mb-4">
                 Para levar alterações para o código: <code className="bg-muted px-1 rounded">cd backend &amp;&amp; npm run export-explorar-to-code</code>
@@ -967,6 +978,7 @@ const Admin = () => {
                         <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => moveProduct(index, "down")} disabled={index === catalogProducts.length - 1} title="Descer">
                           <ChevronDown className="w-4 h-4" />
                         </Button>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">Pos.</span>
                         <input
                           type="number"
                           min={1}
@@ -981,7 +993,7 @@ const Admin = () => {
                           }}
                           onBlur={() => commitPosition(p.id)}
                           className="w-14 h-8 rounded-md border border-border bg-background text-xs text-center outline-none focus:ring-1 focus:ring-china-red/40"
-                          title="Posição (1 = topo)"
+                          title="Posição (1 = primeiro na Home e no Explorar)"
                         />
                         <Button size="sm" variant="outline" className="gap-1" onClick={() => openEditModal(p)}>
                           <Pencil className="w-3.5 h-3.5" />
