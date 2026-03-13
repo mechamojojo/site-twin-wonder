@@ -75,12 +75,12 @@ export default function FeaturedProductsSection() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    fetch(apiUrl("/api/products?limit=300"))
+    fetch(apiUrl("/api/products?limit=500"))
       .then((r) => r.json())
       .then((data) => {
         const list = data.products ?? [];
         const fromApi = Array.isArray(list) ? list : [];
-        setApiProducts(fromApi);
+        setApiProducts(fromApi); // ordem = exatamente a do admin (sortOrder 0,1,2...), não reordenar
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -107,7 +107,7 @@ export default function FeaturedProductsSection() {
       return p;
     });
     if (apiWithTitles.length === 0) return EXPLORAR_PRODUCTS;
-    // API order = admin sortOrder (1 to 126); then append explorar items not in catalog
+    // Manter ordem do catálogo (admin 1–N = sortOrder 0..N-1); depois itens do explorar que não estão no catálogo
     const apiKeys = new Set(apiWithTitles.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url)));
     const extra = EXPLORAR_PRODUCTS.filter(
       (p) => !apiKeys.has(productUrlToCanonicalKey(p.url)),

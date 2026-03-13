@@ -112,11 +112,11 @@ const Explorar = () => {
   useEffect(() => setSearchInput(q), [q]);
 
   useEffect(() => {
-    fetch(apiUrl("/api/products?limit=300"))
+    fetch(apiUrl("/api/products?limit=500"))
       .then((r) => r.json())
       .then((data) => {
         const list = data.products ?? [];
-        setApiProducts(Array.isArray(list) ? list : []);
+        setApiProducts(Array.isArray(list) ? list : []); // ordem = exatamente a do admin (sortOrder 0,1,2...)
       })
       .catch(() => setApiProducts([]))
       .finally(() => setLoading(false));
@@ -143,6 +143,7 @@ const Explorar = () => {
       return p;
     });
     if (apiWithTitles.length === 0) return EXPLORAR_PRODUCTS;
+    // Ordem do catálogo (admin 1–N) preservada; depois itens do explorar fora do catálogo
     const apiKeys = new Set(apiWithTitles.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url)));
     const extra = EXPLORAR_PRODUCTS.filter(
       (p) => !apiKeys.has(productUrlToCanonicalKey(p.url)),
@@ -298,7 +299,7 @@ const Explorar = () => {
                 onChange={(e) => { setSort(e.target.value as SortOption); handlePage(1); }}
                 className="text-xs border border-border rounded-full px-3 py-1.5 bg-background text-foreground outline-none focus:border-foreground/30"
               >
-                <option value="default">Relevância</option>
+                <option value="default">Ordem do catálogo</option>
                 <option value="price-asc">Menor preço</option>
                 <option value="price-desc">Maior preço</option>
               </select>

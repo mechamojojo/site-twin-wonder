@@ -585,9 +585,9 @@ app.get("/api/auth/me/saved-products/check/:slug", requireUser, async (req, res)
   }
 });
 
-// Admin login
+// Admin login (senha = ADMIN_SECRET do .env)
 app.post("/api/admin/login", (req, res) => {
-  const password = req.body?.password;
+  const password = (req.body?.password != null ? String(req.body.password) : "").trim();
   if (!ADMIN_SECRET) {
     return res.status(503).json({ error: "Admin não configurado." });
   }
@@ -746,7 +746,7 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// Catálogo de produtos — busca e listagem
+// Catálogo de produtos — busca e listagem (ordem = mesma do admin, sortOrder)
 app.get("/api/products", async (req, res) => {
   try {
     const q = (req.query.q as string)?.trim().toLowerCase();
@@ -770,7 +770,7 @@ app.get("/api/products", async (req, res) => {
     const [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], // mesma ordem definida no admin (reordenar)
         take: limit,
         skip: offset,
       }),
