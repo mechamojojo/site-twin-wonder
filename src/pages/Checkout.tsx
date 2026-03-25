@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { apiUrl } from "@/lib/api";
+import { ensureHttpsImage } from "@/lib/utils";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { useAuth } from "@/context/AuthContext";
 import { getAuthToken } from "@/context/AuthContext";
@@ -317,18 +318,36 @@ const Checkout = () => {
           <p className="text-xs font-semibold text-muted-foreground mb-2">
             {items.length} {items.length === 1 ? "item" : "itens"} no pedido
           </p>
-          <ul className="text-sm text-foreground space-y-1">
+          <ul className="text-sm text-foreground space-y-3">
             {items.map((i) => (
-              <li key={i.id}>
-                {i.titlePt || i.title || "Produto"}
-                {(i.color || i.size || i.variation) && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    —{" "}
-                    {[i.color, i.size, i.variation].filter(Boolean).join(", ")}
+              <li key={i.id} className="flex gap-3 items-start">
+                <div className="shrink-0 w-14 h-14 rounded-lg border border-border bg-muted overflow-hidden">
+                  {i.image ? (
+                    <img
+                      src={ensureHttpsImage(i.image)}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px]">
+                      —
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <span className="font-medium">
+                    {i.titlePt || i.title || "Produto"}
                   </span>
-                )}{" "}
-                × {i.quantity}
+                  {(i.color || i.size || i.variation) && (
+                    <span className="text-muted-foreground block text-xs mt-0.5">
+                      {[i.color, i.size, i.variation].filter(Boolean).join(", ")}
+                    </span>
+                  )}
+                  <span className="text-muted-foreground text-xs mt-1 block">
+                    × {i.quantity}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

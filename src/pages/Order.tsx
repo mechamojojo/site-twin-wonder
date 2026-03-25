@@ -3,7 +3,7 @@ import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
 import { isValidProductUrl } from "@/lib/urlValidation";
 import { ExternalLink, ShoppingCart, ArrowLeft, RefreshCw, AlertCircle, Search, Save } from "lucide-react";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
@@ -37,6 +37,46 @@ const isSizeGroup = (name: string, values?: string[]) => {
 /** Grupo de nível de qualidade (não deve ser usado como galeria de imagens). */
 const isQualityGradeGroup = (name: string) =>
   /^Quality grade$/i.test(name) || /品质等级|quality\s*level|quality\s*grade|nível\s*de\s*qualidade/i.test(name.trim());
+
+type ProductPreviewForImage = {
+  images: string[];
+  optionGroups: {
+    name: string;
+    values: string[];
+    images: string[];
+    displayAsImages?: boolean;
+  }[];
+};
+
+/**
+ * Mesma regra da imagem principal na galeria: thumb do grupo de opções com imagens
+ * (exceto tamanho / quality grade); senão a imagem pelo índice da galeria; senão fallback.
+ */
+function resolveHeroImageForCartLine(
+  productPreview: ProductPreviewForImage,
+  selectedOptionByGroup: Record<string, string>,
+  selectedImageIndex: number,
+): string | null {
+  const imageGroup = productPreview.optionGroups?.find(
+    (g) =>
+      !isSizeGroup(g.name, g.values) &&
+      !isQualityGradeGroup(g.name) &&
+      (g.displayAsImages === true || (g.displayAsImages !== false && g.images?.some(Boolean))),
+  );
+  const selectedVal = imageGroup ? selectedOptionByGroup[imageGroup.name] : undefined;
+  const imgIdx = selectedVal && imageGroup ? imageGroup.values.indexOf(selectedVal) : -1;
+  const optionImg = imageGroup && imgIdx >= 0 ? imageGroup.images?.[imgIdx] : null;
+  if (optionImg && String(optionImg).trim() !== "") return String(optionImg).trim();
+  if (productPreview.images.length > 0) {
+    const i = Math.min(selectedImageIndex, productPreview.images.length - 1);
+    const main = productPreview.images[i];
+    if (main && String(main).trim() !== "") return String(main).trim();
+  }
+  const fromGroup = imageGroup?.images?.find((u) => u && String(u).trim() !== "");
+  if (fromGroup) return String(fromGroup).trim();
+  const first = productPreview.images?.[0];
+  return first && String(first).trim() !== "" ? String(first).trim() : null;
+}
 
 const getSourceLabel = (url: string) => {
   try {
@@ -232,6 +272,17 @@ const Order = () => {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [url, effectivePriceCny, productPreview?.priceCny, productPreviewLoading]);
+
+  /** Imagem do item no carrinho/checkout: igual à galeria (opção com miniatura ou índice clicado). */
+  const cartLineImage = useMemo(() => {
+    if (!productPreview) return undefined;
+    const raw = resolveHeroImageForCartLine(
+      { images: productPreview.images, optionGroups: productPreview.optionGroups },
+      selectedOptionByGroup,
+      selectedImageIndex,
+    );
+    return raw ? ensureHttpsImage(raw) : undefined;
+  }, [productPreview, selectedOptionByGroup, selectedImageIndex]);
 
   const saveSnapshotForAll = useCallback(async () => {
     if (!url || !productPreview) return;
@@ -892,13 +943,6 @@ const Order = () => {
                       .join(", ");
                     const colorGroup = productPreview?.optionGroups?.find((g) => /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo)$/i.test(g.name));
                     const selectedColorValue = selectedColor || (colorGroup ? selectedOptionByGroup[colorGroup.name] : undefined);
-                    const colorImgIdx = selectedColorValue && colorGroup ? colorGroup.values.indexOf(selectedColorValue) : -1;
-                    const selectedVariantImage =
-                      (colorGroup && colorImgIdx >= 0 && colorGroup.images?.[colorImgIdx])
-                        ? colorGroup.images[colorImgIdx]
-                        : productPreview?.images?.[Math.min(selectedImageIndex, (productPreview?.images?.length ?? 1) - 1)]
-                          ?? colorGroup?.images?.[0]
-                          ?? productPreview?.images?.[0];
                     const otherOptions = Object.entries(selectedOptionByGroup)
                       .filter(([, v]) => v)
                       .map(([k, v]) => `${k}: ${v}`)
@@ -942,7 +986,7 @@ const Order = () => {
                         titlePt: productPreview?.titlePt ?? undefined,
                         priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                         priceBrl: preview?.totalProductBrl ?? undefined,
-                        image: selectedVariantImage ?? productPreview?.images?.[0] ?? undefined,
+                        image: cartLineImage,
                         category: productCategory,
                         keepBox,
                       });
@@ -993,7 +1037,7 @@ const Order = () => {
                               titlePt: productPreview?.titlePt ?? undefined,
                               priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                               priceBrl: preview?.totalProductBrl ?? undefined,
-                              image: selectedVariantImage ?? productPreview?.images?.[0] ?? undefined,
+                              image: cartLineImage,
                               category: productCategory,
                               keepBox,
                             });
