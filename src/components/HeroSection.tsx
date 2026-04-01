@@ -1,7 +1,7 @@
 import { Search, CreditCard, PackageCheck, Headphones, ArrowRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import heroBg from "@/assets/hero-bg.jpg";
+import heroBg from "@/assets/hero-bg.png";
 import { looksLikeUrl } from "@/lib/urlValidation";
 
 const trustBadges = [
@@ -49,7 +49,7 @@ const HeroSection = () => {
     >
       <img
         src={heroBg}
-        alt="Produtos importados da China"
+        alt="Horizonte urbano moderno na China"
         className="absolute inset-0 w-full h-full object-cover scale-105"
       />
       {/* Overlay duplo: base escuro + gradiente direcional */}
