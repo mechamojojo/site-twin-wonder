@@ -44,6 +44,8 @@ type AuthContextValue = {
   fetchMe: () => Promise<void>;
   resendVerification: () => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
+  /** Após confirmar e-mail pelo link (token único) — persiste e atualiza o estado. */
+  setSessionFromVerification: (token: string, user: AuthUser) => void;
 };
 
 export type RegisterData = {
@@ -209,6 +211,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const setSessionFromVerification = useCallback((newToken: string, newUser: AuthUser) => {
+    saveStored(newToken, newUser);
+    setToken(newToken);
+    setUser(newUser);
+  }, []);
+
   const value: AuthContextValue = {
     user,
     token,
@@ -219,6 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchMe,
     resendVerification,
     updateProfile,
+    setSessionFromVerification,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

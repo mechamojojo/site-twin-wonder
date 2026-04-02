@@ -16,13 +16,13 @@ const PLACEHOLDER_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 
 type ProductLike = { id: string; url?: string; originalUrl?: string; title: string; titlePt?: string | null; image?: string | null; priceCny?: number | null; priceBrl?: number | null; source: string; slug?: string; category: string; brand?: string; storeName?: string; isChineseBrand?: boolean };
 
-function ProductCard({ product, useSlug = false }: { product: ProductLike; useSlug?: boolean }) {
+function ProductCard({ product }: { product: ProductLike }) {
   const url = product.originalUrl ?? product.url ?? "";
   const [lazyImage, containerRef] = useLazyProductImage(url || undefined, product.image ?? undefined);
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER_IMAGE;
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
   const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
-  const to = useSlug && product.slug ? `/produto/${product.slug}` : `/pedido?url=${encodeURIComponent(url)}`;
+  const to = `/pedido?url=${encodeURIComponent(url)}`;
 
   return (
     <div ref={containerRef} className="h-full">
@@ -109,10 +109,6 @@ export default function FeaturedProductsSection() {
       return p;
     });
   }, [apiProducts, explorarTitleByKey]);
-  const apiUrlSet = useMemo(
-    () => new Set(apiProducts.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url))),
-    [apiProducts],
-  );
   const categoriesWithProducts = Array.from(new Set(allProducts.map((p) => p.category))).sort((a, b) => {
     const order = ["marcas-chinesas", "moda", "eletronicos", "acessorios", "beleza", "casa", "outros"];
     return order.indexOf(a) - order.indexOf(b);
@@ -201,11 +197,7 @@ export default function FeaturedProductsSection() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
               {visibleProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  useSlug={apiUrlSet.has(productUrlToCanonicalKey(product.originalUrl || product.url))}
-                />
+                <ProductCard key={product.id} product={product} />
               ))}
             </div>
             {hasMore && (

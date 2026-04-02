@@ -16,6 +16,7 @@ const PLACEHOLDER =
 type Product = {
   id: string;
   slug: string;
+  originalUrl: string;
   title: string;
   titlePt: string | null;
   image: string | null;
@@ -89,7 +90,10 @@ const ProdutosSalvos = () => {
                   key={p.id}
                   className="group flex flex-col rounded-xl border border-border bg-card overflow-hidden hover:shadow-md transition-shadow"
                 >
-                  <Link to={`/produto/${p.slug}`} className="flex flex-col flex-1">
+                  <Link
+                    to={`/pedido?url=${encodeURIComponent(p.originalUrl || "")}`}
+                    className="flex flex-col flex-1"
+                  >
                     <div className="aspect-[3/4] bg-muted/30 relative overflow-hidden">
                       <img
                         src={p.image ? ensureHttpsImage(p.image) : PLACEHOLDER}

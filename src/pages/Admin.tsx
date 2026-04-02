@@ -1007,7 +1007,12 @@ const Admin = () => {
                           Excluir
                         </Button>
                         <Button size="sm" variant="outline" asChild>
-                          <a href={`/produto/${p.slug}`} target="_blank" rel="noopener noreferrer" className="gap-1">
+                          <a
+                            href={`/pedido?url=${encodeURIComponent(p.originalUrl || "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="gap-1"
+                          >
                             <ExternalLink className="w-3.5 h-3.5" />
                             Ver
                           </a>

@@ -146,11 +146,6 @@ const Explorar = () => {
     });
   }, [apiProducts, explorarTitleByKey]);
 
-  const apiUrlSet = useMemo(
-    () => new Set(apiProducts.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url))),
-    [apiProducts],
-  );
-
   const { products, total, totalPages } = useMemo(() => {
     let list = sourceList;
     if (category !== "all") list = list.filter((p) => p.category === category);
@@ -306,7 +301,7 @@ const Explorar = () => {
                 <ExplorarProductCard
                   key={p.id}
                   p={p}
-                  to={p.slug && apiUrlSet.has(productUrlToCanonicalKey(p.originalUrl ?? p.url)) ? `/produto/${p.slug}` : `/pedido?url=${encodeURIComponent(p.originalUrl ?? p.url ?? "")}`}
+                  to={`/pedido?url=${encodeURIComponent(p.originalUrl ?? p.url ?? "")}`}
                 />
               ))}
             </div>

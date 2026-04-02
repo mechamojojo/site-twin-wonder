@@ -3,21 +3,18 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, type AuthUser } from "@/context/AuthContext";
 import { apiUrl } from "@/lib/api";
 
-const AUTH_TOKEN_KEY = "compraschina-auth-token";
-const AUTH_USER_KEY = "compraschina-auth-user";
-
-function saveStored(token: string, user: unknown) {
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-  localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+/** Evita segunda chamada à API após sucesso (token já invalidado no servidor) — ex.: React StrictMode ou re-execução do effect. */
+function verifyCacheKey(token: string) {
+  return `compraschina-email-verify-ok:${token}`;
 }
 
 const ConfirmarEmail = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { setUser, setToken } = useAuth();
+  const { setSessionFromVerification } = useAuth();
   const tokenParam = (searchParams.get("token") ?? "").trim();
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
 
@@ -26,6 +23,23 @@ const ConfirmarEmail = () => {
       setStatus("error");
       return;
     }
+
+    const cached = sessionStorage.getItem(verifyCacheKey(tokenParam));
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as { token: string; user: AuthUser };
+        if (parsed?.token && parsed?.user) {
+          setSessionFromVerification(parsed.token, parsed.user);
+          setStatus("ok");
+          toast.success("E-mail confirmado! Sua conta está ativa.");
+          const t = setTimeout(() => navigate("/", { replace: true }), 2000);
+          return () => clearTimeout(t);
+        }
+      } catch {
+        sessionStorage.removeItem(verifyCacheKey(tokenParam));
+      }
+    }
+
     let cancelled = false;
     (async () => {
       try {
@@ -35,15 +49,22 @@ const ConfirmarEmail = () => {
           body: JSON.stringify({ token: tokenParam }),
         });
         const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
         if (!res.ok) {
-          setStatus("error");
-          toast.error(data.error || "Link inválido ou expirado.");
+          if (!cancelled) {
+            setStatus("error");
+            toast.error(data.error || "Link inválido ou expirado.");
+          }
           return;
         }
-        saveStored(data.token, data.user);
-        setToken(data.token);
-        setUser(data.user);
+        const payload = { token: data.token as string, user: data.user as AuthUser };
+        // Gravar antes de atualizar estado: se o effect rodar de novo, não chama a API outra vez.
+        try {
+          sessionStorage.setItem(verifyCacheKey(tokenParam), JSON.stringify(payload));
+        } catch {
+          // ignore quota / private mode
+        }
+        if (cancelled) return;
+        setSessionFromVerification(payload.token, payload.user);
         setStatus("ok");
         toast.success("E-mail confirmado! Sua conta está ativa.");
         setTimeout(() => navigate("/", { replace: true }), 2000);
@@ -51,8 +72,13 @@ const ConfirmarEmail = () => {
         if (!cancelled) setStatus("error");
       }
     })();
-    return () => { cancelled = true; };
-  }, [tokenParam, setUser, setToken, navigate]);
+
+    return () => {
+      cancelled = true;
+    };
+    // Só o token da URL deve disparar a verificação (setSessionFromVerification e navigate são estáveis).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenParam]);
 
   return (
     <div className="min-h-screen bg-background">

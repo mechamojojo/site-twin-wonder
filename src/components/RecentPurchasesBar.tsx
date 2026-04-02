@@ -51,7 +51,7 @@ export default function RecentPurchasesBar() {
           {items.map((item, i) => (
             <Link
               key={`${item.url}-${i}`}
-              to={item.slug ? `/produto/${item.slug}` : `/pedido?url=${encodeURIComponent(item.url)}`}
+              to={`/pedido?url=${encodeURIComponent(item.url)}`}
               className="shrink-0 w-28 sm:w-32 group"
             >
               <div className="aspect-square rounded-xl border border-border bg-white overflow-hidden mb-2 shadow-sm group-hover:border-china-red/50 transition-colors">
