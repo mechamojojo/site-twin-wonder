@@ -30,7 +30,9 @@ function InlineCTA({
   return (
     <div className="bg-muted/40 border-y border-border py-4">
       <div className="container mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground text-center sm:text-left">{text}</p>
+        <p className="text-sm text-muted-foreground text-center sm:text-left">
+          {text}
+        </p>
         {linkTo ? (
           <Link
             to={linkTo}
@@ -71,7 +73,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      {/* 1. Hero — proposta + busca + micro-fluxo */}
+      {/* 1. Hero — proposta + busca */}
       <HeroSection />
 
       {/* 2. Marketplaces suportados */}

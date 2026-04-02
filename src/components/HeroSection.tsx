@@ -1,24 +1,11 @@
-import { Search, CreditCard, PackageCheck, Headphones, ArrowRight } from "lucide-react";
+import { Search } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import heroBg from "@/assets/hero-bg.png";
 import { looksLikeUrl } from "@/lib/urlValidation";
 
-const trustBadges = [
-  { icon: CreditCard,   label: "PIX, Cartão e Boleto" },
-  { icon: PackageCheck, label: "Inspeção antes do envio" },
-  { icon: Headphones,   label: "Suporte em Português" },
-];
-
-const flowSteps = [
-  "Cole o link",
-  "Veja o preço em reais",
-  "Pague e confirme",
-  "Receba em casa",
-];
-
-const FULL_PLACEHOLDER = "Cole o link do produto (Taobao, 1688, Weidian...) ou pesquise";
-const SHORT_PLACEHOLDER = "Link ou busque por nome...";
+const FULL_PLACEHOLDER = "Comece pesquisando com um link ou palavra-chave…";
+const SHORT_PLACEHOLDER = "Link ou palavra-chave…";
 
 const HeroSection = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,7 +13,10 @@ const HeroSection = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const update = () => setPlaceholder(window.innerWidth >= 400 ? FULL_PLACEHOLDER : SHORT_PLACEHOLDER);
+    const update = () =>
+      setPlaceholder(
+        window.innerWidth >= 400 ? FULL_PLACEHOLDER : SHORT_PLACEHOLDER,
+      );
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -57,26 +47,33 @@ const HeroSection = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
 
       <div className="relative z-10 text-center px-3 sm:px-4 max-w-3xl mx-auto py-16">
-        <div className="inline-block mb-5">
+        <div className="inline-block mb-4">
           <span className="bg-china-red/90 text-white text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
-            🇧🇷 Pagamento em Reais · Entrega no Brasil
+            🇧🇷 Pague em reais · Entrega no Brasil
           </span>
         </div>
 
         <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-extrabold text-white leading-tight mb-4">
-          <span className="whitespace-nowrap">Tudo que a <span className="text-gold">China</span> oferece,</span>
+          <span className="whitespace-nowrap">
+            Tudo que a <span className="text-gold">China</span> oferece,
+          </span>
           <br />
           entregue na sua porta
         </h1>
-        <p className="text-white/90 text-base md:text-lg mb-6 max-w-xl mx-auto leading-relaxed drop-shadow-sm">
-          Taobao, 1688, Weidian, TMALL e muito mais — sem cartão internacional, sem conta no exterior, sem burocracia.
+        <p className="text-white/90 text-base md:text-lg mb-8 max-w-2xl mx-auto leading-relaxed drop-shadow-sm">
+          De onde você estiver, ajudamos você a comprar da China com segurança e
+          praticidade. Cole o link dos itens que já escolheu, ou explore nosso
+          catálogo pelo site.
         </p>
 
         {/* Search bar */}
         <div className="relative w-full max-w-xl sm:max-w-2xl mx-auto mb-4">
           <div className="w-full flex items-center bg-white rounded-2xl overflow-hidden shadow-lg shadow-black/25 border border-gray-200/80 focus-within:ring-2 focus-within:ring-china-red/30 focus-within:border-china-red/50 transition-shadow">
             <label className="flex items-center flex-1 min-w-0 pl-4 sm:pl-5 pr-2 py-3 sm:py-4 cursor-text">
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 shrink-0 mr-3" aria-hidden />
+              <Search
+                className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 shrink-0 mr-3"
+                aria-hidden
+              />
               <input
                 type="text"
                 placeholder={placeholder}
@@ -94,38 +91,6 @@ const HeroSection = () => {
               Buscar
             </button>
           </div>
-        </div>
-
-        {/* Micro-flow */}
-        <div className="flex items-center justify-center flex-wrap gap-0 mb-5">
-          {flowSteps.map((step, i) => (
-            <div key={i} className="flex items-center">
-              <span className="text-white/90 text-xs font-semibold px-1 py-0.5 drop-shadow">{step}</span>
-              {i < flowSteps.length - 1 && (
-                <ArrowRight className="w-3 h-3 text-white/50 mx-0.5 shrink-0" />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Secondary path */}
-        <p className="text-white/70 text-xs mb-7 drop-shadow">
-          Não tem o link?{" "}
-          <Link to="/explorar" className="text-gold font-semibold hover:underline">
-            Explore o que outros brasileiros já compraram →
-          </Link>
-        </p>
-
-        {/* Trust badges */}
-        <div className="flex flex-wrap justify-center gap-5">
-          {trustBadges.map((badge, i) => (
-            <div key={i} className="flex items-center gap-2 text-white/95">
-              <div className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
-                <badge.icon className="w-4 h-4 text-gold" />
-              </div>
-              <span className="text-sm font-medium">{badge.label}</span>
-            </div>
-          ))}
         </div>
       </div>
     </section>
