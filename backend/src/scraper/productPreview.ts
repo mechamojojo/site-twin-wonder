@@ -237,7 +237,14 @@ function resolveProductUrl(url: string): string {
 function isCssbuyProductPage(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.hostname.toLowerCase().includes("cssbuy") && /\/item-[a-z0-9]+-[\d\-]+\.html/i.test(parsed.pathname);
+    if (!parsed.hostname.toLowerCase().includes("cssbuy")) return false;
+    // CSSBuy product pages can be:
+    // - /item-taobao-823808975526.html (with explicit source)
+    // - /item-823808975526.html (no explicit source)
+    return (
+      /\/item-[a-z0-9]+-[\d\-]+\.html/i.test(parsed.pathname) ||
+      /\/item-\d+\.html/i.test(parsed.pathname)
+    );
   } catch {
     return false;
   }

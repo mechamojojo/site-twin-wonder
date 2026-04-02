@@ -180,6 +180,12 @@ export async function getCssbuyProductPreview(
     const baseWait = isItemMicro ? 3000 : isItem1688 ? 3500 : 2500;
     await page.waitForTimeout(baseWait);
 
+    // Many CSSBuy items render SKU/options (e.g. Color Classification) a bit later in #sku_box.
+    // Waiting for it is safe: it resolves fast when absent and improves option capture when present.
+    await page
+      .waitForSelector("#sku_box img[src], #sku_box a img[src]", { timeout: 4500 })
+      .catch(() => {});
+
     if (isItem1688) {
       await page
         .waitForSelector(
@@ -687,6 +693,10 @@ export async function getCssbuyProductPreview(
       function extractColorOptions() {
         const labels = [
           "Color:",
+          "Color Classification:",
+          "Color classification:",
+          "Color Classification",
+          "Color classification",
           "Style:",
           "Model:",
           "Modelo:",
@@ -710,11 +720,14 @@ export async function getCssbuyProductPreview(
             const wrapper = imgs[i].closest(
               "a, li, div, button, [role=button], span",
             );
+            const imgEl = imgs[i] as HTMLImageElement;
             const name =
               wrapper
                 ?.querySelector("[class*='name'], span, [class*='text']")
                 ?.textContent?.trim() ||
               (wrapper as HTMLElement)?.getAttribute("title") ||
+              imgEl.getAttribute("title") ||
+              imgEl.getAttribute("alt") ||
               "";
             result.colorImages.push(src);
             result.colorValues.push(name?.trim() || `Cor ${i + 1}`);
@@ -754,16 +767,24 @@ export async function getCssbuyProductPreview(
         const byLabel = document.querySelectorAll("label, span, div, p");
         for (const el of byLabel) {
           const t = (el as HTMLElement).textContent?.trim() || "";
+          const tl = t.toLowerCase();
+          const looksLikeColorLabel =
+            tl === "color:" ||
+            tl.startsWith("color:") ||
+            tl === "colour:" ||
+            tl.startsWith("colour:") ||
+            tl === "style:" ||
+            tl.startsWith("style:") ||
+            tl === "model:" ||
+            tl.startsWith("model:") ||
+            tl === "modelo:" ||
+            tl.startsWith("modelo:") ||
+            tl === "color classification:" ||
+            tl.startsWith("color classification:") ||
+            tl === "color classification" ||
+            tl.startsWith("color classification");
           if (
-            (t === "Color:" ||
-              t === "Style:" ||
-              t === "Model:" ||
-              t === "Modelo:" ||
-              t.startsWith("Color:") ||
-              t.startsWith("Style:") ||
-              t.startsWith("Model:") ||
-              t.startsWith("Modelo:") ||
-              t.startsWith("Colour:")) &&
+            looksLikeColorLabel &&
             t.length < 50
           ) {
             let parent = el.parentElement;
