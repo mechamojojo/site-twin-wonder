@@ -3,7 +3,6 @@ import { useLocation, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import MarketplaceBanner from "@/components/MarketplaceBanner";
-import TrustBar from "@/components/TrustBar";
 import RecentPurchasesBar from "@/components/RecentPurchasesBar";
 import FeaturedProductsSection from "@/components/FeaturedProductsSection";
 import HowItWorks from "@/components/HowItWorks";
@@ -78,13 +77,10 @@ const Index = () => {
       {/* 2. Marketplaces suportados */}
       <MarketplaceBanner />
 
-      {/* 3. Sinais de confiança institucional */}
-      <TrustBar />
-
-      {/* 4. Compras recentes (exibe quando houver dados da API) */}
+      {/* 3. Compras recentes (exibe quando houver dados da API) */}
       <RecentPurchasesBar />
 
-      {/* 5. Catálogo — aprovados por clientes */}
+      {/* 4. Catálogo — aprovados por clientes */}
       <FeaturedProductsSection />
 
       {/* CTA: já tem o link? vai direto */}
@@ -94,10 +90,10 @@ const Index = () => {
         linkLabel="Colar link do produto →"
       />
 
-      {/* 6. Como funciona */}
+      {/* 5. Como funciona */}
       <HowItWorks />
 
-      {/* 7. Serviços */}
+      {/* 6. Serviços */}
       <ServicesSection />
 
       {/* CTA: dúvida antes de comprar → WhatsApp */}
@@ -107,19 +103,19 @@ const Index = () => {
         linkLabel="Falar no WhatsApp →"
       />
 
-      {/* 8. Entrega + estimador de frete */}
+      {/* 7. Entrega + estimador de frete */}
       <ShippingRates />
 
-      {/* 9. Sobre / diferenciais */}
+      {/* 8. Sobre / diferenciais */}
       <AboutSection />
 
-      {/* 10. Atendimento */}
+      {/* 9. Atendimento */}
       <MobileAppSection />
 
-      {/* 11. CTA final */}
+      {/* 10. CTA final */}
       <CTASection />
 
-      {/* 12. FAQ */}
+      {/* 11. FAQ */}
       <FAQSection />
 
       <Footer />

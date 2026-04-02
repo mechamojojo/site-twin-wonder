@@ -26,7 +26,7 @@ export function whatsAppUrl(message?: string): string {
 export const CONTACT_EMAIL = "contato@compraschina.com.br";
 
 /**
- * CNPJ da empresa — exibido na TrustBar e no rodapé.
+ * CNPJ da empresa — exibido no rodapé.
  * Preencha com o CNPJ real no formato "XX.XXX.XXX/0001-XX".
  * Deixe null para ocultar até obter o registro.
  */
