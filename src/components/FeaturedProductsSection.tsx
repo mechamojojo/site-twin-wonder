@@ -95,8 +95,9 @@ export default function FeaturedProductsSection() {
     return m;
   }, []);
 
+  // Só produtos do catálogo (API / admin — ordem sortOrder). Lista estática EXPLORAR não aparece na home.
   const allProducts = useMemo(() => {
-    const apiWithTitles = apiProducts.map((p) => {
+    return apiProducts.map((p) => {
       if (p.titlePt ?? p.title) return p;
       const key = productUrlToCanonicalKey(p.originalUrl || p.url);
       const curated = key ? CURATED_TITLE_BY_CANONICAL_KEY.get(key) : undefined;
@@ -107,13 +108,6 @@ export default function FeaturedProductsSection() {
         return { ...p, title: explorar.title, titlePt: explorar.titlePt };
       return p;
     });
-    if (apiWithTitles.length === 0) return EXPLORAR_PRODUCTS;
-    // Manter ordem do catálogo (admin 1–N = sortOrder 0..N-1); depois itens do explorar que não estão no catálogo
-    const apiKeys = new Set(apiWithTitles.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url)));
-    const extra = EXPLORAR_PRODUCTS.filter(
-      (p) => !apiKeys.has(productUrlToCanonicalKey(p.url)),
-    );
-    return [...apiWithTitles, ...extra];
   }, [apiProducts, explorarTitleByKey]);
   const apiUrlSet = useMemo(
     () => new Set(apiProducts.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url))),

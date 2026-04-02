@@ -131,8 +131,9 @@ const Explorar = () => {
     return m;
   }, []);
 
+  // Só produtos do catálogo (API / admin). Itens só na lista estática EXPLORAR não aparecem aqui.
   const sourceList = useMemo(() => {
-    const apiWithTitles = apiProducts.map((p) => {
+    return apiProducts.map((p) => {
       if (p.titlePt ?? p.title) return p;
       const key = productUrlToCanonicalKey(p.originalUrl || p.url);
       const curated = key ? CURATED_TITLE_BY_CANONICAL_KEY.get(key) : undefined;
@@ -143,13 +144,6 @@ const Explorar = () => {
         return { ...p, title: explorar.title, titlePt: explorar.titlePt };
       return p;
     });
-    if (apiWithTitles.length === 0) return EXPLORAR_PRODUCTS;
-    // Ordem do catálogo (admin 1–N) preservada; depois itens do explorar fora do catálogo
-    const apiKeys = new Set(apiWithTitles.map((p) => productUrlToCanonicalKey(p.originalUrl || p.url)));
-    const extra = EXPLORAR_PRODUCTS.filter(
-      (p) => !apiKeys.has(productUrlToCanonicalKey(p.url)),
-    );
-    return [...apiWithTitles, ...extra];
   }, [apiProducts, explorarTitleByKey]);
 
   const apiUrlSet = useMemo(
@@ -282,7 +276,9 @@ const Explorar = () => {
         ) : products.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-muted-foreground mb-4">
-              {q || category !== "all" ? "Nenhum produto encontrado. Tente outros termos." : "Catálogo em construção. Em breve mais produtos!"}
+              {q || category !== "all"
+                ? "Nenhum produto encontrado. Tente outros termos."
+                : "Nenhum produto no catálogo. Adicione e organize itens em Admin → Produtos no catálogo (Home e Explorar)."}
             </p>
             <Link to="/pedido" className="text-china-red font-medium hover:underline">
               Informe o link do produto na página inicial para comprar →
