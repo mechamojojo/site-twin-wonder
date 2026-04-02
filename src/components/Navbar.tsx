@@ -104,7 +104,7 @@ const Navbar = () => {
               <Search className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
               <input
                 type="text"
-                placeholder="Cole o link do produto ou busque no catálogo"
+                placeholder="Cole o link do produto ou explore o catálogo no site"
                 className="flex-1 min-w-0 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -333,7 +333,7 @@ const Navbar = () => {
             <Search className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
             <input
               type="text"
-              placeholder="Cole o link do produto ou busque no catálogo"
+              placeholder="Cole o link do produto ou explore o catálogo no site"
               className="flex-1 min-w-0 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
