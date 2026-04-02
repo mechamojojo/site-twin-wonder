@@ -4,8 +4,8 @@ import { useNavigate } from "react-router-dom";
 import heroBg from "@/assets/hero-bg.png";
 import { looksLikeUrl } from "@/lib/urlValidation";
 
-const FULL_PLACEHOLDER = "Comece pesquisando com um link ou palavra-chave…";
-const SHORT_PLACEHOLDER = "Link ou palavra-chave…";
+const FULL_PLACEHOLDER = "Cole o link do produto ou busque no catálogo";
+const SHORT_PLACEHOLDER = "Link ou busca...";
 
 const HeroSection = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,9 +61,8 @@ const HeroSection = () => {
           entregue na sua porta
         </h1>
         <p className="text-white/90 text-base md:text-lg mb-8 max-w-2xl mx-auto leading-relaxed drop-shadow-sm">
-          De onde você estiver, ajudamos você a comprar da China com segurança e
-          praticidade. Cole o link dos itens que já escolheu, ou explore nosso
-          catálogo pelo site.
+          Ajudamos você a comprar da China com segurança e praticidade. Cole o
+          link de itens que já possui, ou explore nosso catálogo pelo site.
         </p>
 
         {/* Search bar */}
