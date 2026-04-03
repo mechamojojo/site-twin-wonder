@@ -4,7 +4,11 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
 import { getDisplayPriceBrl } from "@/lib/pricing";
-import { calcCartShipping, detectCategory } from "@/lib/shipping";
+import {
+  calcCartShipping,
+  detectCategory,
+  itemWeightG,
+} from "@/lib/shipping";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -218,17 +222,40 @@ const Checkout = () => {
       };
     });
 
+    const lineEstimates: number[] = [];
+    for (const item of items) {
+      const unitBrl = getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0;
+      const productTotal = Math.round(unitBrl * item.quantity * 100) / 100;
+      const itemCat =
+        item.category ?? detectCategory(item.titlePt ?? item.title);
+      const lineWeightG =
+        itemWeightG(itemCat, item.weightG, item.keepBox ?? false) *
+        item.quantity;
+      const freightShare =
+        totalWeightG > 0
+          ? (lineWeightG / totalWeightG) * totalFreightBrl
+          : totalFreightBrl / items.length;
+      lineEstimates.push(
+        Math.round((productTotal + freightShare) * 100) / 100,
+      );
+    }
+
+    const sumLineEstimates =
+      Math.round(lineEstimates.reduce((a, b) => a + b, 0) * 100) / 100;
+    const expectedCheckoutTotal =
+      Math.round((totalProductBrl + totalFreightBrl) * 100) / 100;
+    if (Math.abs(sumLineEstimates - expectedCheckoutTotal) > 0.06) {
+      toast.error(
+        "O total enviado não confere com o resumo (proteção contra erro de preço). Recarregue a página ou volte ao carrinho e tente de novo.",
+      );
+      setLoading(false);
+      return;
+    }
+
     try {
-      for (const item of items) {
-        const unitBrl = getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0;
-        const productTotal = Math.round(unitBrl * item.quantity * 100) / 100;
-        const itemWeightG = (item.weightG ?? 400) * item.quantity;
-        const freightShare =
-          totalWeightG > 0
-            ? (itemWeightG / totalWeightG) * totalFreightBrl
-            : totalFreightBrl / items.length;
-        const estimatedTotalBrl =
-          Math.round((productTotal + freightShare) * 100) / 100;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const estimatedTotalBrl = lineEstimates[i]!;
 
         const productDescription = [
           item.titlePt || item.title || "Produto",

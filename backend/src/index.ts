@@ -1593,6 +1593,27 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         ? bodyOrderItemsJson
         : undefined;
 
+    const totalBrlIncoming = Number(estimatedTotalBrl) || 0;
+    if (orderItemsJson && orderItemsJson.length > 0) {
+      let sumLineProducts = 0;
+      for (const row of orderItemsJson) {
+        if (row && typeof row === "object") {
+          const v = (row as Record<string, unknown>).lineProductBrl;
+          if (typeof v === "number" && Number.isFinite(v) && v >= 0)
+            sumLineProducts += v;
+        }
+      }
+      if (
+        sumLineProducts > 0 &&
+        totalBrlIncoming + 0.02 < sumLineProducts
+      ) {
+        return res.status(400).json({
+          error:
+            "Total menor que a soma dos produtos (dados inválidos). Atualize o site e tente novamente.",
+        });
+      }
+    }
+
     const order = await prisma.order.create({
       data: {
         originalUrl,
@@ -1626,7 +1647,7 @@ app.post("/api/orders", optionalUser, async (req, res) => {
     });
 
     // Auto-quote: cria cotação imediata para o cliente poder pagar
-    const totalBrl = Number(estimatedTotalBrl) || 0;
+    const totalBrl = totalBrlIncoming;
     let status = order.status;
 
     if (totalBrl > 0) {
