@@ -1655,18 +1655,9 @@ app.post("/api/orders", optionalUser, async (req, res) => {
   }
 });
 
-function recentPurchaseTitleFromLine(row: unknown): string {
-  if (!row || typeof row !== "object") return "Produto";
-  const r = row as Record<string, unknown>;
-  const pt = typeof r.titlePt === "string" ? r.titlePt.trim() : "";
-  const t = typeof r.title === "string" ? r.title.trim() : "";
-  return pt || t || "Produto";
-}
-
 // Produtos comprados recentemente (para barra "O que estão comprando" na home)
 app.get("/api/recent-purchases", async (_req, res) => {
   try {
-    const MAX_BAR_ITEMS = 24;
     const orders = await prisma.order.findMany({
       where: {
         status: {
@@ -1682,75 +1673,28 @@ app.get("/api/recent-purchases", async (_req, res) => {
         },
       },
       orderBy: { updatedAt: "desc" },
-      take: 40,
+      take: 24,
       select: {
         originalUrl: true,
         productTitle: true,
         productImage: true,
         productDescription: true,
-        orderItemsJson: true,
       },
     });
-
-    const allUrls = new Set<string>();
-    for (const o of orders) {
-      const arr = o.orderItemsJson;
-      if (Array.isArray(arr) && arr.length > 0) {
-        for (const row of arr) {
-          if (!row || typeof row !== "object") continue;
-          const u = (row as Record<string, unknown>).url;
-          if (typeof u === "string" && u.trim().startsWith("http"))
-            allUrls.add(u.trim());
-        }
-      } else {
-        allUrls.add(o.originalUrl);
-      }
-    }
-
+    const urls = orders.map((o) => o.originalUrl);
     const productsInCatalog = await prisma.product.findMany({
-      where: { originalUrl: { in: [...allUrls] } },
+      where: { originalUrl: { in: urls } },
       select: { originalUrl: true, slug: true },
     });
     const slugByUrl = new Map(
       productsInCatalog.map((p) => [p.originalUrl, p.slug]),
     );
-
-    type BarItem = {
-      url: string;
-      title: string;
-      image: string | null;
-      slug: string | null;
-    };
-    const items: BarItem[] = [];
-
-    for (const o of orders) {
-      if (items.length >= MAX_BAR_ITEMS) break;
-      const arr = o.orderItemsJson;
-      if (Array.isArray(arr) && arr.length > 0) {
-        for (const row of arr) {
-          if (items.length >= MAX_BAR_ITEMS) break;
-          if (!row || typeof row !== "object") continue;
-          const r = row as Record<string, unknown>;
-          const url = typeof r.url === "string" ? r.url.trim() : "";
-          if (!url.startsWith("http")) continue;
-          const image = typeof r.image === "string" ? r.image : null;
-          items.push({
-            url,
-            title: recentPurchaseTitleFromLine(row),
-            image,
-            slug: slugByUrl.get(url) ?? null,
-          });
-        }
-      } else {
-        items.push({
-          url: o.originalUrl,
-          title: o.productTitle || o.productDescription || "Produto",
-          image: o.productImage || null,
-          slug: slugByUrl.get(o.originalUrl) ?? null,
-        });
-      }
-    }
-
+    const items = orders.map((o) => ({
+      url: o.originalUrl,
+      title: o.productTitle || o.productDescription || "Produto",
+      image: o.productImage || null,
+      slug: slugByUrl.get(o.originalUrl) ?? null,
+    }));
     res.json({ items });
   } catch (err) {
     console.error(err);

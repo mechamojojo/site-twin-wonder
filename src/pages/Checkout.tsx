@@ -265,12 +265,7 @@ const Checkout = () => {
           productDescription,
           productTitle:
             items.length > 1
-              ? (() => {
-                  const main = (first.titlePt || first.title || "Produto").trim();
-                  const short = main.length > 100 ? `${main.slice(0, 97)}…` : main;
-                  const extra = items.length - 1;
-                  return `${short} (+${extra} ${extra === 1 ? "outro" : "outros"})`;
-                })()
+              ? `Carrinho (${items.length} produtos, ${totalUnits} un.)`
               : first.titlePt || first.title || null,
           productImage: first.image || null,
           productColor: first.color || null,

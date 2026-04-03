@@ -14,5 +14,4 @@ RUN npx prisma generate && npm run build
 ENV NODE_ENV=production
 EXPOSE 8080
 
-# Migrações: rode depois (Railway Shell, CI ou deploy hook): npx prisma migrate deploy
-CMD ["node", "dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
