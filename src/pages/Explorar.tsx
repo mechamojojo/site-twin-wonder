@@ -8,6 +8,10 @@ import { MARKETPLACE_SEARCH_URLS } from "@/data/siteConfig";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
 import { getDisplayPriceBrl } from "@/lib/pricing";
+import {
+  hasProductDisplayTitle,
+  productDisplayTitle,
+} from "@/lib/productDisplayTitle";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ShoppingBag, Search, Loader2, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -50,7 +54,7 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
   const url = (p.originalUrl ?? p.url ?? "").replace(/\?.*$/, "");
   const [lazyImage, containerRef] = useLazyProductImage(url || undefined, p.image ?? undefined);
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER;
-  const displayTitle = p.titlePt || p.title;
+  const displayTitle = productDisplayTitle(p.titlePt, p.title, "Produto");
   const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
   const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
 
@@ -134,7 +138,7 @@ const Explorar = () => {
   // Só produtos do catálogo (API / admin). Itens só na lista estática EXPLORAR não aparecem aqui.
   const sourceList = useMemo(() => {
     return apiProducts.map((p) => {
-      if (p.titlePt ?? p.title) return p;
+      if (hasProductDisplayTitle(p.titlePt, p.title)) return p;
       const key = productUrlToCanonicalKey(p.originalUrl || p.url);
       const curated = key ? CURATED_TITLE_BY_CANONICAL_KEY.get(key) : undefined;
       if (curated)

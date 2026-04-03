@@ -6,6 +6,10 @@ import { CATEGORY_LABELS as CATALOG_CATEGORY_LABELS } from "@/lib/categoryLabels
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
 import { getDisplayPriceBrl } from "@/lib/pricing";
+import {
+  hasProductDisplayTitle,
+  productDisplayTitle,
+} from "@/lib/productDisplayTitle";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
 
@@ -31,7 +35,7 @@ function ProductCard({ product }: { product: ProductLike }) {
           <div className="aspect-[3/4] bg-muted/50 relative overflow-hidden">
             <img
               src={imgSrc}
-              alt={product.titlePt || product.title || "Produto"}
+              alt={productDisplayTitle(product.titlePt, product.title, "Produto")}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               referrerPolicy={referrerPolicyForImage(imgSrc)}
               loading="lazy"
@@ -56,7 +60,9 @@ function ProductCard({ product }: { product: ProductLike }) {
               )}
             </div>
           )}
-          <h3 className="font-medium text-foreground text-sm line-clamp-2">{product.titlePt || product.title}</h3>
+          <h3 className="font-medium text-foreground text-sm line-clamp-2">
+            {productDisplayTitle(product.titlePt, product.title, "Produto")}
+          </h3>
           <div className="mt-auto pt-2 flex items-center justify-between">
             <span className="text-base font-bold text-china-red">{priceStr}</span>
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground group-hover:text-china-red transition-colors">
@@ -98,7 +104,7 @@ export default function FeaturedProductsSection() {
   // Só produtos do catálogo (API / admin — ordem sortOrder). Lista estática EXPLORAR não aparece na home.
   const allProducts = useMemo(() => {
     return apiProducts.map((p) => {
-      if (p.titlePt ?? p.title) return p;
+      if (hasProductDisplayTitle(p.titlePt, p.title)) return p;
       const key = productUrlToCanonicalKey(p.originalUrl || p.url);
       const curated = key ? CURATED_TITLE_BY_CANONICAL_KEY.get(key) : undefined;
       if (curated)

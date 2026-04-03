@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
 import { getDisplayPriceBrl } from "@/lib/pricing";
+import { productDisplayTitle } from "@/lib/productDisplayTitle";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart } from "lucide-react";
 import { SaveProductHeart } from "@/components/SaveProductHeart";
@@ -43,11 +44,12 @@ const Produto = () => {
 
   const handleAddToCart = () => {
     if (!product) return;
+    const name = productDisplayTitle(product.titlePt, product.title, "Produto");
     addItem({
       url: product.originalUrl,
       quantity: 1,
-      title: product.titlePt || product.title,
-      titlePt: product.titlePt || product.title,
+      title: name,
+      titlePt: name,
       priceCny: product.priceCny,
       priceBrl: displayBrl ?? product.priceBrl ?? undefined,
       image: product.image || undefined,
@@ -90,7 +92,11 @@ const Produto = () => {
     );
   }
 
-  const displayTitle = product.titlePt || product.title;
+  const displayTitle = productDisplayTitle(
+    product.titlePt,
+    product.title,
+    "Produto",
+  );
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
   const priceStr =
     displayBrl != null
