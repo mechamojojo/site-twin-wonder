@@ -14,5 +14,10 @@ ENV NODE_ENV=production
 # Railway injeta PORT em runtime (geralmente 8080). Não sobrescrever aqui.
 EXPOSE 8080
 
-# Migrações no start; se falhar (ex.: DB), o container não sobe — útil no deploy.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+<<<<<<< HEAD
+# Migrações: rode na Railway (Shell) ou em "Deploy" com: npx prisma migrate deploy
+# Não encadear aqui — se migrate falhar, o container nunca escuta e o healthcheck quebra.
+CMD ["node", "dist/index.js"]
+=======
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+>>>>>>> c5e3679 (Docker: run prisma migrate deploy before starting server)

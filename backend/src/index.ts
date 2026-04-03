@@ -79,7 +79,7 @@ function safeErrorMessage(err: unknown, fallback: string): string {
 const ADMIN_SECRET = (process.env.ADMIN_SECRET || "").trim();
 const ADMIN_SESSIONS = new Map<string, number>();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-const RATE_CNY = 0.81;
+const RATE_CNY = 0.78;
 
 const ADMIN_JWT_EXPIRES = "7d";
 
@@ -769,20 +769,15 @@ app.get("/api/admin/orders/:id", requireAdmin, async (req, res) => {
 });
 
 // Admin: URL do produto no CSSBuy (para botão "Processar compra")
-// Query opcional ?url= — para pedidos com vários itens (cada link no carrinho)
 app.get("/api/admin/orders/:id/cssbuy-url", requireAdmin, async (req, res) => {
   try {
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },
       select: { originalUrl: true },
     });
-    const qUrl =
-      typeof req.query.url === "string" ? req.query.url.trim() : "";
-    const target =
-      qUrl.startsWith("http") ? qUrl : order?.originalUrl?.trim() || "";
-    if (!target)
+    if (!order?.originalUrl)
       return res.status(404).json({ error: "Pedido ou URL não encontrado" });
-    const cssbuyUrl = marketplaceToCssbuyUrl(target);
+    const cssbuyUrl = marketplaceToCssbuyUrl(order.originalUrl);
     res.json({ url: cssbuyUrl });
   } catch (err) {
     console.error(err);
@@ -880,12 +875,11 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
     });
     if (updates.status === OrderStatus.PAGO) {
       try {
-        await ensureProductsFromOrder({
+        await ensureProductFromOrder({
           originalUrl: order.originalUrl,
           productTitle: order.productTitle,
           productDescription: order.productDescription,
           productImage: order.productImage,
-          orderItemsJson: order.orderItemsJson,
         });
       } catch (err) {
         console.warn("Erro ao adicionar produto ao catálogo:", err);
@@ -1103,79 +1097,6 @@ async function ensureProductFromOrder(order: {
       featured: false,
     },
   });
-}
-
-/** Garante um produto no catálogo por URL; com carrinho, uma entrada por item. */
-async function ensureProductsFromOrder(order: {
-  originalUrl: string;
-  productTitle: string | null;
-  productDescription: string;
-  productImage: string | null;
-  orderItemsJson: unknown;
-}) {
-  const items = order.orderItemsJson;
-  if (Array.isArray(items) && items.length > 0) {
-    for (const raw of items) {
-      if (!raw || typeof raw !== "object") continue;
-      const row = raw as Record<string, unknown>;
-      const url = typeof row.url === "string" ? row.url.trim() : "";
-      if (!url.startsWith("http")) continue;
-      const titlePt = typeof row.titlePt === "string" ? row.titlePt : null;
-      const title = typeof row.title === "string" ? row.title : null;
-      const image = typeof row.image === "string" ? row.image : null;
-      const desc =
-        [titlePt, title].filter(Boolean).join(" — ") ||
-        order.productDescription;
-      try {
-        await ensureProductFromOrder({
-          originalUrl: url,
-          productTitle: titlePt || title || order.productTitle,
-          productDescription: desc.slice(0, 2000),
-          productImage: image || order.productImage,
-        });
-      } catch (err) {
-        console.warn("ensureProductFromOrder (item do carrinho):", err);
-      }
-    }
-    return;
-  }
-  await ensureProductFromOrder({
-    originalUrl: order.originalUrl,
-    productTitle: order.productTitle,
-    productDescription: order.productDescription,
-    productImage: order.productImage,
-  });
-}
-
-function normalizeOrderItemsFromBody(raw: unknown): object[] {
-  if (!Array.isArray(raw)) return [];
-  const out: object[] = [];
-  for (const row of raw) {
-    if (!row || typeof row !== "object") continue;
-    const o = row as Record<string, unknown>;
-    const url = typeof o.url === "string" ? o.url.trim() : "";
-    const q = Number(o.quantity);
-    if (!url.startsWith("http") || !Number.isFinite(q) || q < 1) continue;
-    const qty = Math.min(999, Math.floor(q));
-    out.push({
-      url,
-      quantity: qty,
-      titlePt:
-        typeof o.titlePt === "string" ? o.titlePt.slice(0, 500) : null,
-      title: typeof o.title === "string" ? o.title.slice(0, 500) : null,
-      image: typeof o.image === "string" ? o.image.slice(0, 2000) : null,
-      lineTotalBrl:
-        typeof o.lineTotalBrl === "number" && Number.isFinite(o.lineTotalBrl)
-          ? o.lineTotalBrl
-          : null,
-      color: typeof o.color === "string" ? o.color.slice(0, 200) : null,
-      size: typeof o.size === "string" ? o.size.slice(0, 200) : null,
-      variation:
-        typeof o.variation === "string" ? o.variation.slice(0, 500) : null,
-      notes: typeof o.notes === "string" ? o.notes.slice(0, 2000) : null,
-    });
-  }
-  return out;
 }
 
 // Admin: listar produtos do catálogo (protegido) — ordenação só por sortOrder para reordenar em qualquer posição
@@ -1540,10 +1461,7 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       addressCity,
       addressState,
       estimatedTotalBrl,
-      orderItems,
     } = req.body ?? {};
-
-    const orderItemsNormalized = normalizeOrderItemsFromBody(orderItems);
 
     if (!originalUrl || !productDescription || !quantity || !cep) {
       return res.status(400).json({
@@ -1565,8 +1483,6 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         cep,
         shippingMethod: shippingMethod ?? null,
         notes: notes ?? null,
-        orderItemsJson:
-          orderItemsNormalized.length > 0 ? orderItemsNormalized : undefined,
         userId: authUserId ?? null,
         customerName: customerName ?? null,
         customerEmail: customerEmail ?? null,
@@ -1876,7 +1792,7 @@ app.post("/api/admin/product-preview/save", requireAdmin, async (req, res) => {
 });
 
 // Taxa de câmbio base (custo para nós) — em produção usar API de câmbio
-const RATE_CNY_TO_BRL = 0.81;
+const RATE_CNY_TO_BRL = 0.78;
 const MARGEM_THRESHOLD_BRL = 60; // abaixo disso: margem maior (itens baratos)
 const MARGEM_BAIXA_PERCENT = 50; // produto < R$ 60: +50%
 const MARGEM_ALTA_PERCENT = 35; // produto >= R$ 60: +35%
@@ -2156,12 +2072,11 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
         data: { status: OrderStatus.PAGO },
       });
       try {
-        await ensureProductsFromOrder({
+        await ensureProductFromOrder({
           originalUrl: order.originalUrl,
           productTitle: order.productTitle,
           productDescription: order.productDescription,
           productImage: order.productImage,
-          orderItemsJson: order.orderItemsJson,
         });
       } catch (err) {
         console.warn("Erro ao adicionar produto ao catálogo:", err);
@@ -2262,12 +2177,11 @@ async function processWebhookPayment(paymentId: string) {
     data: { status: OrderStatus.PAGO },
   });
   try {
-    await ensureProductsFromOrder({
+    await ensureProductFromOrder({
       originalUrl: dbPayment.order.originalUrl,
       productTitle: dbPayment.order.productTitle,
       productDescription: dbPayment.order.productDescription,
       productImage: dbPayment.order.productImage,
-      orderItemsJson: dbPayment.order.orderItemsJson,
     });
   } catch (err) {
     console.warn("Erro ao adicionar produto ao catálogo:", err);

@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
-import { getDisplayPriceBrl } from "@/lib/pricing";
+import { priceCnyToBrl } from "@/lib/pricing";
 import { calcCartShipping, detectCategory } from "@/lib/shipping";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -122,33 +122,6 @@ const Checkout = () => {
     }));
   }, [user?.id]);
 
-  const cartTotals = useMemo(() => {
-    if (items.length === 0)
-      return { subtotal: 0, freight: 0, grand: 0 };
-    const shipping = calcCartShipping(
-      items.map((i) => ({
-        category: i.category ?? detectCategory(i.titlePt ?? i.title),
-        weightG: i.weightG,
-        keepBox: i.keepBox ?? false,
-        quantity: i.quantity,
-      })),
-    );
-    const subtotal = items.reduce(
-      (acc, i) =>
-        acc + (getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0) * i.quantity,
-      0,
-    );
-    const grand =
-      subtotal > 0
-        ? Math.round((subtotal + shipping.totalBrl) * 100) / 100
-        : 0;
-    return {
-      subtotal,
-      freight: shipping.totalBrl,
-      grand,
-    };
-  }, [items]);
-
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
@@ -196,8 +169,9 @@ const Checkout = () => {
     }
 
     setLoading(true);
+    let firstOrderId: string | null = null;
 
-    // Mesma base do carrinho: preço em tela + frete único (um pedido = um pagamento = total do carrinho)
+    // Compute real freight estimate from cart weights
     const shippingResult = calcCartShipping(
       items.map((i) => ({
         category: i.category ?? detectCategory(i.titlePt ?? i.title),
@@ -206,109 +180,89 @@ const Checkout = () => {
         quantity: i.quantity,
       })),
     );
+    const totalFreightBrl = shippingResult.totalBrl;
     const totalProductBrl = items.reduce(
       (acc, i) =>
-        acc + (getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0) * i.quantity,
+        acc +
+        (i.priceBrl ?? (i.priceCny != null ? priceCnyToBrl(i.priceCny) : 100)) *
+          i.quantity,
       0,
     );
-    const grandTotal =
-      totalProductBrl > 0
-        ? Math.round((totalProductBrl + shippingResult.totalBrl) * 100) / 100
-        : 0;
-
-    const first = items[0];
-    const productLines = items.map((item, idx) => {
-      const title = item.titlePt || item.title || "Produto";
-      const opts = [item.color, item.size, item.variation]
-        .filter(Boolean)
-        .join(" · ");
-      const unit = getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0;
-      const lineTotal = Math.round(unit * item.quantity * 100) / 100;
-      return `[${idx + 1}] ${title}${opts ? ` — ${opts}` : ""} ×${item.quantity} (R$ ${lineTotal.toFixed(2)}) | ${item.url}`;
-    });
-    const productDescription = productLines.join("\n").slice(0, 8000);
-    const totalUnits = items.reduce((a, i) => a + i.quantity, 0);
-    const extraLinksBlock =
-      items.length > 1
-        ? items
-            .slice(1)
-            .map((i, idx) => `Item ${idx + 2}: ${i.url}`)
-            .join("\n")
-        : "";
-    const perItemNotes = items
-      .map((i, idx) =>
-        i.notes?.trim() ? `[Item ${idx + 1}] ${i.notes.trim()}` : "",
-      )
-      .filter(Boolean)
-      .join("\n");
-    const combinedNotes = [
-      form.notes?.trim(),
-      perItemNotes,
-      items.length > 1 ? `--- Demais links do carrinho ---\n${extraLinksBlock}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n")
-      .slice(0, 8000);
+    // Distribute freight proportionally by item weight
+    const totalWeightG = shippingResult.totalWeightG;
 
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      const token = getAuthToken();
-      if (token) headers.Authorization = `Bearer ${token}`;
+      for (const item of items) {
+        const unitBrl =
+          item.priceBrl ??
+          (item.priceCny != null ? priceCnyToBrl(item.priceCny) : 100);
+        const productTotal = unitBrl * item.quantity;
+        // Weight-proportional freight share for this item
+        const itemCat =
+          item.category ?? detectCategory(item.titlePt ?? item.title);
+        const itemWeightG = (item.weightG ?? 400) * item.quantity;
+        const freightShare =
+          totalWeightG > 0
+            ? (itemWeightG / totalWeightG) * totalFreightBrl
+            : totalFreightBrl / items.length;
+        const estimatedTotalBrl =
+          Math.round((productTotal + freightShare) * 100) / 100;
+        void itemCat;
+        void totalProductBrl;
 
-      const res = await fetch(apiUrl("/api/orders"), {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          originalUrl: first.url,
-          productDescription,
-          productTitle:
-            items.length > 1
-              ? `Carrinho (${items.length} produtos, ${totalUnits} un.)`
-              : first.titlePt || first.title || null,
-          productImage: first.image || null,
-          productColor: first.color || null,
-          productSize: first.size || null,
-          productVariation: first.variation || null,
-          quantity: totalUnits,
-          cep,
-          shippingMethod: form.shippingMethod || null,
-          notes: combinedNotes || null,
-          customerName: form.customerName.trim(),
-          customerEmail: form.customerEmail.trim(),
-          customerWhatsapp: form.customerWhatsapp.replace(/\D/g, ""),
-          customerCpf: cpf,
-          addressStreet: form.addressStreet.trim(),
-          addressNumber: form.addressNumber.trim(),
-          addressComplement: form.addressComplement.trim() || null,
-          addressNeighborhood: form.addressNeighborhood.trim(),
-          addressCity: form.addressCity.trim(),
-          addressState: form.addressState.trim(),
-          estimatedTotalBrl: grandTotal,
-          orderItems: items.map((item) => {
-            const unit = getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0;
-            const lineTotal = Math.round(unit * item.quantity * 100) / 100;
-            return {
-              url: item.url,
-              titlePt: item.titlePt ?? null,
-              title: item.title ?? null,
-              image: item.image ?? null,
-              quantity: item.quantity,
-              lineTotalBrl: lineTotal,
-              color: item.color ?? null,
-              size: item.size ?? null,
-              variation: item.variation ?? null,
-              notes: item.notes ?? null,
-            };
+        const productDescription = [
+          item.titlePt || item.title || "Produto",
+          item.variation,
+          item.color,
+          item.size,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        const token = getAuthToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const res = await fetch(apiUrl("/api/orders"), {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            originalUrl: item.url,
+            productDescription,
+            productTitle: item.titlePt || item.title || null,
+            productImage: item.image || null,
+            productColor: item.color || null,
+            productSize: item.size || null,
+            productVariation: item.variation || null,
+            quantity: item.quantity,
+            cep,
+            shippingMethod: form.shippingMethod || null,
+            notes: form.notes || item.notes || null,
+            customerName: form.customerName.trim(),
+            customerEmail: form.customerEmail.trim(),
+            customerWhatsapp: form.customerWhatsapp.replace(/\D/g, ""),
+            customerCpf: cpf,
+            addressStreet: form.addressStreet.trim(),
+            addressNumber: form.addressNumber.trim(),
+            addressComplement: form.addressComplement.trim() || null,
+            addressNeighborhood: form.addressNeighborhood.trim(),
+            addressCity: form.addressCity.trim(),
+            addressState: form.addressState.trim(),
+            estimatedTotalBrl,
           }),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Erro ao criar pedido");
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Erro ao criar pedido");
+        if (!firstOrderId) firstOrderId = data.id;
+      }
       clearCart();
-      toast.success("Pedido enviado com sucesso!");
-      navigate(data.id ? `/pedido-confirmado/${data.id}` : "/", {
+      toast.success(
+        items.length > 1
+          ? "Pedidos enviados com sucesso!"
+          : "Pedido enviado com sucesso!",
+      );
+      navigate(firstOrderId ? `/pedido-confirmado/${firstOrderId}` : "/", {
         replace: true,
       });
     } catch (err) {
@@ -389,7 +343,9 @@ const Checkout = () => {
                   </span>
                   {(i.color || i.size || i.variation) && (
                     <span className="text-muted-foreground block text-xs mt-0.5">
-                      {[i.color, i.size, i.variation].filter(Boolean).join(", ")}
+                      {[i.color, i.size, i.variation]
+                        .filter(Boolean)
+                        .join(", ")}
                     </span>
                   )}
                   <span className="text-muted-foreground text-xs mt-1 block">
@@ -399,25 +355,6 @@ const Checkout = () => {
               </li>
             ))}
           </ul>
-          {cartTotals.subtotal > 0 && (
-            <div className="mt-4 pt-4 border-t border-border space-y-2 text-sm">
-              <div className="flex justify-between text-muted-foreground">
-                <span>Subtotal (produtos)</span>
-                <span>R$ {cartTotals.subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>Frete (estimado)</span>
-                <span>R$ {cartTotals.freight.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-china-red pt-1">
-                <span>Total a pagar</span>
-                <span>R$ {cartTotals.grand.toFixed(2)}</span>
-              </div>
-              <p className="text-[11px] text-muted-foreground pt-1">
-                Este é o mesmo valor que será cobrado no pagamento (PIX ou cartão).
-              </p>
-            </div>
-          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

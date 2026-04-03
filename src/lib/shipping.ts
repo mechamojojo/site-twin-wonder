@@ -138,7 +138,7 @@ export function domesticFreightBrl(totalWeightG: number): number {
 // ---------------------------------------------------------------------------
 // Exchange rate (CNY → BRL) — kept as a constant; update periodically
 // ---------------------------------------------------------------------------
-export const CNY_TO_BRL = 0.81; // approximate mid-market rate
+export const CNY_TO_BRL = 0.78; // approximate mid-market rate
 
 // ---------------------------------------------------------------------------
 // Main cart shipping calculator

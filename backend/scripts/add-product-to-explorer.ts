@@ -12,7 +12,7 @@ import { getProductPreview } from "../src/scraper/productPreview";
 import * as fs from "fs";
 import * as path from "path";
 
-const RATE_CNY_TO_BRL = 0.81;
+const RATE_CNY_TO_BRL = 0.78;
 const MARGEM_THRESHOLD_BRL = 60;
 const MARGEM_BAIXA_PERCENT = 50;
 const MARGEM_ALTA_PERCENT = 35;

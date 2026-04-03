@@ -11,7 +11,7 @@ import * as path from "path";
 
 const FEATURED_PATH = path.join(__dirname, "../../src/data/featuredProducts.ts");
 
-const RATE_CNY_TO_BRL = 0.81;
+const RATE_CNY_TO_BRL = 0.78;
 const MARGEM_THRESHOLD_BRL = 60;
 const MARGEM_BAIXA_PERCENT = 50;
 const MARGEM_ALTA_PERCENT = 35;
