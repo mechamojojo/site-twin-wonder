@@ -8,13 +8,6 @@ import { calcCartShipping, detectCategory } from "@/lib/shipping";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
@@ -22,6 +15,9 @@ import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { Truck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getAuthToken } from "@/context/AuthContext";
+
+/** Mesma base da estimativa em `calcCartShipping`; o cliente não escolhe rota mais barata no site. */
+const CHECKOUT_SHIPPING_METHOD = "FJ_BR_EXP" as const;
 
 type ViaCepResponse = {
   cep: string;
@@ -69,7 +65,6 @@ const Checkout = () => {
     customerName: "",
     customerEmail: "",
     customerWhatsapp: "",
-    shippingMethod: "",
     notes: "",
   });
 
@@ -262,7 +257,7 @@ const Checkout = () => {
             productVariation: item.variation || null,
             quantity: item.quantity,
             cep,
-            shippingMethod: form.shippingMethod || null,
+            shippingMethod: CHECKOUT_SHIPPING_METHOD,
             notes: form.notes || item.notes || null,
             customerName: form.customerName.trim(),
             customerEmail: form.customerEmail.trim(),
@@ -448,6 +443,9 @@ const Checkout = () => {
               Preço em BRL será confirmado na cotação (como no carrinho).
             </p>
           )}
+          <p className="text-[11px] text-muted-foreground pt-2 leading-relaxed border-t border-border mt-2">
+            O frete estimado usa a tabela <strong className="font-medium text-foreground">FJ-BR-EXP</strong> (igual ao carrinho). A forma de envio e o valor final são definidos pela equipe na cotação — não há opção de marítimo ou linha econômica no checkout.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -613,26 +611,6 @@ const Checkout = () => {
               }
               required
             />
-          </div>
-          <div>
-            <Label htmlFor="shippingMethod">Método de envio (opcional)</Label>
-            <Select
-              value={form.shippingMethod}
-              onValueChange={(v) =>
-                setForm((p) => ({ ...p, shippingMethod: v }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Escolha na cotação" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="FJ_BR_EXP">
-                  FJ-BR-EXP (12-30 dias)
-                </SelectItem>
-                <SelectItem value="BR_EMS">BR-EMS (15-40 dias)</SelectItem>
-                <SelectItem value="BR_SEA">BR-SEA (40-60 dias)</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
           <div>
             <Label htmlFor="notes">Observações (opcional)</Label>

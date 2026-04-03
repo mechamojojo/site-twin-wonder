@@ -30,7 +30,7 @@ import {
 } from "./auth";
 import cors from "cors";
 import { json } from "body-parser";
-import { PrismaClient, OrderStatus } from "@prisma/client";
+import { PrismaClient, OrderStatus, ShippingMethod } from "@prisma/client";
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
 
 const prisma = new PrismaClient();
@@ -1551,7 +1551,6 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       productVariation,
       quantity,
       cep,
-      shippingMethod,
       notes,
       customerName,
       customerEmail,
@@ -1605,7 +1604,8 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         productVariation: productVariation ?? null,
         quantity: Number(quantity),
         cep,
-        shippingMethod: shippingMethod ?? null,
+        // Sempre expresso padrão (mesma base da estimativa no front). EMS/marítimo só pelo admin.
+        shippingMethod: ShippingMethod.FJ_BR_EXP,
         notes: notes ?? null,
         userId: authUserId ?? null,
         customerName: customerName ?? null,
