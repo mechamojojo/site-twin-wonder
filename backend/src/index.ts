@@ -1117,6 +1117,78 @@ app.get("/api/admin/products", requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: dados para resgate / backup (URLs de catálogo, pedidos, previews, usuários — sem senhas)
+app.get("/api/admin/data-recovery", requireAdmin, async (_req, res) => {
+  try {
+    const products = await prisma.product.findMany({
+      select: {
+        id: true,
+        originalUrl: true,
+        slug: true,
+        title: true,
+        titlePt: true,
+        featured: true,
+        sortOrder: true,
+        createdAt: true,
+      },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+    });
+
+    const orderRows = await prisma.order.findMany({
+      select: {
+        originalUrl: true,
+        productTitle: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    const seenOrderUrls = new Set<string>();
+    const orderUrls: {
+      originalUrl: string;
+      productTitle: string | null;
+      createdAt: Date;
+    }[] = [];
+    for (const o of orderRows) {
+      const u = o.originalUrl?.trim();
+      if (!u) continue;
+      if (seenOrderUrls.has(u)) continue;
+      seenOrderUrls.add(u);
+      orderUrls.push({
+        originalUrl: u,
+        productTitle: o.productTitle,
+        createdAt: o.createdAt,
+      });
+    }
+
+    const previewSnapshots = await prisma.productPreviewSnapshot.findMany({
+      select: { urlKey: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        emailVerified: true,
+        createdAt: true,
+        customerWhatsapp: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({
+      products,
+      orderUrls,
+      previewSnapshots,
+      users,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao carregar dados de resgate" });
+  }
+});
+
 // Admin: atualizar produto (protegido)
 app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
   try {

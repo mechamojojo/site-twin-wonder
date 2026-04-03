@@ -23,6 +23,7 @@ const Servicos = lazy(() => import("./pages/Servicos"));
 const PoliticaPrivacidade = lazy(() => import("./pages/PoliticaPrivacidade"));
 const TermosServico = lazy(() => import("./pages/TermosServico"));
 const Admin = lazy(() => import("./pages/Admin"));
+const AdminResgate = lazy(() => import("./pages/AdminResgate"));
 const AdminPedido = lazy(() => import("./pages/AdminPedido"));
 const Explorar = lazy(() => import("./pages/Explorar"));
 const Produto = lazy(() => import("./pages/Produto"));
@@ -31,7 +32,9 @@ const MinhaConta = lazy(() => import("./pages/MinhaConta"));
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
-    <div className="animate-pulse text-muted-foreground text-sm">Carregando...</div>
+    <div className="animate-pulse text-muted-foreground text-sm">
+      Carregando...
+    </div>
   </div>
 );
 
@@ -41,35 +44,42 @@ const App = () => (
     <BrowserRouter>
       <AuthProvider>
         <SavedProductsProvider>
-        <CartProvider>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/pedido" element={<Order />} />
-            <Route path="/pedido-confirmado/:id" element={<OrderConfirmed />} />
-            <Route path="/entrar" element={<Login />} />
-            <Route path="/esqueci-senha" element={<EsqueciSenha />} />
-            <Route path="/redefinir-senha" element={<RedefinirSenha />} />
-            <Route path="/confirmar-email" element={<ConfirmarEmail />} />
-            <Route path="/cadastro" element={<Cadastro />} />
-            <Route path="/meus-pedidos" element={<MeusPedidos />} />
-            <Route path="/carrinho" element={<Cart />} />
-            <Route path="/checkout" element={<Checkout />} />
-            <Route path="/pagar/:id" element={<Pagar />} />
-            <Route path="/servicos" element={<Servicos />} />
-            <Route path="/politica-de-privacidade" element={<PoliticaPrivacidade />} />
-            <Route path="/termos-de-servico" element={<TermosServico />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/admin/pedido/:id" element={<AdminPedido />} />
-            <Route path="/explorar" element={<Explorar />} />
-            <Route path="/produto/:slug" element={<Produto />} />
-            <Route path="/produtos-salvos" element={<ProdutosSalvos />} />
-            <Route path="/minha-conta" element={<MinhaConta />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      </CartProvider>
-      </SavedProductsProvider>
+          <CartProvider>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/pedido" element={<Order />} />
+                <Route
+                  path="/pedido-confirmado/:id"
+                  element={<OrderConfirmed />}
+                />
+                <Route path="/entrar" element={<Login />} />
+                <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+                <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+                <Route path="/confirmar-email" element={<ConfirmarEmail />} />
+                <Route path="/cadastro" element={<Cadastro />} />
+                <Route path="/meus-pedidos" element={<MeusPedidos />} />
+                <Route path="/carrinho" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/pagar/:id" element={<Pagar />} />
+                <Route path="/servicos" element={<Servicos />} />
+                <Route
+                  path="/politica-de-privacidade"
+                  element={<PoliticaPrivacidade />}
+                />
+                <Route path="/termos-de-servico" element={<TermosServico />} />
+                <Route path="/admin" element={<Admin />} />
+                <Route path="/admin/resgate-dados" element={<AdminResgate />} />
+                <Route path="/admin/pedido/:id" element={<AdminPedido />} />
+                <Route path="/explorar" element={<Explorar />} />
+                <Route path="/produto/:slug" element={<Produto />} />
+                <Route path="/produtos-salvos" element={<ProdutosSalvos />} />
+                <Route path="/minha-conta" element={<MinhaConta />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </CartProvider>
+        </SavedProductsProvider>
       </AuthProvider>
     </BrowserRouter>
   </TooltipProvider>
