@@ -2,7 +2,7 @@
  * Pricing logic shared with backend (/api/price/preview).
  * Use this whenever we display a product price so listing and product page match.
  */
-const RATE_CNY_TO_BRL = 0.78;
+const RATE_CNY_TO_BRL = 0.81;
 const MARGEM_THRESHOLD_BRL = 60;
 const MARGEM_BAIXA_PERCENT = 50;  // produto < R$ 60: +50%
 const MARGEM_ALTA_PERCENT = 35;   // produto >= R$ 60: +35%

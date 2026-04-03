@@ -9,7 +9,7 @@ import { PrismaClient } from "@prisma/client";
 import { getProductPreview } from "../src/scraper/productPreview";
 
 const prisma = new PrismaClient();
-const RATE_CNY = 0.78;
+const RATE_CNY = 0.81;
 
 function getLimit(): number | null {
   const arg = process.argv.find((a) => a === "--limit" || a.startsWith("--limit="));

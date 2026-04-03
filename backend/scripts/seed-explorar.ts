@@ -9,7 +9,7 @@ import { EXPLORAR_PRODUCTS } from "../prisma/seed-explorar-products";
 
 const prisma = new PrismaClient();
 
-const RATE_CNY = 0.78;
+const RATE_CNY = 0.81;
 
 function slugify(s: string): string {
   return s
