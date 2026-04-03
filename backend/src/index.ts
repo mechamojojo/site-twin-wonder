@@ -1720,6 +1720,18 @@ app.post("/api/orders", optionalUser, async (req, res) => {
   }
 });
 
+/** Título exibido: prioriza titlePt (não vazio), senão title — alinhado ao site. */
+function catalogProductDisplayTitle(
+  titlePt: string | null | undefined,
+  title: string,
+): string {
+  const pt = typeof titlePt === "string" ? titlePt.trim() : "";
+  if (pt.length > 0) return pt;
+  const t = typeof title === "string" ? title.trim() : "";
+  if (t.length > 0) return t;
+  return "";
+}
+
 // Produtos comprados recentemente (para barra "O que estão comprando" na home)
 app.get("/api/recent-purchases", async (_req, res) => {
   try {
@@ -1749,17 +1761,39 @@ app.get("/api/recent-purchases", async (_req, res) => {
     const urls = orders.map((o) => o.originalUrl);
     const productsInCatalog = await prisma.product.findMany({
       where: { originalUrl: { in: urls } },
-      select: { originalUrl: true, slug: true },
+      select: {
+        originalUrl: true,
+        slug: true,
+        title: true,
+        titlePt: true,
+        image: true,
+      },
     });
-    const slugByUrl = new Map(
-      productsInCatalog.map((p) => [p.originalUrl, p.slug]),
+    const catalogByUrl = new Map(
+      productsInCatalog.map((p) => [p.originalUrl, p]),
     );
-    const items = orders.map((o) => ({
-      url: o.originalUrl,
-      title: o.productTitle || o.productDescription || "Produto",
-      image: o.productImage || null,
-      slug: slugByUrl.get(o.originalUrl) ?? null,
-    }));
+    const items = orders.map((o) => {
+      const cat = catalogByUrl.get(o.originalUrl);
+      const fromCatalog = cat
+        ? catalogProductDisplayTitle(cat.titlePt, cat.title)
+        : "";
+      const title =
+        fromCatalog ||
+        (o.productTitle && o.productTitle.trim()) ||
+        (o.productDescription && o.productDescription.trim()) ||
+        "Produto";
+      const catalogImg =
+        cat?.image && String(cat.image).trim()
+          ? String(cat.image).trim()
+          : null;
+      const image = catalogImg || o.productImage || null;
+      return {
+        url: o.originalUrl,
+        title,
+        image,
+        slug: cat?.slug ?? null,
+      };
+    });
     res.json({ items });
   } catch (err) {
     console.error(err);
