@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
-import { priceCnyToBrl } from "@/lib/pricing";
+import { getDisplayPriceBrl } from "@/lib/pricing";
 import { calcCartShipping, detectCategory } from "@/lib/shipping";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
+import { Truck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getAuthToken } from "@/context/AuthContext";
 
@@ -101,6 +102,36 @@ const Checkout = () => {
     if (cep.length === 8) fetchCep(cep);
   }, [form.cep, fetchCep]);
 
+  const shippingItems = useMemo(
+    () =>
+      items.map((i) => ({
+        category: i.category ?? detectCategory(i.titlePt ?? i.title),
+        weightG: i.weightG,
+        keepBox: i.keepBox ?? false,
+        quantity: i.quantity,
+      })),
+    [items],
+  );
+  const shipping = useMemo(
+    () => calcCartShipping(shippingItems),
+    [shippingItems],
+  );
+  const totalProductBrl = useMemo(
+    () =>
+      items.reduce(
+        (acc, i) =>
+          acc +
+          (getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0) * i.quantity,
+        0,
+      ),
+    [items],
+  );
+  const grandTotal = useMemo(
+    () =>
+      totalProductBrl > 0 ? totalProductBrl + shipping.totalBrl : 0,
+    [totalProductBrl, shipping.totalBrl],
+  );
+
   // Pré-preenche com dados do usuário logado
   useEffect(() => {
     if (!user) return;
@@ -171,35 +202,31 @@ const Checkout = () => {
     setLoading(true);
     let firstOrderId: string | null = null;
 
-    // Compute real freight estimate from cart weights
-    const shippingResult = calcCartShipping(
-      items.map((i) => ({
-        category: i.category ?? detectCategory(i.titlePt ?? i.title),
-        weightG: i.weightG,
-        keepBox: i.keepBox ?? false,
+    const totalFreightBrl = shipping.totalBrl;
+    const totalWeightG = shipping.totalWeightG;
+    const checkoutGroupId =
+      items.length > 1 ? crypto.randomUUID() : null;
+    const orderItemsJson = items.map((i) => {
+      const unit = getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0;
+      return {
+        url: i.url,
         quantity: i.quantity,
-      })),
-    );
-    const totalFreightBrl = shippingResult.totalBrl;
-    const totalProductBrl = items.reduce(
-      (acc, i) =>
-        acc +
-        (i.priceBrl ?? (i.priceCny != null ? priceCnyToBrl(i.priceCny) : 100)) *
-          i.quantity,
-      0,
-    );
-    // Distribute freight proportionally by item weight
-    const totalWeightG = shippingResult.totalWeightG;
+        titlePt: i.titlePt ?? null,
+        title: i.title ?? null,
+        image: i.image ?? null,
+        color: i.color ?? null,
+        size: i.size ?? null,
+        variation: i.variation ?? null,
+        notes: i.notes ?? null,
+        unitBrl: unit,
+        lineProductBrl: Math.round(unit * i.quantity * 100) / 100,
+      };
+    });
 
     try {
       for (const item of items) {
-        const unitBrl =
-          item.priceBrl ??
-          (item.priceCny != null ? priceCnyToBrl(item.priceCny) : 100);
-        const productTotal = unitBrl * item.quantity;
-        // Weight-proportional freight share for this item
-        const itemCat =
-          item.category ?? detectCategory(item.titlePt ?? item.title);
+        const unitBrl = getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0;
+        const productTotal = Math.round(unitBrl * item.quantity * 100) / 100;
         const itemWeightG = (item.weightG ?? 400) * item.quantity;
         const freightShare =
           totalWeightG > 0
@@ -207,8 +234,6 @@ const Checkout = () => {
             : totalFreightBrl / items.length;
         const estimatedTotalBrl =
           Math.round((productTotal + freightShare) * 100) / 100;
-        void itemCat;
-        void totalProductBrl;
 
         const productDescription = [
           item.titlePt || item.title || "Produto",
@@ -250,6 +275,8 @@ const Checkout = () => {
             addressCity: form.addressCity.trim(),
             addressState: form.addressState.trim(),
             estimatedTotalBrl,
+            checkoutGroupId,
+            orderItemsJson,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -321,40 +348,106 @@ const Checkout = () => {
             {items.length} {items.length === 1 ? "item" : "itens"} no pedido
           </p>
           <ul className="text-sm text-foreground space-y-3">
-            {items.map((i) => (
-              <li key={i.id} className="flex gap-3 items-start">
-                <div className="shrink-0 w-14 h-14 rounded-lg border border-border bg-muted overflow-hidden">
-                  {i.image ? (
-                    <img
-                      src={ensureHttpsImage(i.image)}
-                      alt=""
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px]">
-                      —
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <span className="font-medium">
-                    {i.titlePt || i.title || "Produto"}
-                  </span>
-                  {(i.color || i.size || i.variation) && (
-                    <span className="text-muted-foreground block text-xs mt-0.5">
-                      {[i.color, i.size, i.variation]
-                        .filter(Boolean)
-                        .join(", ")}
+            {items.map((i) => {
+              const unitBrlLine = getDisplayPriceBrl(i.priceCny, i.priceBrl);
+              return (
+                <li key={i.id} className="flex gap-3 items-start">
+                  <div className="shrink-0 w-14 h-14 rounded-lg border border-border bg-muted overflow-hidden">
+                    {i.image ? (
+                      <img
+                        src={ensureHttpsImage(i.image)}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px]">
+                        —
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <span className="font-medium">
+                      {i.titlePt || i.title || "Produto"}
                     </span>
-                  )}
-                  <span className="text-muted-foreground text-xs mt-1 block">
-                    × {i.quantity}
-                  </span>
-                </div>
-              </li>
-            ))}
+                    {(i.color || i.size || i.variation) && (
+                      <span className="text-muted-foreground block text-xs mt-0.5">
+                        {[i.color, i.size, i.variation]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
+                    )}
+                    <span className="text-muted-foreground text-xs mt-1 block">
+                      × {i.quantity}
+                    </span>
+                    <span className="text-sm font-semibold text-china-red mt-1 block">
+                      {unitBrlLine != null
+                        ? `R$ ${(unitBrlLine * i.quantity).toFixed(2)}`
+                        : "—"}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-4 mb-6 space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <Truck className="w-4 h-4 text-muted-foreground" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Resumo (igual ao carrinho)
+            </p>
+          </div>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div className="flex justify-between">
+              <span>Peso total</span>
+              <span>
+                {shipping.totalWeightG >= 1000
+                  ? `${(shipping.totalWeightG / 1000).toFixed(2)} kg`
+                  : `${shipping.totalWeightG} g`}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Frete China → Brasil (FJ-BR-EXP)</span>
+              <span>R$ {shipping.chinaFreightBrl.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Entrega doméstica</span>
+              <span>R$ {shipping.domesticBrl.toFixed(2)}</span>
+            </div>
+            {shipping.keepBoxSurchargeBrl > 0 && (
+              <div className="flex justify-between">
+                <span>Embalagem original (volumétrico)</span>
+                <span>R$ {shipping.keepBoxSurchargeBrl.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+          <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold">
+            <span>Subtotal produtos</span>
+            <span>
+              {totalProductBrl > 0
+                ? `R$ ${totalProductBrl.toFixed(2)}`
+                : "—"}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm font-semibold">
+            <span>Frete estimado</span>
+            <span className="text-foreground">
+              R$ {shipping.totalBrl.toFixed(2)}
+            </span>
+          </div>
+          {totalProductBrl > 0 && (
+            <div className="flex justify-between text-sm font-bold text-china-red pt-2 border-t border-border">
+              <span>Total estimado</span>
+              <span>R$ {grandTotal.toFixed(2)}</span>
+            </div>
+          )}
+          {totalProductBrl === 0 && (
+            <p className="text-xs text-muted-foreground pt-1">
+              Preço em BRL será confirmado na cotação (como no carrinho).
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

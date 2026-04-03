@@ -881,6 +881,9 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
           productDescription: order.productDescription,
           productImage: order.productImage,
         });
+        if (order.orderItemsJson != null) {
+          await ensureProductsFromOrderSnapshot(order.orderItemsJson);
+        }
       } catch (err) {
         console.warn("Erro ao adicionar produto ao catálogo:", err);
       }
@@ -1097,6 +1100,34 @@ async function ensureProductFromOrder(order: {
       featured: false,
     },
   });
+}
+
+/** Catálogo: uma entrada por item do snapshot do carrinho (pedido pago). */
+async function ensureProductsFromOrderSnapshot(orderItemsJson: unknown) {
+  if (!Array.isArray(orderItemsJson)) return;
+  for (const raw of orderItemsJson) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const url = typeof row.url === "string" ? row.url.trim() : "";
+    if (!url.startsWith("http")) continue;
+    const titlePt = typeof row.titlePt === "string" ? row.titlePt : null;
+    const title = typeof row.title === "string" ? row.title : null;
+    const image = typeof row.image === "string" ? row.image : null;
+    const qty = typeof row.quantity === "number" ? row.quantity : 1;
+    const desc =
+      [titlePt, title].filter(Boolean).join(" — ") || "Produto";
+    try {
+      await ensureProductFromOrder({
+        originalUrl: url,
+        productTitle: titlePt || title,
+        productDescription:
+          `${desc}${qty > 1 ? ` ×${qty}` : ""}`.slice(0, 2000),
+        productImage: image,
+      });
+    } catch (err) {
+      console.warn("ensureProductFromOrder (snapshot):", err);
+    }
+  }
 }
 
 // Admin: listar produtos do catálogo (protegido) — ordenação só por sortOrder para reordenar em qualquer posição
@@ -1533,6 +1564,8 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       addressCity,
       addressState,
       estimatedTotalBrl,
+      checkoutGroupId: bodyCheckoutGroupId,
+      orderItemsJson: bodyOrderItemsJson,
     } = req.body ?? {};
 
     if (!originalUrl || !productDescription || !quantity || !cep) {
@@ -1541,6 +1574,25 @@ app.post("/api/orders", optionalUser, async (req, res) => {
           "Campos obrigatórios: originalUrl, productDescription, quantity, cep",
       });
     }
+
+    const checkoutGroupId =
+      typeof bodyCheckoutGroupId === "string" &&
+      bodyCheckoutGroupId.trim().length > 0
+        ? bodyCheckoutGroupId.trim().slice(0, 120)
+        : null;
+
+    if (
+      bodyOrderItemsJson != null &&
+      !Array.isArray(bodyOrderItemsJson)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "orderItemsJson deve ser um array quando enviado" });
+    }
+    const orderItemsJson =
+      Array.isArray(bodyOrderItemsJson) && bodyOrderItemsJson.length > 0
+        ? bodyOrderItemsJson
+        : undefined;
 
     const order = await prisma.order.create({
       data: {
@@ -1566,6 +1618,10 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         addressNeighborhood: addressNeighborhood ?? null,
         addressCity: addressCity ?? null,
         addressState: addressState ?? null,
+        checkoutGroupId,
+        ...(orderItemsJson !== undefined
+          ? { orderItemsJson }
+          : {}),
       },
     });
 

@@ -16,6 +16,7 @@ import {
   Plus,
   RefreshCw,
   ShoppingBag,
+  ShoppingCart,
   Trash2,
 } from "lucide-react";
 import { CATEGORY_LABELS } from "@/lib/categoryLabels";
@@ -47,12 +48,41 @@ type OrderWithDetails = {
   addressCity: string | null;
   addressState: string | null;
   notes: string | null;
+  checkoutGroupId?: string | null;
+  orderItemsJson?: unknown;
   cssbuyOrderId: string | null;
   internalNotes: string | null;
   createdAt: string;
   quote?: { totalBrl: string };
   shipment?: { trackingCode: string | null; carrier: string | null } | null;
 };
+
+type CartSnapshotRow = {
+  url?: string;
+  quantity?: number;
+  titlePt?: string | null;
+  title?: string | null;
+  lineProductBrl?: number;
+  unitBrl?: number;
+};
+
+function parseCartSnapshot(raw: unknown): CartSnapshotRow[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x) => x && typeof x === "object") as CartSnapshotRow[];
+}
+
+/** Primeiro pedido criado no grupo (mostra o snapshot completo uma vez). */
+function isCartSnapshotLeader(
+  o: OrderWithDetails,
+  all: OrderWithDetails[],
+): boolean {
+  if (!o.checkoutGroupId) return true;
+  const siblings = all.filter((x) => x.checkoutGroupId === o.checkoutGroupId);
+  if (siblings.length <= 1) return true;
+  const t = (x: OrderWithDetails) => new Date(x.createdAt).getTime();
+  const leader = siblings.reduce((a, b) => (t(a) <= t(b) ? a : b));
+  return leader.id === o.id;
+}
 
 function formatCpf(v: string | null): string {
   if (!v) return "";
@@ -1529,12 +1559,67 @@ const Admin = () => {
                         >
                           {STATUS_LABELS[o.status] || o.status}
                         </Badge>
+                        {o.checkoutGroupId && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] gap-1 border-china-red/40 text-china-red"
+                          >
+                            <ShoppingCart className="w-3 h-3" />
+                            Carrinho ·{" "}
+                            {parseCartSnapshot(o.orderItemsJson).length ||
+                              "vários"}{" "}
+                            itens
+                          </Badge>
+                        )}
                         {o.quote && (
                           <span className="text-sm font-semibold text-china-red">
                             R$ {Number(o.quote.totalBrl).toFixed(2)}
                           </span>
                         )}
                       </div>
+                      {isCartSnapshotLeader(o, orders) &&
+                        parseCartSnapshot(o.orderItemsJson).length > 1 && (
+                          <div className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-xs">
+                            <p className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                              <ShoppingCart className="w-3.5 h-3.5 text-china-red" />
+                              Produtos neste checkout
+                            </p>
+                            <ul className="space-y-2">
+                              {parseCartSnapshot(o.orderItemsJson).map(
+                                (row, idx) => (
+                                  <li
+                                    key={idx}
+                                    className="border-b border-border/60 pb-2 last:border-0 last:pb-0"
+                                  >
+                                    <span className="font-medium text-foreground">
+                                      {row.titlePt || row.title || "Produto"}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      {" "}
+                                      ×{row.quantity ?? 1}
+                                    </span>
+                                    {row.lineProductBrl != null && (
+                                      <span className="text-china-red font-semibold ml-2">
+                                        R${" "}
+                                        {Number(row.lineProductBrl).toFixed(2)}
+                                      </span>
+                                    )}
+                                    {row.url && (
+                                      <a
+                                        href={row.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block truncate text-[10px] text-blue-600 hover:underline mt-1"
+                                      >
+                                        {row.url}
+                                      </a>
+                                    )}
+                                  </li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        )}
                       <p className="text-sm font-medium text-foreground line-clamp-2">
                         {o.productTitle || o.productDescription}
                       </p>

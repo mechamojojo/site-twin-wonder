@@ -110,6 +110,10 @@ model Order {
   addressCity        String?      // Cidade
   addressState       String?      // Estado (UF)
   notes              String?
+  /** Mesmo UUID em todos os pedidos criados num único checkout com vários itens */
+  checkoutGroupId    String?
+  /** Snapshot do carrinho (array de itens: url, qtd, título, preço exibido…) */
+  orderItemsJson     Json?
   cssbuyOrderId      String?      // ID do pedido no CSSBuy (para link direto)
   internalNotes      String?      // Notas internas (só admin)
   createdAt          DateTime      @default(now())
@@ -118,6 +122,8 @@ model Order {
   quote    OrderQuote?
   payment  Payment?
   shipment Shipment?
+
+  @@index([checkoutGroupId])
 }
 
 model OrderQuote {

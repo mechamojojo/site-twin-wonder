@@ -78,11 +78,26 @@ type Order = {
   addressCity: string | null;
   addressState: string | null;
   notes: string | null;
+  checkoutGroupId?: string | null;
+  orderItemsJson?: unknown;
   cssbuyOrderId: string | null;
   internalNotes: string | null;
   quote?: { totalBrl: string };
   shipment?: { trackingCode: string | null; carrier: string | null };
 };
+
+type CartSnap = {
+  url?: string;
+  quantity?: number;
+  titlePt?: string | null;
+  title?: string | null;
+  lineProductBrl?: number;
+};
+
+function parseCartSnap(raw: unknown): CartSnap[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x) => x && typeof x === "object") as CartSnap[];
+}
 
 function formatCpf(v: string | null): string {
   if (!v) return "";
@@ -420,6 +435,54 @@ const AdminPedido = () => {
                 </span>
               )}
             </div>
+            {parseCartSnap(order.orderItemsJson).length > 0 &&
+              (order.checkoutGroupId ||
+                parseCartSnap(order.orderItemsJson).length > 1) && (
+              <div className="mb-5 rounded-lg border border-border bg-muted/40 p-4">
+                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-china-red" />
+                  {order.checkoutGroupId
+                    ? "Carrinho completo (mesmo checkout)"
+                    : "Itens no checkout"}
+                </h3>
+                <ul className="space-y-3 text-sm">
+                  {parseCartSnap(order.orderItemsJson).map((row, idx) => (
+                    <li
+                      key={idx}
+                      className="flex flex-col gap-1 border-b border-border/60 pb-3 last:border-0 last:pb-0"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="font-medium text-foreground">
+                          {row.titlePt || row.title || "Produto"}
+                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          ×{row.quantity ?? 1}
+                          {row.lineProductBrl != null && (
+                            <span className="text-china-red font-semibold ml-2">
+                              R$ {Number(row.lineProductBrl).toFixed(2)}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {row.url && (
+                        <a
+                          href={row.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:underline truncate"
+                        >
+                          {row.url}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-muted-foreground mt-3">
+                  Este card é o produto deste pedido; use a lista acima para ver
+                  tudo que o cliente enviou no mesmo checkout.
+                </p>
+              </div>
+            )}
             <div className="flex gap-4 flex-wrap">
               {order.productImage && (
                 <div className="shrink-0 w-24 h-24 rounded-lg border border-border bg-muted overflow-hidden">
