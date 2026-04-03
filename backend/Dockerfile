@@ -16,4 +16,4 @@ EXPOSE 8080
 
 # Migrações: rode na Railway (Shell) ou em "Deploy" com: npx prisma migrate deploy
 # Não encadear aqui — se migrate falhar, o container nunca escuta e o healthcheck quebra.
-CMD ["node", "server.js"]
+CMD ["node", "dist/index.js"]
