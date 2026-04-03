@@ -265,7 +265,12 @@ const Checkout = () => {
           productDescription,
           productTitle:
             items.length > 1
-              ? `Carrinho (${items.length} produtos, ${totalUnits} un.)`
+              ? (() => {
+                  const main = (first.titlePt || first.title || "Produto").trim();
+                  const short = main.length > 100 ? `${main.slice(0, 97)}…` : main;
+                  const extra = items.length - 1;
+                  return `${short} (+${extra} ${extra === 1 ? "outro" : "outros"})`;
+                })()
               : first.titlePt || first.title || null,
           productImage: first.image || null,
           productColor: first.color || null,
@@ -286,6 +291,22 @@ const Checkout = () => {
           addressCity: form.addressCity.trim(),
           addressState: form.addressState.trim(),
           estimatedTotalBrl: grandTotal,
+          orderItems: items.map((item) => {
+            const unit = getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0;
+            const lineTotal = Math.round(unit * item.quantity * 100) / 100;
+            return {
+              url: item.url,
+              titlePt: item.titlePt ?? null,
+              title: item.title ?? null,
+              image: item.image ?? null,
+              quantity: item.quantity,
+              lineTotalBrl: lineTotal,
+              color: item.color ?? null,
+              size: item.size ?? null,
+              variation: item.variation ?? null,
+              notes: item.notes ?? null,
+            };
+          }),
         }),
       });
       const data = await res.json().catch(() => ({}));

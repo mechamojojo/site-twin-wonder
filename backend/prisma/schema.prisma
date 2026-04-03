@@ -110,6 +110,8 @@ model Order {
   addressCity        String?      // Cidade
   addressState       String?      // Estado (UF)
   notes              String?
+  /** Carrinho: itens (url, título, imagem, qtd…) para exibição no admin */
+  orderItemsJson     Json?
   cssbuyOrderId      String?      // ID do pedido no CSSBuy (para link direto)
   internalNotes      String?      // Notas internas (só admin)
   createdAt          DateTime      @default(now())

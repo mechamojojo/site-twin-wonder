@@ -9,16 +9,136 @@ import {
   ArrowLeft,
   Check,
   ExternalLink,
-  Lock,
   MessageCircle,
-  Package,
   ShoppingBag,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ensureHttpsImage } from "@/lib/utils";
 
 const ADMIN_TOKEN_KEY = "compraschina-admin-token";
+
+type AdminOrderLine = {
+  url: string;
+  displayTitle: string;
+  subtitle: string;
+  quantity: number;
+  lineTotalBrl: number | null;
+  image: string | null;
+  notes: string | null;
+};
+
+type ParsedDescLine = {
+  titleAndOpts: string;
+  quantity: number;
+  lineTotalBrl: number;
+  url: string;
+};
+
+/** Campos mínimos para montar linhas do pedido (antes do tipo `Order` completo) */
+type OrderLineSource = {
+  orderItemsJson?: unknown;
+  productDescription: string;
+  originalUrl: string;
+  productTitle: string | null;
+  productImage: string | null;
+  productColor: string | null;
+  productSize: string | null;
+  productVariation: string | null;
+  quantity: number;
+  notes: string | null;
+};
+
+function parseProductDescriptionLines(desc: string): ParsedDescLine[] {
+  const lines = desc
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const out: ParsedDescLine[] = [];
+  for (const line of lines) {
+    const pipeIdx = line.lastIndexOf(" | http");
+    if (pipeIdx === -1) continue;
+    const url = line.slice(pipeIdx + 3).trim();
+    if (!url.startsWith("http")) continue;
+    const left = line.slice(0, pipeIdx).trim();
+    const m = left.match(
+      /^\[(\d+)\]\s*(.+?)\s+×(\d+)\s+\(R\$\s*([\d.]+)\)\s*$/,
+    );
+    if (!m) continue;
+    out.push({
+      titleAndOpts: m[2].trim(),
+      quantity: Number(m[3]),
+      lineTotalBrl: Number(m[4]),
+      url,
+    });
+  }
+  return out;
+}
+
+function getAdminOrderLines(o: OrderLineSource): AdminOrderLine[] {
+  const json = o.orderItemsJson;
+  if (Array.isArray(json) && json.length > 0) {
+    return json
+      .filter(
+        (x): x is Record<string, unknown> =>
+          x != null && typeof x === "object",
+      )
+      .filter(
+        (row) => typeof row.url === "string" && row.url.startsWith("http"),
+      )
+      .map((row, i) => {
+        const titlePt = typeof row.titlePt === "string" ? row.titlePt : "";
+        const title = typeof row.title === "string" ? row.title : "";
+        const displayTitle = titlePt || title || `Produto ${i + 1}`;
+        const parts = [row.color, row.size, row.variation].filter(
+          (x) => typeof x === "string" && x.trim(),
+        ) as string[];
+        const qty = Number(row.quantity);
+        return {
+          url: row.url as string,
+          displayTitle,
+          subtitle: parts.join(" · "),
+          quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
+          lineTotalBrl:
+            typeof row.lineTotalBrl === "number" ? row.lineTotalBrl : null,
+          image: typeof row.image === "string" ? row.image : null,
+          notes: typeof row.notes === "string" ? row.notes : null,
+        };
+      });
+  }
+  const parsed = parseProductDescriptionLines(o.productDescription);
+  if (parsed.length > 0) {
+    return parsed.map((p, i) => {
+      const parts = p.titleAndOpts.split(" — ");
+      const displayTitle = parts[0]?.trim() || p.titleAndOpts;
+      const subtitle =
+        parts.length > 1 ? parts.slice(1).join(" — ").trim() : "";
+      return {
+        url: p.url,
+        displayTitle,
+        subtitle,
+        quantity: p.quantity,
+        lineTotalBrl: p.lineTotalBrl,
+        image: i === 0 ? o.productImage : null,
+        notes: null,
+      };
+    });
+  }
+  return [
+    {
+      url: o.originalUrl,
+      displayTitle: o.productTitle || o.productDescription || "Produto",
+      subtitle: [o.productColor, o.productSize, o.productVariation]
+        .filter(Boolean)
+        .join(" · "),
+      quantity: o.quantity,
+      lineTotalBrl: null,
+      image: o.productImage,
+      notes: o.notes,
+    },
+  ];
+}
 
 const STATUS_LABELS: Record<string, string> = {
   AGUARDANDO_COTACAO: "Aguardando cotação",
@@ -48,16 +168,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 const QUICK_STATUSES = ["ENVIADO_PARA_CSSBUY", "COMPRADO", "NO_ESTOQUE", "AGUARDANDO_ENVIO", "EM_ENVIO", "CONCLUIDO"] as const;
 
-type Order = {
+type Order = OrderLineSource & {
   id: string;
-  originalUrl: string;
-  productDescription: string;
-  productTitle: string | null;
-  productImage: string | null;
-  productColor: string | null;
-  productSize: string | null;
-  productVariation: string | null;
-  quantity: number;
   status: string;
   cep: string;
   customerName: string | null;
@@ -70,7 +182,6 @@ type Order = {
   addressNeighborhood: string | null;
   addressCity: string | null;
   addressState: string | null;
-  notes: string | null;
   cssbuyOrderId: string | null;
   internalNotes: string | null;
   quote?: { totalBrl: string };
@@ -91,17 +202,26 @@ function formatAddress(o: Order): string {
   return [line1, line2, `CEP ${o.cep}`].filter(Boolean).join("\n");
 }
 
-function buildCssBuyCopyText(o: Order): string {
-  const variantParts = [o.productColor, o.productSize, o.productVariation].filter(Boolean);
-  const noteParts = [...variantParts];
-  if (o.notes) noteParts.push(o.notes);
-  const nota = noteParts.length ? noteParts.join(" | ") : o.productDescription;
+function buildCssBuyCopyText(o: Order, lines: AdminOrderLine[]): string {
+  const itemBlocks = lines.map((L, i) => {
+    const bits = [
+      `--- Item ${i + 1}${lines.length > 1 ? ` / ${lines.length}` : ""} ---`,
+      `Link: ${L.url}`,
+      `Título: ${L.displayTitle}`,
+      L.subtitle ? `Opções: ${L.subtitle}` : "",
+      `Quantidade: ${L.quantity}`,
+      L.lineTotalBrl != null
+        ? `Subtotal estimado (ref.): R$ ${L.lineTotalBrl.toFixed(2)}`
+        : "",
+      L.notes ? `Nota do cliente: ${L.notes}` : "",
+    ].filter(Boolean);
+    return bits.join("\n");
+  });
   return [
     "--- COMPRASCHINA → CSSBuy ---",
-    `Link: ${o.originalUrl}`,
-    `Título: ${o.productTitle || o.productDescription}`,
-    `Nota (cor/tamanho/variante): ${nota}`,
-    `Quantidade: ${o.quantity}`,
+    lines.length > 1 ? `Pedido com ${lines.length} produtos` : "",
+    "",
+    ...itemBlocks,
     "",
     "Destinatário Brasil:",
     `Nome: ${o.customerName || "-"}`,
@@ -109,8 +229,11 @@ function buildCssBuyCopyText(o: Order): string {
     `Endereço:\n${formatAddress(o)}`,
     `WhatsApp: ${o.customerWhatsapp || "-"}`,
     `E-mail: ${o.customerEmail || "-"}`,
+    o.notes ? `\nObs. do pedido:\n${o.notes}` : "",
     "---",
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function whatsAppUrl(phone: string | null, message?: string): string {
@@ -255,27 +378,36 @@ const AdminPedido = () => {
     }
   };
 
-  const [processingCssBuy, setProcessingCssBuy] = useState(false);
+  const [processingCssBuyUrl, setProcessingCssBuyUrl] = useState<string | null>(
+    null,
+  );
 
-  const handleProcessarCompra = async () => {
+  const openCssBuyForUrl = async (itemUrl: string) => {
     if (!order?.id || !token) return;
-    setProcessingCssBuy(true);
+    setProcessingCssBuyUrl(itemUrl);
     try {
-      const res = await fetch(apiUrl(`/api/admin/orders/${order.id}/cssbuy-url`), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        apiUrl(
+          `/api/admin/orders/${order.id}/cssbuy-url?url=${encodeURIComponent(itemUrl)}`,
+        ),
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
       const data = await res.json().catch(() => ({}));
       const url = data?.url;
       if (url) {
         window.open(url, "_blank", "noopener,noreferrer");
-        toast.success("Abrindo produto no CSSBuy. Replique o modelo da imagem abaixo.");
+        toast.success(
+          "Abrindo no CSSBuy. Replique a variante conforme a imagem deste item.",
+        );
       } else {
-        toast.info("Este marketplace não tem link direto no CSSBuy. Use o link do produto e copie o resumo.");
+        toast.info(
+          "Este marketplace pode não ter link direto no CSSBuy. Use o link do produto e copie o resumo.",
+        );
       }
     } catch {
       toast.error("Erro ao obter link CSSBuy");
     } finally {
-      setProcessingCssBuy(false);
+      setProcessingCssBuyUrl(null);
     }
   };
 
@@ -314,8 +446,16 @@ const AdminPedido = () => {
     );
   }
 
+  const orderLines = getAdminOrderLines(order);
+
   const nome = order.customerName?.trim().split(/\s/)[0] || "cliente";
-  const produto = (order.productTitle || order.productDescription || "seu produto").slice(0, 80);
+  const produto =
+    orderLines.length > 1
+      ? `seu pedido (${orderLines.length} itens)`
+      : (order.productTitle || order.productDescription || "seu produto").slice(
+          0,
+          80,
+        );
   const linkAcompanhamento = `${SITE_URL.replace(/\/$/, "")}/pedido-confirmado/${order.id}`;
 
   const msgPedidoAceito =
@@ -352,9 +492,8 @@ const AdminPedido = () => {
         </div>
 
         <div className="rounded-xl border border-border bg-card overflow-hidden">
-          {/* Bloco do produto: imagem + título + link */}
           <div className="p-6 border-b border-border">
-            <div className="flex flex-wrap items-start gap-2 mb-3">
+            <div className="flex flex-wrap items-start gap-2 mb-2">
               <span className="text-xs font-mono text-muted-foreground">{order.id}</span>
               <Badge className={STATUS_COLORS[order.status] || "bg-muted"}>
                 {STATUS_LABELS[order.status] || order.status}
@@ -365,77 +504,123 @@ const AdminPedido = () => {
                 </span>
               )}
             </div>
-            <div className="flex gap-4 flex-wrap">
-              {order.productImage && (
-                <div className="shrink-0 w-24 h-24 rounded-lg border border-border bg-muted overflow-hidden">
-                  <img
-                    src={order.productImage}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <h1 className="text-xl font-heading font-bold text-foreground">
-                  {order.productTitle || order.productDescription}
-                </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Qtd: {order.quantity}
-                  {(order.productColor || order.productSize || order.productVariation) && (
-                    <> · {[order.productColor, order.productSize, order.productVariation].filter(Boolean).join(", ")}</>
-                  )}
-                </p>
-                <a
-                  href={order.originalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 mt-2 text-sm text-china-red hover:underline"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Abrir link do produto no marketplace
-                </a>
-              </div>
-            </div>
+            {orderLines.length > 1 && (
+              <p className="text-sm text-muted-foreground">
+                Pedido com <strong className="text-foreground">{orderLines.length}</strong>{" "}
+                produtos — cada seção abaixo é um item do carrinho (imagem, link e ações próprias).
+              </p>
+            )}
           </div>
 
-          {/* Modelo escolhido pelo cliente — imagem em destaque para replicar no CSSBuy */}
-          <div className="p-6 border-b border-border bg-amber-50/50 dark:bg-amber-950/20">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Modelo escolhido pelo cliente</h3>
-            <p className="text-xs text-muted-foreground mb-3">
-              Use esta imagem para replicar exatamente a variante no CSSBuy (cor/estilo).
-            </p>
-            <div className="flex flex-wrap items-start gap-4">
-              {order.productImage ? (
-                <div className="shrink-0 w-48 h-48 sm:w-56 sm:h-56 rounded-xl border-2 border-border bg-white overflow-hidden shadow-sm">
-                  <img
-                    src={order.productImage}
-                    alt="Modelo escolhido"
-                    className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
+          {orderLines.map((line, idx) => (
+            <div
+              key={`${line.url}-${idx}`}
+              className="border-b border-border last:border-b-0 bg-card"
+            >
+              <div className="p-6 border-b border-border/60 bg-muted/15">
+                <p className="text-xs font-bold uppercase tracking-wide text-china-red mb-3">
+                  Produto {idx + 1} de {orderLines.length}
+                </p>
+                <div className="flex gap-4 flex-wrap">
+                  {line.image ? (
+                    <div className="shrink-0 w-24 h-24 rounded-lg border border-border bg-muted overflow-hidden">
+                      <img
+                        src={ensureHttpsImage(line.image)}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="shrink-0 w-24 h-24 rounded-lg border border-dashed border-border bg-muted/40 flex items-center justify-center text-[10px] text-muted-foreground text-center px-1">
+                      Sem imagem
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-lg font-heading font-bold text-foreground leading-snug">
+                      {line.displayTitle}
+                    </h2>
+                    {line.subtitle && (
+                      <p className="text-sm text-muted-foreground mt-1">{line.subtitle}</p>
+                    )}
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Quantidade: {line.quantity}
+                      {line.lineTotalBrl != null && (
+                        <>
+                          {" "}
+                          · Subtotal (ref.):{" "}
+                          <span className="font-medium text-foreground">
+                            R$ {line.lineTotalBrl.toFixed(2)}
+                          </span>
+                        </>
+                      )}
+                    </p>
+                    {line.notes && (
+                      <p className="text-xs text-muted-foreground mt-2 italic">
+                        Nota: {line.notes}
+                      </p>
+                    )}
+                    <a
+                      href={line.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 mt-2 text-sm text-china-red hover:underline break-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                      Abrir link no marketplace
+                    </a>
+                  </div>
                 </div>
-              ) : (
-                <div className="shrink-0 w-48 h-48 sm:w-56 sm:h-56 rounded-xl border-2 border-dashed border-border bg-muted/50 flex items-center justify-center text-xs text-muted-foreground text-center px-3">
-                  Imagem do modelo não disponível
+              </div>
+
+              <div className="p-6 bg-amber-50/50 dark:bg-amber-950/20">
+                <h3 className="text-sm font-semibold text-foreground mb-2">
+                  Modelo / variante (item {idx + 1})
+                </h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Use a imagem deste bloco para replicar no CSSBuy a variante correta.
+                </p>
+                <div className="flex flex-wrap items-start gap-4">
+                  {line.image ? (
+                    <div className="shrink-0 w-48 h-48 sm:w-56 sm:h-56 rounded-xl border-2 border-border bg-white overflow-hidden shadow-sm">
+                      <img
+                        src={ensureHttpsImage(line.image)}
+                        alt={`Modelo item ${idx + 1}`}
+                        className="w-full h-full object-contain"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="shrink-0 w-48 h-48 sm:w-56 sm:h-56 rounded-xl border-2 border-dashed border-border bg-muted/50 flex items-center justify-center text-xs text-muted-foreground text-center px-3">
+                      Imagem não disponível para este item
+                    </div>
+                  )}
+                  <div className="min-w-0 flex flex-col gap-2">
+                    {line.subtitle && (
+                      <p className="text-sm font-medium text-foreground">{line.subtitle}</p>
+                    )}
+                    <Button
+                      size="sm"
+                      className="gap-1.5 bg-china-red hover:bg-china-red/90 w-fit"
+                      onClick={() => openCssBuyForUrl(line.url)}
+                      disabled={processingCssBuyUrl !== null}
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      {processingCssBuyUrl === line.url
+                        ? "Abrindo…"
+                        : "Processar este item no CSSBuy"}
+                    </Button>
+                  </div>
                 </div>
-              )}
-              <div className="min-w-0">
-                {(order.productColor || order.productSize || order.productVariation) && (
-                  <p className="text-sm font-medium text-foreground">
-                    {[order.productColor, order.productSize, order.productVariation].filter(Boolean).join(" · ")}
-                  </p>
-                )}
-                <p className="text-sm text-muted-foreground mt-1">Qtd: {order.quantity}</p>
               </div>
             </div>
-          </div>
+          ))}
 
           {/* Contatar cliente */}
           <div className="p-6 border-b border-border bg-muted/30">
@@ -516,19 +701,33 @@ const AdminPedido = () => {
                 <XCircle className="w-3.5 h-3.5 mr-1" />
                 Negar / Cancelar
               </Button>
-              <Button
-                size="sm"
-                className="gap-1.5 bg-china-red hover:bg-china-red/90"
-                onClick={handleProcessarCompra}
-                disabled={processingCssBuy}
-              >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                {processingCssBuy ? "Abrindo…" : "Processar no CSSBuy"}
-              </Button>
+              {orderLines.length === 1 ? (
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-china-red hover:bg-china-red/90"
+                  onClick={() => openCssBuyForUrl(orderLines[0].url)}
+                  disabled={processingCssBuyUrl !== null}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  {processingCssBuyUrl === orderLines[0].url
+                    ? "Abrindo…"
+                    : "Processar no CSSBuy"}
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground w-full sm:w-auto py-1">
+                  Vários itens: use <strong className="text-foreground">Processar este item no CSSBuy</strong> em cada
+                  seção acima.
+                </p>
+              )}
               <Button size="sm" variant="outline" asChild>
-                <a href={order.originalUrl} target="_blank" rel="noopener noreferrer" className="gap-1.5">
+                <a
+                  href={orderLines[0]?.url || order.originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gap-1.5"
+                >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  Abrir link produto
+                  {orderLines.length > 1 ? "Abrir 1º link" : "Abrir link produto"}
                 </a>
               </Button>
               <Button size="sm" variant="outline" asChild>
@@ -606,7 +805,7 @@ const AdminPedido = () => {
               Ver dados completos (copiar para CSSBuy)
             </summary>
             <pre className="p-4 bg-muted/50 text-xs overflow-x-auto whitespace-pre-wrap font-sans">
-              {buildCssBuyCopyText(order)}
+              {buildCssBuyCopyText(order, orderLines)}
             </pre>
           </details>
         </div>
