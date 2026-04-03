@@ -840,7 +840,7 @@ app.patch("/api/admin/orders/:id/shipment", requireAdmin, async (req, res) => {
   }
 });
 
-// Admin: atualizar pedido (status, cssbuyOrderId, internalNotes) (protegido)
+// Admin: atualizar pedido (status, cssbuyOrderId, internalNotes, títulos) (protegido)
 app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -855,6 +855,13 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
     }
     if (typeof body.internalNotes === "string") {
       updates.internalNotes = body.internalNotes.trim().slice(0, 2000) || null;
+    }
+    if (typeof body.productTitle === "string") {
+      updates.productTitle = body.productTitle.trim().slice(0, 300) || null;
+    }
+    if (typeof body.barDisplayTitle === "string") {
+      updates.barDisplayTitle =
+        body.barDisplayTitle.trim().slice(0, 300) || null;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -1754,6 +1761,7 @@ app.get("/api/recent-purchases", async (_req, res) => {
       select: {
         originalUrl: true,
         productTitle: true,
+        barDisplayTitle: true,
         productImage: true,
         productDescription: true,
       },
@@ -1777,7 +1785,9 @@ app.get("/api/recent-purchases", async (_req, res) => {
       const fromCatalog = cat
         ? catalogProductDisplayTitle(cat.titlePt, cat.title)
         : "";
+      const barOverride = (o.barDisplayTitle ?? "").trim();
       const title =
+        barOverride ||
         fromCatalog ||
         (o.productTitle && o.productTitle.trim()) ||
         (o.productDescription && o.productDescription.trim()) ||

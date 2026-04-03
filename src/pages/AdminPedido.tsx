@@ -60,6 +60,8 @@ type Order = {
   originalUrl: string;
   productDescription: string;
   productTitle: string | null;
+  /** Título só na faixa "O que estão comprando" (opcional) */
+  barDisplayTitle?: string | null;
   productImage: string | null;
   productColor: string | null;
   productSize: string | null;
@@ -178,6 +180,8 @@ const AdminPedido = () => {
     internalNotes: "",
     trackingCode: "",
     carrier: "",
+    productTitle: "",
+    barDisplayTitle: "",
   });
 
   useEffect(() => {
@@ -208,6 +212,8 @@ const AdminPedido = () => {
             internalNotes: data.internalNotes ?? "",
             trackingCode: data.shipment?.trackingCode ?? "",
             carrier: data.shipment?.carrier ?? "",
+            productTitle: data.productTitle ?? "",
+            barDisplayTitle: data.barDisplayTitle ?? "",
           });
         } else {
           setError(
@@ -273,6 +279,8 @@ const AdminPedido = () => {
             status: form.status,
             cssbuyOrderId: form.cssbuyOrderId.trim() || null,
             internalNotes: form.internalNotes.trim() || null,
+            productTitle: form.productTitle.trim() || null,
+            barDisplayTitle: form.barDisplayTitle.trim() || null,
           }),
         }),
         fetch(apiUrl(`/api/admin/orders/${order.id}/shipment`), {
@@ -292,6 +300,8 @@ const AdminPedido = () => {
         status: form.status,
         cssbuyOrderId: form.cssbuyOrderId.trim() || null,
         internalNotes: form.internalNotes.trim() || null,
+        productTitle: form.productTitle.trim() || null,
+        barDisplayTitle: form.barDisplayTitle.trim() || null,
         shipment: {
           trackingCode: form.trackingCode.trim() || null,
           carrier: form.carrier.trim() || null,
@@ -728,6 +738,42 @@ const AdminPedido = () => {
             <h3 className="text-sm font-semibold text-foreground">
               Editar pedido
             </h3>
+            <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+              <p className="text-xs font-medium text-foreground">
+                Nomes na loja
+              </p>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  Título do produto (painel, mensagens, área do cliente)
+                </label>
+                <input
+                  value={form.productTitle}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, productTitle: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                  placeholder="Nome legível do produto"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  Título na faixa &quot;O que estão comprando&quot; (opcional)
+                </label>
+                <input
+                  value={form.barDisplayTitle}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, barDisplayTitle: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                  placeholder="Deixe vazio para usar catálogo ou título acima"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Se você preencher, esse texto aparece na home nessa faixa,
+                  ignorando o nome do catálogo. Útil para encurtar ou corrigir
+                  um nome feio vindo do checkout.
+                </p>
+              </div>
+            </div>
             <div className="grid gap-3">
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">

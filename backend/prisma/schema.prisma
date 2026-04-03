@@ -93,6 +93,8 @@ model Order {
   shippingMethod     ShippingMethod?
   productDescription String
   productTitle       String?       // Título do produto (para barra "O que estão comprando")
+  /** Se preenchido, substitui catálogo/título só na faixa "O que estão comprando" na home */
+  barDisplayTitle    String?
   productImage       String?       // URL da imagem (para barra "O que estão comprando")
   productColor       String?       // Cor selecionada (para CSSBuy)
   productSize        String?       // Tamanho selecionado (para CSSBuy)
