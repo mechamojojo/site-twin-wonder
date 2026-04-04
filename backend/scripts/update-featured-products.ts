@@ -11,10 +11,8 @@ import * as path from "path";
 
 const FEATURED_PATH = path.join(__dirname, "../../src/data/featuredProducts.ts");
 
-const RATE_CNY_TO_BRL = 0.78;
-const MARGEM_THRESHOLD_BRL = 60;
-const MARGEM_BAIXA_PERCENT = 50;
-const MARGEM_ALTA_PERCENT = 35;
+const RATE_CNY_TO_BRL = 0.81;
+const DISPLAY_PRICE_MULTIPLIER = 2;
 
 function getSourceFromUrl(url: string): string {
   const host = url.toLowerCase();
@@ -137,8 +135,7 @@ async function main() {
       let newPriceBrl = isStorePage ? undefined : p.priceBrl;
       if (!isStorePage && newPriceCny != null && newPriceCny > 0) {
         const costBrl = newPriceCny * RATE_CNY_TO_BRL;
-        const marginPercent = costBrl < MARGEM_THRESHOLD_BRL ? MARGEM_BAIXA_PERCENT : MARGEM_ALTA_PERCENT;
-        newPriceBrl = Math.round(costBrl * (1 + marginPercent / 100) * 100) / 100;
+        newPriceBrl = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
       }
 
       updated.push({

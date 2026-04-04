@@ -9,7 +9,8 @@ import { PrismaClient } from "@prisma/client";
 import { getProductPreview } from "../src/scraper/productPreview";
 
 const prisma = new PrismaClient();
-const RATE_CNY = 0.78;
+const RATE_CNY = 0.81;
+const DISPLAY_PRICE_MULTIPLIER = 2;
 
 function getLimit(): number | null {
   const arg = process.argv.find((a) => a === "--limit" || a.startsWith("--limit="));
@@ -49,8 +50,7 @@ async function main() {
       let priceBrlVal: number | null = p.priceBrl != null ? Number(p.priceBrl) : null;
       if (priceCnyVal != null && priceCnyVal > 0) {
         const costBrl = priceCnyVal * RATE_CNY;
-        const margin = costBrl < 60 ? 0.5 : 0.35;
-        priceBrlVal = Math.round(costBrl * (1 + margin) * 100) / 100;
+        priceBrlVal = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
       }
 
       await prisma.product.update({

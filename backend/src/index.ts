@@ -79,7 +79,9 @@ function safeErrorMessage(err: unknown, fallback: string): string {
 const ADMIN_SECRET = (process.env.ADMIN_SECRET || "").trim();
 const ADMIN_SESSIONS = new Map<string, number>();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-const RATE_CNY = 0.78;
+const RATE_CNY = 0.81;
+/** Preço exibido = custo em R$ (CNY × taxa) × fator. 2 = dobro do custo. */
+const DISPLAY_PRICE_MULTIPLIER = 2;
 
 const ADMIN_JWT_EXPIRES = "7d";
 
@@ -1511,8 +1513,7 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
     let priceBrl: number | null = null;
     if (priceCny != null && priceCny > 0) {
       const costBrl = priceCny * RATE_CNY;
-      const margin = costBrl < 60 ? 0.5 : 0.35;
-      priceBrl = Math.round(costBrl * (1 + margin) * 100) / 100;
+      priceBrl = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
     }
 
     const maxSort = await prisma.product
@@ -2027,12 +2028,9 @@ app.post("/api/admin/product-preview/save", requireAdmin, async (req, res) => {
 });
 
 // Taxa de câmbio base (custo para nós) — em produção usar API de câmbio
-const RATE_CNY_TO_BRL = 0.78;
-const MARGEM_THRESHOLD_BRL = 60; // abaixo disso: margem maior (itens baratos)
-const MARGEM_BAIXA_PERCENT = 50; // produto < R$ 60: +50%
-const MARGEM_ALTA_PERCENT = 35; // produto >= R$ 60: +35%
+const RATE_CNY_TO_BRL = RATE_CNY;
 
-// Preview de preço: custo em yuan → conversão → margem ComprasChina → preço final em reais
+// Preview de preço: custo em yuan → conversão → preço ao cliente (custo em R$ × multiplicador)
 // Query opcional: priceCny — quando informado (ex.: preço da variante no CSSBuy), usa esse valor em vez do cache
 app.get("/api/price/preview", async (req, res) => {
   try {
@@ -2067,11 +2065,8 @@ app.get("/api/price/preview", async (req, res) => {
     }
 
     const costBrl = productPriceCny * RATE_CNY_TO_BRL;
-    const marginPercent =
-      costBrl < MARGEM_THRESHOLD_BRL
-        ? MARGEM_BAIXA_PERCENT
-        : MARGEM_ALTA_PERCENT;
-    const totalProductBrl = costBrl * (1 + marginPercent / 100);
+    const marginPercent = (DISPLAY_PRICE_MULTIPLIER - 1) * 100; // ex.: 2× → +100% sobre o custo
+    const totalProductBrl = costBrl * DISPLAY_PRICE_MULTIPLIER;
 
     return res.json({
       originalUrl: url,
