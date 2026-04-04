@@ -4,11 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
 import { getDisplayPriceBrl } from "@/lib/pricing";
-import {
-  calcCartShipping,
-  detectCategory,
-  itemWeightG,
-} from "@/lib/shipping";
+import { calcCartShipping, detectCategory, itemWeightG } from "@/lib/shipping";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -119,15 +115,13 @@ const Checkout = () => {
     () =>
       items.reduce(
         (acc, i) =>
-          acc +
-          (getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0) * i.quantity,
+          acc + (getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0) * i.quantity,
         0,
       ),
     [items],
   );
   const grandTotal = useMemo(
-    () =>
-      totalProductBrl > 0 ? totalProductBrl + shipping.totalBrl : 0,
+    () => (totalProductBrl > 0 ? totalProductBrl + shipping.totalBrl : 0),
     [totalProductBrl, shipping.totalBrl],
   );
 
@@ -203,8 +197,7 @@ const Checkout = () => {
 
     const totalFreightBrl = shipping.totalBrl;
     const totalWeightG = shipping.totalWeightG;
-    const checkoutGroupId =
-      items.length > 1 ? crypto.randomUUID() : null;
+    const checkoutGroupId = items.length > 1 ? crypto.randomUUID() : null;
     const orderItemsJson = items.map((i) => {
       const unit = getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0;
       return {
@@ -235,9 +228,7 @@ const Checkout = () => {
         totalWeightG > 0
           ? (lineWeightG / totalWeightG) * totalFreightBrl
           : totalFreightBrl / items.length;
-      lineEstimates.push(
-        Math.round((productTotal + freightShare) * 100) / 100,
-      );
+      lineEstimates.push(Math.round((productTotal + freightShare) * 100) / 100);
     }
 
     const sumLineEstimates =
@@ -448,9 +439,7 @@ const Checkout = () => {
           <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold">
             <span>Subtotal produtos</span>
             <span>
-              {totalProductBrl > 0
-                ? `R$ ${totalProductBrl.toFixed(2)}`
-                : "—"}
+              {totalProductBrl > 0 ? `R$ ${totalProductBrl.toFixed(2)}` : "—"}
             </span>
           </div>
           <div className="flex justify-between text-sm font-semibold">
@@ -471,7 +460,11 @@ const Checkout = () => {
             </p>
           )}
           <p className="text-[11px] text-muted-foreground pt-2 leading-relaxed border-t border-border mt-2">
-            O frete estimado usa a tabela <strong className="font-medium text-foreground">FJ-BR-EXP</strong> (igual ao carrinho). A forma de envio e o valor final são definidos pela equipe na cotação — não há opção de marítimo ou linha econômica no checkout.
+            O frete estimado usa a tabela{" "}
+            <strong className="font-medium text-foreground">FJ-BR-EXP</strong>{" "}
+            (igual ao carrinho). A forma de envio e o valor final são definidos
+            pela equipe na cotação — não há opção de marítimo ou linha econômica
+            no checkout.
           </p>
         </div>
 

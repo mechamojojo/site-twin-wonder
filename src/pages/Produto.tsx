@@ -99,9 +99,7 @@ const Produto = () => {
   );
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
   const priceStr =
-    displayBrl != null
-      ? `R$ ${displayBrl.toFixed(2)}`
-      : "Consultar";
+    displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
 
   return (
     <div className="min-h-screen bg-background">

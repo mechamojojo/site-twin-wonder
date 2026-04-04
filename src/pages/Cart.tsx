@@ -15,14 +15,20 @@ const Cart = () => {
   const { items, removeItem, updateQuantity, updateKeepBox } = useCart();
 
   const totalBrl = items.reduce(
-    (acc, i) => acc + (getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0) * i.quantity,
-    0
+    (acc, i) =>
+      acc + (getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0) * i.quantity,
+    0,
   );
 
   // Build shipping estimate from current cart items
   const shippingItems = items.map((i) => {
     const cat = i.category ?? detectCategory(i.titlePt ?? i.title);
-    return { category: cat, weightG: i.weightG, keepBox: i.keepBox ?? false, quantity: i.quantity };
+    return {
+      category: cat,
+      weightG: i.weightG,
+      keepBox: i.keepBox ?? false,
+      quantity: i.quantity,
+    };
   });
   const shipping = calcCartShipping(shippingItems);
   const grandTotal = totalBrl > 0 ? totalBrl + shipping.totalBrl : 0;
@@ -31,7 +37,9 @@ const Cart = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-12 max-w-4xl">
-        <h1 className="text-xl font-heading font-bold text-foreground mb-2">Seu carrinho</h1>
+        <h1 className="text-xl font-heading font-bold text-foreground mb-2">
+          Seu carrinho
+        </h1>
         <p className="text-sm text-muted-foreground mb-6">
           {items.length === 0
             ? "Adicione produtos pela página inicial ou pela página do produto."
@@ -52,7 +60,8 @@ const Cart = () => {
         ) : (
           <div className="space-y-4">
             {items.map((item) => {
-              const cat = item.category ?? detectCategory(item.titlePt ?? item.title);
+              const cat =
+                item.category ?? detectCategory(item.titlePt ?? item.title);
               const supportsKeepBox = categorySupportsKeepBox(cat);
               const keepBox = item.keepBox ?? false;
               const weightPerUnit = itemWeightG(cat, item.weightG, keepBox);
@@ -90,11 +99,15 @@ const Cart = () => {
                       </Link>
                       {(item.color || item.size || item.variation) && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {[item.color, item.size, item.variation].filter(Boolean).join(" · ")}
+                          {[item.color, item.size, item.variation]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       )}
                       {item.notes && (
-                        <p className="text-xs text-muted-foreground mt-0.5 italic">Nota: {item.notes}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 italic">
+                          Nota: {item.notes}
+                        </p>
                       )}
                       <p className="text-sm font-semibold text-china-red mt-1">
                         {item.priceBrl != null
@@ -106,11 +119,12 @@ const Cart = () => {
 
                       {/* Weight badge */}
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                        <Package className="w-3 h-3 shrink-0" />
-                        ~{totalWeightForItem >= 1000
+                        <Package className="w-3 h-3 shrink-0" />~
+                        {totalWeightForItem >= 1000
                           ? `${(totalWeightForItem / 1000).toFixed(2)} kg`
                           : `${totalWeightForItem} g`}
-                        {item.quantity > 1 && ` (${item.quantity} × ${weightPerUnit}g)`}
+                        {item.quantity > 1 &&
+                          ` (${item.quantity} × ${weightPerUnit}g)`}
                       </p>
 
                       {/* keepBox toggle — only for bulky-box categories */}
@@ -119,12 +133,16 @@ const Cart = () => {
                           <input
                             type="checkbox"
                             checked={keepBox}
-                            onChange={(e) => updateKeepBox(item.id, e.target.checked)}
+                            onChange={(e) =>
+                              updateKeepBox(item.id, e.target.checked)
+                            }
                             className="rounded border-border w-4 h-4 accent-china-red"
                           />
                           <span className="text-xs text-muted-foreground">
                             Manter embalagem original
-                            <span className="ml-1 text-muted-foreground/60">(+peso volumétrico)</span>
+                            <span className="ml-1 text-muted-foreground/60">
+                              (+peso volumétrico)
+                            </span>
                           </span>
                         </label>
                       )}
@@ -134,7 +152,9 @@ const Cart = () => {
                     <div className="flex items-center rounded-lg border border-border overflow-hidden">
                       <button
                         type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        onClick={() =>
+                          updateQuantity(item.id, item.quantity - 1)
+                        }
                         className="touch-target min-w-[44px] min-h-[44px] flex items-center justify-center bg-background hover:bg-muted text-sm font-bold"
                       >
                         −
@@ -144,7 +164,9 @@ const Cart = () => {
                       </span>
                       <button
                         type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        onClick={() =>
+                          updateQuantity(item.id, item.quantity + 1)
+                        }
                         className="touch-target min-w-[44px] min-h-[44px] flex items-center justify-center bg-background hover:bg-muted text-sm font-bold"
                       >
                         +
@@ -197,26 +219,33 @@ const Cart = () => {
               </div>
               <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold">
                 <span>Frete</span>
-                <span className="text-foreground">R$ {shipping.totalBrl.toFixed(2)}</span>
+                <span className="text-foreground">
+                  R$ {shipping.totalBrl.toFixed(2)}
+                </span>
               </div>
               {totalBrl > 0 && (
                 <div className="flex justify-between text-sm font-bold text-china-red pt-1 border-t border-border">
                   <span>
                     Total ({items.reduce((a, i) => a + i.quantity, 0)}{" "}
-                    {items.reduce((a, i) => a + i.quantity, 0) === 1 ? "item" : "itens"})
+                    {items.reduce((a, i) => a + i.quantity, 0) === 1
+                      ? "item"
+                      : "itens"}
+                    )
                   </span>
                   <span>R$ {grandTotal.toFixed(2)}</span>
                 </div>
               )}
               {totalBrl === 0 && (
                 <p className="text-xs text-muted-foreground pt-1">
-                  Valores em BRL serão calculados no checkout com base na cotação do dia.
+                  Valores em BRL serão calculados no checkout com base na
+                  cotação do dia.
                 </p>
               )}
               <p className="text-xs text-muted-foreground pt-2 flex items-start gap-2">
                 <span className="text-china-red mt-0.5 shrink-0">💡</span>
                 <span>
-                  <strong>Dica:</strong> Juntar mais itens no pedido dilui o frete por unidade.
+                  <strong>Dica:</strong> Juntar mais itens no pedido dilui o
+                  frete por unidade.
                 </span>
               </p>
             </div>
