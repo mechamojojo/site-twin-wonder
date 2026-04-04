@@ -42,18 +42,18 @@ export default function RecentPurchasesBar() {
           <ShoppingBag className="w-4 h-4 text-china-red shrink-0 mt-0.5" />
           <div className="min-w-0">
             <h2 className="text-sm font-heading font-bold text-foreground tracking-tight">
-              Últimas compras feitas no site
+              Clientes já estão comprando
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5 leading-snug max-w-xl">
-              Pedidos reais de quem já fechou com a gente — inspire-se e peça o
-              seu pelo mesmo link, com intermediação e suporte até o Brasil.
+              Estes são alguns produtos comprados recentemente por clientes na
+              plataforma.
             </p>
           </div>
         </div>
         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent -mx-1">
-          {items.map((item, i) => (
+          {items.map((item) => (
             <Link
-              key={`${item.url}-${i}`}
+              key={item.url}
               to={`/pedido?url=${encodeURIComponent(item.url)}`}
               className="shrink-0 w-28 sm:w-32 group"
             >

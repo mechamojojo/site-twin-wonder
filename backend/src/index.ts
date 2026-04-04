@@ -1764,8 +1764,11 @@ app.get("/api/recent-purchases", async (_req, res) => {
         },
       },
       orderBy: { updatedAt: "desc" },
-      take: 24,
+      // Amostra maior: depois dedup por URL canônica ainda sobram ~24 itens únicos
+      take: 100,
       select: {
+        id: true,
+        updatedAt: true,
         originalUrl: true,
         productTitle: true,
         barDisplayTitle: true,
@@ -1773,9 +1776,30 @@ app.get("/api/recent-purchases", async (_req, res) => {
         productDescription: true,
       },
     });
-    const urls = orders.map((o) => o.originalUrl);
+
+    // Mesmo produto em vários pedidos: um só card. Quem foi salvo por último no admin
+    // (updatedAt) vence — aí o título editado em "Nomes na loja" aparece.
+    const byNormKey = new Map<
+      string,
+      (typeof orders)[number]
+    >();
+    for (const o of orders) {
+      const key = normalizeProductPreviewUrlKey(o.originalUrl);
+      const prev = byNormKey.get(key);
+      if (!prev || o.updatedAt > prev.updatedAt) byNormKey.set(key, o);
+    }
+    const uniqueOrders = [...byNormKey.values()].sort(
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+    ).slice(0, 24);
+
+    const urlCandidates = new Set<string>();
+    for (const o of uniqueOrders) {
+      const u = o.originalUrl.trim();
+      if (u) urlCandidates.add(u);
+      urlCandidates.add(normalizeProductPreviewUrlKey(o.originalUrl));
+    }
     const productsInCatalog = await prisma.product.findMany({
-      where: { originalUrl: { in: urls } },
+      where: { originalUrl: { in: [...urlCandidates] } },
       select: {
         originalUrl: true,
         slug: true,
@@ -1784,17 +1808,25 @@ app.get("/api/recent-purchases", async (_req, res) => {
         image: true,
       },
     });
-    const catalogByUrl = new Map(
-      productsInCatalog.map((p) => [p.originalUrl, p]),
-    );
-    const items = orders.map((o) => {
-      const cat = catalogByUrl.get(o.originalUrl);
+    const catalogByNormKey = new Map<
+      string,
+      (typeof productsInCatalog)[number]
+    >();
+    for (const p of productsInCatalog) {
+      catalogByNormKey.set(
+        normalizeProductPreviewUrlKey(p.originalUrl),
+        p,
+      );
+    }
+
+    const items = uniqueOrders.map((o) => {
+      const norm = normalizeProductPreviewUrlKey(o.originalUrl);
+      const cat = catalogByNormKey.get(norm);
       const fromCatalog = cat
         ? catalogProductDisplayTitle(cat.titlePt, cat.title)
         : "";
       const barOverride = (o.barDisplayTitle ?? "").trim();
       const orderTitle = (o.productTitle ?? "").trim();
-      // Pedido (admin/cliente) antes do catálogo: edição em "Nomes na loja" passa a valer na faixa.
       const title =
         barOverride ||
         orderTitle ||

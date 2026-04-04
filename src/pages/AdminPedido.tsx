@@ -782,9 +782,11 @@ const AdminPedido = () => {
                   placeholder="Nome legível do produto"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Também aparece na faixa &quot;últimas compras&quot; da home
-                  (antes do nome do catálogo). Limpe o campo e salve para voltar
-                  a usar só o catálogo.
+                  Aparece na faixa &quot;Clientes já estão comprando&quot; da home
+                  (antes do
+                  catálogo). O mesmo link em vários pedidos vira um card só: vale
+                  o pedido alterado por último. Limpe e salve para priorizar o
+                  catálogo.
                 </p>
               </div>
               <div>
