@@ -30,6 +30,7 @@ import {
 } from "./auth";
 import cors from "cors";
 import { json } from "body-parser";
+import { handleImageProxy } from "./imageProxy";
 import { PrismaClient, OrderStatus, ShippingMethod } from "@prisma/client";
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
 
@@ -58,6 +59,17 @@ const corsOrigins = envOrigins?.length
   : defaultOrigins;
 app.use(cors({ origin: corsOrigins }));
 app.use(json());
+
+const imageProxyRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 180,
+  message: { error: "Muitas requisições de imagem. Tente em instantes." },
+  standardHeaders: true,
+});
+
+app.get("/api/image-proxy", imageProxyRateLimiter, (req, res) => {
+  void handleImageProxy(req, res);
+});
 
 // Rate limit para rotas de auth (cadastro, login, esqueci senha)
 const authRateLimiter = rateLimit({

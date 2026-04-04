@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
+import { referrerPolicyForImage } from "@/lib/utils";
+import { productPageImageSrc } from "@/lib/productImageSrc";
 import { ShoppingBag } from "lucide-react";
 
 const PLACEHOLDER_IMAGE =
@@ -51,7 +53,12 @@ export default function RecentPurchasesBar() {
           </div>
         </div>
         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent -mx-1">
-          {items.map((item) => (
+          {items.map((item) => {
+            const thumbSrc = productPageImageSrc(
+              item.image || PLACEHOLDER_IMAGE,
+              item.url,
+            );
+            return (
             <Link
               key={item.url}
               to={`/pedido?url=${encodeURIComponent(item.url)}`}
@@ -59,10 +66,10 @@ export default function RecentPurchasesBar() {
             >
               <div className="aspect-square rounded-xl border border-border bg-white overflow-hidden mb-2 shadow-sm group-hover:border-china-red/50 transition-colors">
                 <img
-                  src={item.image || PLACEHOLDER_IMAGE}
+                  src={thumbSrc}
                   alt=""
                   className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
+                  referrerPolicy={referrerPolicyForImage(thumbSrc)}
                   loading="lazy"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
@@ -76,7 +83,8 @@ export default function RecentPurchasesBar() {
                 {item.title}
               </p>
             </Link>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

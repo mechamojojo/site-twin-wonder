@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import { EXPLORAR_PRODUCTS, CURATED_TITLE_BY_CANONICAL_KEY } from "@/data/explorarProducts";
 import { MARKETPLACE_SEARCH_URLS } from "@/data/siteConfig";
 import { apiUrl } from "@/lib/api";
-import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
+import { referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import {
   hasProductDisplayTitle,
@@ -53,7 +53,7 @@ const PLACEHOLDER =
 function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
   const url = (p.originalUrl ?? p.url ?? "").replace(/\?.*$/, "");
   const [lazyImage, containerRef] = useLazyProductImage(url || undefined, p.image ?? undefined);
-  const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER;
+  const imgSrc = lazyImage || PLACEHOLDER;
   const displayTitle = productDisplayTitle(p.titlePt, p.title, "Produto");
   const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
   const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";

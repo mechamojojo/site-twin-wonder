@@ -1,6 +1,7 @@
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
-import { ensureHttpsImage, referrerPolicyForImage } from "@/lib/utils";
+import { referrerPolicyForImage } from "@/lib/utils";
+import { productPageImageSrc } from "@/lib/productImageSrc";
 import { isValidProductUrl } from "@/lib/urlValidation";
 import {
   ExternalLink,
@@ -347,7 +348,7 @@ const Order = () => {
       selectedOptionByGroup,
       selectedImageIndex,
     );
-    return raw ? ensureHttpsImage(raw) : undefined;
+    return raw ? productPageImageSrc(raw, url) : undefined;
   }, [productPreview, selectedOptionByGroup, selectedImageIndex]);
 
   const saveSnapshotForAll = useCallback(async () => {
@@ -553,7 +554,10 @@ const Order = () => {
                                 }
                                 return imageGroup?.images?.[0] || "";
                               })();
-                              const heroSrc = ensureHttpsImage(String(rawHero));
+                              const heroSrc = productPageImageSrc(
+                                String(rawHero),
+                                url,
+                              );
                               return (
                                 <img
                                   src={heroSrc}
@@ -616,11 +620,11 @@ const Order = () => {
                                       title={value}
                                     >
                                       <img
-                                        src={ensureHttpsImage(thumb!)}
+                                        src={productPageImageSrc(thumb!, url)}
                                         alt=""
                                         className="w-full h-full object-cover"
                                         referrerPolicy={referrerPolicyForImage(
-                                          ensureHttpsImage(thumb!),
+                                          productPageImageSrc(thumb!, url),
                                         )}
                                         onError={(e) => {
                                           (
@@ -646,12 +650,12 @@ const Order = () => {
                                     }`}
                                   >
                                     <img
-                                      src={ensureHttpsImage(src)}
+                                      src={productPageImageSrc(src, url)}
                                       alt=""
                                       className="w-full h-full object-cover"
                                       loading="lazy"
                                       referrerPolicy={referrerPolicyForImage(
-                                        ensureHttpsImage(src),
+                                        productPageImageSrc(src, url),
                                       )}
                                       onError={(e) => {
                                         (
@@ -1044,11 +1048,17 @@ const Order = () => {
                                         >
                                           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
                                             <img
-                                              src={ensureHttpsImage(thumb)}
+                                              src={productPageImageSrc(
+                                                thumb,
+                                                url,
+                                              )}
                                               alt=""
                                               className="w-full h-full object-cover"
                                               referrerPolicy={referrerPolicyForImage(
-                                                ensureHttpsImage(thumb),
+                                                productPageImageSrc(
+                                                  thumb,
+                                                  url,
+                                                ),
                                               )}
                                               onError={(e) => {
                                                 (
@@ -1187,11 +1197,17 @@ const Order = () => {
                                     <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
                                       {thumb ? (
                                         <img
-                                          src={ensureHttpsImage(thumb)}
+                                          src={productPageImageSrc(
+                                            thumb,
+                                            url,
+                                          )}
                                           alt=""
                                           className="w-full h-full object-cover"
                                           referrerPolicy={referrerPolicyForImage(
-                                            ensureHttpsImage(thumb),
+                                            productPageImageSrc(
+                                              thumb,
+                                              url,
+                                            ),
                                           )}
                                           onError={(e) => {
                                             (

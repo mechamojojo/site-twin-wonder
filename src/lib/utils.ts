@@ -13,40 +13,24 @@ export function ensureHttpsImage(url: string): string {
   return url;
 }
 
-/** CDNs que costumam falhar (403 / vazio no Safari) com Referer ausente — usar política padrão do browser. */
-function imageHostAllowsDefaultReferrer(host: string): boolean {
-  const h = host.toLowerCase();
-  if (h.includes("cssbuy")) return true;
-  if (
-    h.includes("alicdn") ||
-    h.includes("alibaba") ||
-    h.includes("1688") ||
-    h.includes("taobao") ||
-    h.includes("tmall") ||
-    h.includes("tbcdn") ||
-    h.includes("gw.alicdn") ||
-    h.includes("img.alicdn") ||
-    h.includes("sc01.alicdn") ||
-    h.includes("cbu01") ||
-    h.includes("imgzone") ||
-    h.includes("img-region") ||
-    h.includes("imgregion")
-  )
-    return true;
-  return false;
-}
-
+/**
+ * Política de referrer para <img> de produtos.
+ * `no-referrer` quebrava vários CDNs no Safari iOS (1688, Weidian, etc.) — eles
+ * esperam pelo menos a origem do site. `strict-origin-when-cross-origin` envia
+ * só origem em pedidos cross-site (HTTPS), compatível com hotlink comum.
+ */
 export function referrerPolicyForImage(
   url: string,
 ): HTMLImageElement["referrerPolicy"] | undefined {
   if (!url || url.startsWith("data:")) return "no-referrer";
+  if (url.includes("/api/image-proxy")) return "no-referrer";
   try {
-    const host = new URL(url).hostname.toLowerCase();
-    if (imageHostAllowsDefaultReferrer(host)) return undefined;
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "no-referrer";
   } catch {
-    // ignore
+    return "no-referrer";
   }
-  return "no-referrer";
+  return "strict-origin-when-cross-origin";
 }
 
 /**
