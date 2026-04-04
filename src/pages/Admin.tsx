@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, publicUploadUrl } from "@/lib/api";
 import { toast } from "sonner";
 import {
   ChevronDown,
@@ -18,6 +25,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { Button } from "@/components/ui/button";
@@ -245,6 +253,8 @@ const Admin = () => {
     image: "",
     images: "",
   });
+  const catalogImageInputRef = useRef<HTMLInputElement>(null);
+  const [catalogImageUploading, setCatalogImageUploading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<{
     created: number;
@@ -473,6 +483,67 @@ const Admin = () => {
       image: p.image ?? "",
       images: imagesStr,
     });
+  };
+
+  const handleCatalogImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !token) return;
+    setCatalogImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch(apiUrl("/api/admin/products/upload-image"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        path?: string;
+      };
+      if (!res.ok) {
+        toast.error(data.error || "Falha no upload da imagem");
+        return;
+      }
+      const relPath = typeof data.path === "string" ? data.path : "";
+      if (!relPath) {
+        toast.error("Resposta inválida do servidor");
+        return;
+      }
+      const url = publicUploadUrl(relPath);
+      setEditForm((f) => {
+        const prevMain = f.image.trim();
+        const restLines = f.images
+          .trim()
+          .split("\n")
+          .map((x) => x.trim())
+          .filter(Boolean);
+        const withoutDup = restLines.filter((u) => u !== url);
+        const promotePrev =
+          prevMain &&
+          prevMain !== url &&
+          (prevMain.startsWith("http") || prevMain.startsWith("/"))
+            ? prevMain
+            : "";
+        const mergedExtras = [
+          ...(promotePrev ? [promotePrev] : []),
+          ...withoutDup.filter((u) => u !== promotePrev),
+        ].filter((u) => u !== url);
+        return {
+          ...f,
+          image: url,
+          images: mergedExtras.join("\n"),
+        };
+      });
+      toast.success(
+        "Imagem enviada. Clique em Salvar para publicar no Explorar.",
+      );
+    } catch {
+      toast.error("Erro de conexão");
+    } finally {
+      setCatalogImageUploading(false);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -1388,6 +1459,30 @@ const Admin = () => {
                             </div>
                           ) : null}
                           <input
+                            ref={catalogImageInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            className="hidden"
+                            onChange={handleCatalogImageUpload}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2 mt-2"
+                            disabled={catalogImageUploading}
+                            onClick={() => catalogImageInputRef.current?.click()}
+                          >
+                            <Upload className="w-4 h-4" />
+                            {catalogImageUploading
+                              ? "Enviando…"
+                              : "Enviar foto do computador"}
+                          </Button>
+                          <p className="text-xs text-muted-foreground mt-1.5">
+                            JPG, PNG, WebP ou GIF até 5 MB. A imagem principal
+                            vira o card na home e no Explorar após Salvar.
+                          </p>
+                          <input
                             type="url"
                             value={editForm.image}
                             onChange={(e) =>
@@ -1397,7 +1492,7 @@ const Admin = () => {
                               }))
                             }
                             className="mt-2 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
-                            placeholder="URL da imagem principal"
+                            placeholder="Ou cole a URL da imagem principal"
                           />
                         </div>
                         <div>

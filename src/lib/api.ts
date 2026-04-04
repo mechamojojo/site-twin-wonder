@@ -14,3 +14,12 @@ export function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${API_BASE}${p}`;
 }
+
+/** URL pública de arquivo servido pela API (ex.: upload do catálogo em /uploads/catalog/...). */
+export function publicUploadUrl(pathFromApi: string): string {
+  const p = pathFromApi.startsWith("/") ? pathFromApi : `/${pathFromApi}`;
+  const base = (API_BASE || "").replace(/\/$/, "");
+  if (base) return `${base}${p}`;
+  if (typeof window !== "undefined") return `${window.location.origin}${p}`;
+  return p;
+}

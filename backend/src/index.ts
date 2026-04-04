@@ -11,8 +11,11 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import jwt from "jsonwebtoken";
 import express from "express";
+import multer from "multer";
 import { rateLimit } from "express-rate-limit";
 import { sendTelegram } from "./telegram";
 import {
@@ -58,6 +61,33 @@ const corsOrigins = envOrigins?.length
   : defaultOrigins;
 app.use(cors({ origin: corsOrigins }));
 app.use(json());
+
+const CATALOG_UPLOAD_DIR = path.join(process.cwd(), "uploads", "catalog");
+fs.mkdirSync(CATALOG_UPLOAD_DIR, { recursive: true });
+
+const catalogImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, CATALOG_UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    let ext = path.extname(file.originalname || "").toLowerCase();
+    if (![".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(ext)) ext = ".jpg";
+    cb(
+      null,
+      `cat-${Date.now()}-${crypto.randomBytes(8).toString("hex")}${ext}`,
+    );
+  },
+});
+
+const uploadCatalogImageMulter = multer({
+  storage: catalogImageStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(jpeg|pjpeg|png|webp|gif)$/i.test(file.mimetype);
+    if (ok) cb(null, true);
+    else cb(new Error("Formato inválido. Use JPG, PNG, WebP ou GIF."));
+  },
+});
+
+app.use("/uploads/catalog", express.static(CATALOG_UPLOAD_DIR));
 
 // Rate limit para rotas de auth (cadastro, login, esqueci senha)
 const authRateLimiter = rateLimit({
@@ -1235,6 +1265,40 @@ app.get("/api/admin/data-recovery", requireAdmin, async (_req, res) => {
     res.status(500).json({ error: "Erro ao carregar dados de resgate" });
   }
 });
+
+// Admin: upload de imagem do catálogo (home / Explorar) — retorna path para compor URL pública
+app.post(
+  "/api/admin/products/upload-image",
+  requireAdmin,
+  (req, res, next) => {
+    uploadCatalogImageMulter.single("image")(req, res, (err: unknown) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res
+            .status(400)
+            .json({ error: "Arquivo muito grande (máximo 5 MB)" });
+        }
+        return res.status(400).json({ error: err.message });
+      }
+      if (err) {
+        return res.status(400).json({
+          error:
+            err instanceof Error ? err.message : "Erro ao processar arquivo",
+        });
+      }
+      next();
+    });
+  },
+  (req, res) => {
+    const f = req.file;
+    if (!f?.filename) {
+      return res
+        .status(400)
+        .json({ error: "Envie uma imagem (campo image). JPG, PNG, WebP ou GIF." });
+    }
+    res.json({ path: `/uploads/catalog/${f.filename}` });
+  },
+);
 
 // Admin: atualizar produto (protegido)
 app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
