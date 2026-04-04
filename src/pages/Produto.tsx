@@ -8,8 +8,6 @@ import { productDisplayTitle } from "@/lib/productDisplayTitle";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart } from "lucide-react";
 import { SaveProductHeart } from "@/components/SaveProductHeart";
-import { referrerPolicyForImage } from "@/lib/utils";
-import { productPageImageSrc } from "@/lib/productImageSrc";
 
 type Product = {
   id: string;
@@ -102,10 +100,6 @@ const Produto = () => {
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
   const priceStr =
     displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
-  const mainImageSrc = productPageImageSrc(
-    product.image || PLACEHOLDER,
-    product.originalUrl,
-  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -114,10 +108,10 @@ const Produto = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="aspect-square rounded-2xl border border-border bg-muted overflow-hidden">
             <img
-              src={mainImageSrc}
+              src={product.image || PLACEHOLDER}
               alt=""
               className="w-full h-full object-cover"
-              referrerPolicy={referrerPolicyForImage(mainImageSrc)}
+              referrerPolicy="no-referrer"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = PLACEHOLDER;
               }}

@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EXPLORAR_PRODUCTS, CURATED_TITLE_BY_CANONICAL_KEY } from "@/data/explorarProducts";
 import { CATEGORY_LABELS as CATALOG_CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { apiUrl } from "@/lib/api";
-import { referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
+import { ensureHttpsImage, referrerPolicyForImage, productUrlToCanonicalKey } from "@/lib/utils";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import {
   hasProductDisplayTitle,
@@ -23,7 +23,7 @@ type ProductLike = { id: string; url?: string; originalUrl?: string; title: stri
 function ProductCard({ product }: { product: ProductLike }) {
   const url = product.originalUrl ?? product.url ?? "";
   const [lazyImage, containerRef] = useLazyProductImage(url || undefined, product.image ?? undefined);
-  const imgSrc = lazyImage || PLACEHOLDER_IMAGE;
+  const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER_IMAGE;
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
   const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
   const to = `/pedido?url=${encodeURIComponent(url)}`;

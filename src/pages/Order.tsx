@@ -1,7 +1,6 @@
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
-import { referrerPolicyForImage } from "@/lib/utils";
-import { productPageImageSrc } from "@/lib/productImageSrc";
+import { ensureHttpsImage } from "@/lib/utils";
 import { isValidProductUrl } from "@/lib/urlValidation";
 import {
   ExternalLink,
@@ -348,7 +347,7 @@ const Order = () => {
       selectedOptionByGroup,
       selectedImageIndex,
     );
-    return raw ? productPageImageSrc(raw, url) : undefined;
+    return raw ? ensureHttpsImage(raw) : undefined;
   }, [productPreview, selectedOptionByGroup, selectedImageIndex]);
 
   const saveSnapshotForAll = useCallback(async () => {
@@ -521,59 +520,50 @@ const Order = () => {
                         <>
                           {/* Imagem principal — segue a miniatura clicada (grupo com imagens ou galeria) */}
                           <div className="aspect-square sm:aspect-[4/3] max-h-[420px] flex items-center justify-center p-4 sm:p-6 bg-white border-b border-[#e8e8e8]">
-                            {(() => {
-                              const rawHero = (() => {
-                                const imageGroup =
-                                  productPreview.optionGroups?.find(
-                                    (g) =>
-                                      !isSizeGroup(g.name, g.values) &&
-                                      !isQualityGradeGroup(g.name) &&
-                                      (g.displayAsImages === true ||
-                                        (g.displayAsImages !== false &&
-                                          g.images?.some(Boolean))),
-                                  );
-                                const selectedVal = imageGroup
-                                  ? selectedOptionByGroup[imageGroup.name]
-                                  : undefined;
-                                const imgIdx =
-                                  selectedVal && imageGroup
-                                    ? imageGroup.values.indexOf(selectedVal)
-                                    : -1;
-                                const optionImg =
-                                  imageGroup && imgIdx >= 0
-                                    ? imageGroup.images?.[imgIdx]
-                                    : null;
-                                if (optionImg) return optionImg;
-                                if (productPreview.images.length > 0) {
-                                  return productPreview.images[
-                                    Math.min(
-                                      selectedImageIndex,
-                                      productPreview.images.length - 1,
-                                    )
-                                  ];
-                                }
-                                return imageGroup?.images?.[0] || "";
-                              })();
-                              const heroSrc = productPageImageSrc(
-                                String(rawHero),
-                                url,
-                              );
-                              return (
-                                <img
-                                  src={heroSrc}
-                                  alt=""
-                                  className="max-w-full max-h-full w-auto h-auto object-contain"
-                                  referrerPolicy={referrerPolicyForImage(
-                                    heroSrc,
-                                  )}
-                                  onError={(e) => {
-                                    (
-                                      e.target as HTMLImageElement
-                                    ).style.display = "none";
-                                  }}
-                                />
-                              );
-                            })()}
+                            <img
+                              src={ensureHttpsImage(
+                                (() => {
+                                  const imageGroup =
+                                    productPreview.optionGroups?.find(
+                                      (g) =>
+                                        !isSizeGroup(g.name, g.values) &&
+                                        !isQualityGradeGroup(g.name) &&
+                                        (g.displayAsImages === true ||
+                                          (g.displayAsImages !== false &&
+                                            g.images?.some(Boolean))),
+                                    );
+                                  const selectedVal = imageGroup
+                                    ? selectedOptionByGroup[imageGroup.name]
+                                    : undefined;
+                                  const imgIdx =
+                                    selectedVal && imageGroup
+                                      ? imageGroup.values.indexOf(selectedVal)
+                                      : -1;
+                                  const optionImg =
+                                    imageGroup && imgIdx >= 0
+                                      ? imageGroup.images?.[imgIdx]
+                                      : null;
+                                  if (optionImg) return optionImg;
+                                  if (productPreview.images.length > 0) {
+                                    return productPreview.images[
+                                      Math.min(
+                                        selectedImageIndex,
+                                        productPreview.images.length - 1,
+                                      )
+                                    ];
+                                  }
+                                  return imageGroup?.images?.[0] || "";
+                                })(),
+                              )}
+                              alt=""
+                              className="max-w-full max-h-full w-auto h-auto object-contain"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
                           </div>
                           {/* Miniaturas: clicar atualiza a opção e a imagem principal */}
                           <div className="p-3 flex gap-2 overflow-x-auto border-t border-[#e8e8e8] bg-white">
@@ -620,12 +610,10 @@ const Order = () => {
                                       title={value}
                                     >
                                       <img
-                                        src={productPageImageSrc(thumb!, url)}
+                                        src={ensureHttpsImage(thumb!)}
                                         alt=""
                                         className="w-full h-full object-cover"
-                                        referrerPolicy={referrerPolicyForImage(
-                                          productPageImageSrc(thumb!, url),
-                                        )}
+                                        referrerPolicy="no-referrer"
                                         onError={(e) => {
                                           (
                                             e.target as HTMLImageElement
@@ -650,13 +638,11 @@ const Order = () => {
                                     }`}
                                   >
                                     <img
-                                      src={productPageImageSrc(src, url)}
+                                      src={ensureHttpsImage(src)}
                                       alt=""
                                       className="w-full h-full object-cover"
                                       loading="lazy"
-                                      referrerPolicy={referrerPolicyForImage(
-                                        productPageImageSrc(src, url),
-                                      )}
+                                      referrerPolicy="no-referrer"
                                       onError={(e) => {
                                         (
                                           e.target as HTMLImageElement
@@ -1048,18 +1034,10 @@ const Order = () => {
                                         >
                                           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
                                             <img
-                                              src={productPageImageSrc(
-                                                thumb,
-                                                url,
-                                              )}
+                                              src={ensureHttpsImage(thumb)}
                                               alt=""
                                               className="w-full h-full object-cover"
-                                              referrerPolicy={referrerPolicyForImage(
-                                                productPageImageSrc(
-                                                  thumb,
-                                                  url,
-                                                ),
-                                              )}
+                                              referrerPolicy="no-referrer"
                                               onError={(e) => {
                                                 (
                                                   e.target as HTMLImageElement
@@ -1197,18 +1175,10 @@ const Order = () => {
                                     <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
                                       {thumb ? (
                                         <img
-                                          src={productPageImageSrc(
-                                            thumb,
-                                            url,
-                                          )}
+                                          src={ensureHttpsImage(thumb)}
                                           alt=""
                                           className="w-full h-full object-cover"
-                                          referrerPolicy={referrerPolicyForImage(
-                                            productPageImageSrc(
-                                              thumb,
-                                              url,
-                                            ),
-                                          )}
+                                          referrerPolicy="no-referrer"
                                           onError={(e) => {
                                             (
                                               e.target as HTMLImageElement

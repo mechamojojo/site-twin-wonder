@@ -10,8 +10,6 @@ import {
   itemWeightG,
 } from "@/lib/shipping";
 import { getDisplayPriceBrl } from "@/lib/pricing";
-import { referrerPolicyForImage } from "@/lib/utils";
-import { productPageImageSrc } from "@/lib/productImageSrc";
 
 const Cart = () => {
   const { items, removeItem, updateQuantity, updateKeepBox } = useCart();
@@ -81,12 +79,10 @@ const Cart = () => {
                     >
                       {item.image ? (
                         <img
-                          src={productPageImageSrc(item.image, item.url)}
+                          src={item.image}
                           alt=""
                           className="w-full h-full object-cover"
-                          referrerPolicy={referrerPolicyForImage(
-                            productPageImageSrc(item.image, item.url),
-                          )}
+                          referrerPolicy="no-referrer"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">

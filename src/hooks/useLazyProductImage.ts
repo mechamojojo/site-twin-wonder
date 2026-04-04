@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import { apiUrl } from "@/lib/api";
-import { productPageImageSrc } from "@/lib/productImageSrc";
 
 /** Cache de URL do produto -> primeira imagem do preview (evita refetch na mesma sessão). Limitado para evitar uso excessivo de memória. */
 const imageCache = new Map<string, string>();
@@ -63,7 +62,6 @@ export function useLazyProductImage(
     return () => observer.disconnect();
   }, [productUrl, existingImage, enabled]);
 
-  const raw = existingImage || fetchedImage;
-  const imageUrl = raw ? productPageImageSrc(raw, productUrl) : null;
+  const imageUrl = existingImage || fetchedImage;
   return [imageUrl, ref];
 }
