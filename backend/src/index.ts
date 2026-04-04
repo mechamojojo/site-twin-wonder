@@ -32,6 +32,10 @@ import cors from "cors";
 import { json } from "body-parser";
 import { PrismaClient, OrderStatus, ShippingMethod } from "@prisma/client";
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
+import {
+  isAllowedProductImageUrl,
+  refererForImageHost,
+} from "./productImageAllowlist";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -66,6 +70,17 @@ const authRateLimiter = rateLimit({
   message: { error: "Muitas tentativas. Tente novamente em alguns minutos." },
   standardHeaders: true,
 });
+
+/** Proxy de miniaturas (Safari / hotlink): não exige auth; limite por IP. */
+const productImageRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  message: { error: "Muitas imagens. Tente em instantes." },
+  standardHeaders: true,
+});
+
+const PRODUCT_IMAGE_FETCH_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 const PORT = process.env.PORT || 4000;
 const isProduction = process.env.NODE_ENV === "production";
@@ -2062,6 +2077,62 @@ function normalizeProductPreviewUrlKey(url: string): string {
     return url;
   }
 }
+
+// Miniaturas via servidor (evita falha no Safari com referrer / hotlink de CDNs chinesas)
+app.get("/api/product-image", productImageRateLimiter, async (req, res) => {
+  const raw = typeof req.query.url === "string" ? req.query.url.trim() : "";
+  if (!raw) return res.status(400).end();
+  const normalized =
+    raw.startsWith("http://") ? "https://" + raw.slice(7) : raw;
+  if (!isAllowedProductImageUrl(normalized)) {
+    return res.status(403).json({ error: "Host não permitido." });
+  }
+  let target: URL;
+  try {
+    target = new URL(normalized);
+  } catch {
+    return res.status(400).end();
+  }
+  try {
+    const r = await fetch(target.href, {
+      headers: {
+        "User-Agent": PRODUCT_IMAGE_FETCH_UA,
+        Referer: refererForImageHost(target.hostname),
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!r.ok) return res.status(502).end();
+    const ct = (r.headers.get("content-type") || "").toLowerCase();
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 6 * 1024 * 1024) return res.status(413).end();
+    const okByMime = ct.startsWith("image/");
+    const okByMagic =
+      (buf[0] === 0xff && buf[1] === 0xd8) ||
+      (buf[0] === 0x89 &&
+        buf[1] === 0x50 &&
+        buf[2] === 0x4e &&
+        buf[3] === 0x47) ||
+      (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) ||
+      (buf[0] === 0x52 &&
+        buf[1] === 0x49 &&
+        buf[2] === 0x46 &&
+        buf[3] === 0x46);
+    if (!okByMime && !okByMagic) return res.status(415).end();
+    const outType = okByMime ? ct.split(";")[0].trim() : "image/jpeg";
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=86400, stale-while-revalidate=604800",
+    );
+    res.setHeader("Content-Type", outType);
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.send(buf);
+  } catch (e) {
+    console.error("[product-image]", target.href.slice(0, 120), e);
+    res.status(504).end();
+  }
+});
 
 // Preview do produto (scraping): título, preço, imagens, variantes
 app.get("/api/product/preview", async (req, res) => {

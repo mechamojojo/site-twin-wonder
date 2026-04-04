@@ -13,14 +13,17 @@ export function ensureHttpsImage(url: string): string {
 }
 
 export function referrerPolicyForImage(url: string): HTMLImageElement["referrerPolicy"] | undefined {
-  if (!url || url.startsWith("data:")) return "no-referrer";
+  if (!url || url.startsWith("data:")) return undefined;
   try {
-    const host = new URL(url).hostname.toLowerCase();
-    if (host.includes("cssbuy")) return undefined; // evita quebra de hotlink da CSSBuy
+    const parsed = new URL(url, "https://compraschina.com.br");
+    if (parsed.pathname.includes("/api/product-image")) return undefined;
+    const host = parsed.hostname.toLowerCase();
+    if (host.includes("cssbuy")) return undefined;
   } catch {
-    // ignore
+    return undefined;
   }
-  return "no-referrer";
+  // Safari costumava falhar com no-referrer em CDNs chinesas; origem só ou proxy resolve.
+  return "strict-origin-when-cross-origin";
 }
 
 /**

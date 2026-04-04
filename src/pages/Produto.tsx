@@ -3,6 +3,8 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
+import { ensureHttpsImage } from "@/lib/utils";
+import { productImageDisplayUrl } from "@/lib/productImageDisplayUrl";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import { productDisplayTitle } from "@/lib/productDisplayTitle";
 import { useCart } from "@/context/CartContext";
@@ -110,10 +112,13 @@ const Produto = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="aspect-square rounded-2xl border border-border bg-muted overflow-hidden">
             <img
-              src={product.image || PLACEHOLDER}
+              src={
+                product.image
+                  ? productImageDisplayUrl(ensureHttpsImage(product.image))
+                  : PLACEHOLDER
+              }
               alt=""
               className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = PLACEHOLDER;
               }}

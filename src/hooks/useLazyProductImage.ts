@@ -8,6 +8,7 @@ import {
 } from "react";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
+import { productImageDisplayUrl } from "@/lib/productImageDisplayUrl";
 
 const imageCache = new Map<string, string>();
 const IMAGE_CACHE_MAX = 120;
@@ -238,10 +239,11 @@ export function useLazyProductImage(
     })();
   }, [productUrl, enabled, giveUp, idx, appendPreviewUrls]);
 
-  const displayUrl =
+  const raw =
     !giveUp && candidates.length > 0 && idx >= 0 && idx < candidates.length
       ? candidates[idx]
       : null;
+  const displayUrl = raw ? productImageDisplayUrl(raw) : null;
 
   return [displayUrl, ref, onImageError];
 }

@@ -1,6 +1,7 @@
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
+import { productImageDisplayUrl } from "@/lib/productImageDisplayUrl";
 import { isValidProductUrl } from "@/lib/urlValidation";
 import { ExternalLink, ShoppingCart, ArrowLeft, RefreshCw, AlertCircle, Search, Save } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
@@ -17,6 +18,8 @@ const getQueryParam = (search: string, key: string) => {
   const params = new URLSearchParams(search);
   return params.get(key) ?? "";
 };
+
+const previewImgSrc = (u: string) => productImageDisplayUrl(ensureHttpsImage(u));
 
 const ADMIN_TOKEN_KEY = "compraschina-admin-token";
 
@@ -478,7 +481,7 @@ const Order = () => {
                         {/* Imagem principal — segue a miniatura clicada (grupo com imagens ou galeria) */}
                         <div className="aspect-square sm:aspect-[4/3] max-h-[420px] flex items-center justify-center p-4 sm:p-6 bg-white border-b border-[#e8e8e8]">
                           <img
-                            src={ensureHttpsImage((() => {
+                            src={previewImgSrc((() => {
                               const imageGroup = productPreview.optionGroups?.find((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && (g.displayAsImages === true || (g.displayAsImages !== false && g.images?.some(Boolean))));
                               const selectedVal = imageGroup ? selectedOptionByGroup[imageGroup.name] : undefined;
                               const imgIdx = selectedVal && imageGroup ? imageGroup.values.indexOf(selectedVal) : -1;
@@ -492,7 +495,6 @@ const Order = () => {
                             alt=""
                             className="max-w-full max-h-full w-auto h-auto object-contain"
                             loading="lazy"
-                            referrerPolicy="no-referrer"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
                         </div>
@@ -514,7 +516,7 @@ const Order = () => {
                                     className={`shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border-2 overflow-hidden bg-[#fafafa] transition-colors ${isSelected ? "border-china-red ring-2 ring-china-red/30" : "border-[#e0e0e0] hover:border-[#bdbdbd]"}`}
                                     title={value}
                                   >
-                                    <img src={ensureHttpsImage(thumb!)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                    <img src={previewImgSrc(thumb!)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                                   </button>
                                 );
                               });
@@ -528,7 +530,7 @@ const Order = () => {
                                   selectedImageIndex === i ? "border-china-red ring-2 ring-china-red/30" : "border-[#e0e0e0] hover:border-[#bdbdbd]"
                                 }`}
                               >
-                                <img src={ensureHttpsImage(src)} alt="" className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                <img src={previewImgSrc(src)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                               </button>
                             ));
                           })()}
@@ -794,7 +796,7 @@ const Order = () => {
                                     title={value}
                                   >
                                     <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
-                                      <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                                      <img src={previewImgSrc(thumb)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
                                     </div>
                                   </button>
                                 );
@@ -858,7 +860,7 @@ const Order = () => {
                               >
                                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
                                   {thumb ? (
-                                    <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                                    <img src={previewImgSrc(thumb)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
                                   ) : (
                                     <span className="text-[10px] font-medium text-muted-foreground">{c.slice(0, 4)}</span>
                                   )}

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
+import { ensureHttpsImage } from "@/lib/utils";
+import { productImageDisplayUrl } from "@/lib/productImageDisplayUrl";
 import { ShoppingBag } from "lucide-react";
 
 const PLACEHOLDER_IMAGE =
@@ -58,10 +60,13 @@ export default function RecentPurchasesBar() {
             >
               <div className="aspect-square rounded-xl border border-border bg-white overflow-hidden mb-2 shadow-sm group-hover:border-china-red/50 transition-colors">
                 <img
-                  src={item.image || PLACEHOLDER_IMAGE}
+                  src={
+                    item.image
+                      ? productImageDisplayUrl(ensureHttpsImage(item.image))
+                      : PLACEHOLDER_IMAGE
+                  }
                   alt=""
                   className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
                   loading="lazy"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
