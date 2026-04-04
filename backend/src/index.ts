@@ -924,6 +924,69 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: títulos fixos na faixa "Clientes já estão comprando" (por URL canônica)
+app.get("/api/admin/recent-strip-overrides", requireAdmin, async (_req, res) => {
+  try {
+    const entries = await prisma.recentStripTitleOverride.findMany({
+      orderBy: { updatedAt: "desc" },
+    });
+    res.json({ entries });
+  } catch (err) {
+    console.error("Admin list recent-strip-overrides:", err);
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao listar títulos da faixa") });
+  }
+});
+
+app.put("/api/admin/recent-strip-overrides", requireAdmin, async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const urlKeyDirect =
+      typeof body.urlKey === "string" ? body.urlKey.trim() : "";
+    const titleRaw = body.title;
+    const deleteIt =
+      titleRaw === null ||
+      titleRaw === undefined ||
+      (typeof titleRaw === "string" && !titleRaw.trim());
+    if (urlKeyDirect && deleteIt) {
+      await prisma.recentStripTitleOverride.deleteMany({
+        where: { urlKey: urlKeyDirect },
+      });
+      return res.json({ ok: true, removed: true });
+    }
+    const originalUrl =
+      typeof body.originalUrl === "string" ? body.originalUrl.trim() : "";
+    if (!originalUrl.startsWith("http")) {
+      return res
+        .status(400)
+        .json({ error: "Cole uma URL de produto válida (começando com http)." });
+    }
+    const urlKey = normalizeProductPreviewUrlKey(originalUrl);
+    if (deleteIt) {
+      await prisma.recentStripTitleOverride.deleteMany({ where: { urlKey } });
+      return res.json({ ok: true, removed: true });
+    }
+    const title =
+      typeof titleRaw === "string" ? titleRaw.trim().slice(0, 300) : "";
+    if (!title) {
+      await prisma.recentStripTitleOverride.deleteMany({ where: { urlKey } });
+      return res.json({ ok: true, removed: true });
+    }
+    await prisma.recentStripTitleOverride.upsert({
+      where: { urlKey },
+      create: { urlKey, title },
+      update: { title },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin put recent-strip-overrides:", err);
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao salvar título da faixa") });
+  }
+});
+
 // Catálogo de produtos — busca e listagem (ordem = mesma do admin, sortOrder)
 app.get("/api/products", async (req, res) => {
   try {
@@ -1013,6 +1076,55 @@ app.get("/api/products/most-saved", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao buscar produtos mais salvos" });
+  }
+});
+
+// Catálogo por URL do marketplace — alinha /pedido?url= com títulos do admin (antes de :idOrSlug)
+app.get("/api/products/catalog-by-url", async (req, res) => {
+  try {
+    const raw = (req.query.url as string)?.trim() || "";
+    if (!raw.startsWith("http")) {
+      return res.status(400).json({ error: "Parâmetro url inválido" });
+    }
+    const norm = normalizeProductPreviewUrlKey(raw);
+    const candidates = [...new Set([raw, norm])];
+    let product = await prisma.product.findFirst({
+      where: { originalUrl: { in: candidates } },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    });
+    if (!product) {
+      const rows = await prisma.product.findMany({
+        select: { id: true, originalUrl: true },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        take: 3000,
+      });
+      const match = rows.find(
+        (r) => normalizeProductPreviewUrlKey(r.originalUrl) === norm,
+      );
+      if (match) {
+        product = await prisma.product.findUnique({ where: { id: match.id } });
+      }
+    }
+    if (!product) {
+      return res.status(404).json({ error: "Produto não está no catálogo" });
+    }
+
+    let withImage = product;
+    if (!product.image) {
+      try {
+        const parsed = product.images ? JSON.parse(product.images) : null;
+        const first = Array.isArray(parsed)
+          ? parsed.find((x) => typeof x === "string" && x.startsWith("http"))
+          : null;
+        withImage = { ...product, image: first ?? null };
+      } catch {
+        /* keep */
+      }
+    }
+    res.json(withImage);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao buscar produto por URL" });
   }
 });
 
@@ -1819,6 +1931,18 @@ app.get("/api/recent-purchases", async (_req, res) => {
       );
     }
 
+    const normKeysUnique = [
+      ...new Set(
+        uniqueOrders.map((o) => normalizeProductPreviewUrlKey(o.originalUrl)),
+      ),
+    ];
+    const stripOverrides = await prisma.recentStripTitleOverride.findMany({
+      where: { urlKey: { in: normKeysUnique } },
+    });
+    const stripTitleByKey = new Map(
+      stripOverrides.map((s) => [s.urlKey, s.title]),
+    );
+
     const items = uniqueOrders.map((o) => {
       const norm = normalizeProductPreviewUrlKey(o.originalUrl);
       const cat = catalogByNormKey.get(norm);
@@ -1827,7 +1951,9 @@ app.get("/api/recent-purchases", async (_req, res) => {
         : "";
       const barOverride = (o.barDisplayTitle ?? "").trim();
       const orderTitle = (o.productTitle ?? "").trim();
+      const stripFixed = (stripTitleByKey.get(norm) ?? "").trim();
       const title =
+        stripFixed ||
         barOverride ||
         orderTitle ||
         fromCatalog ||

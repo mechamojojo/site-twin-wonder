@@ -10,6 +10,7 @@ import { useCart } from "@/context/CartContext";
 import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
+import { productDisplayTitle } from "@/lib/productDisplayTitle";
 import { toast } from "sonner";
 
 const getQueryParam = (search: string, key: string) => {
@@ -145,6 +146,10 @@ const Order = () => {
   /** Quantidade por tamanho (estilo CSSBuy): M: 2, L: 1 */
   const [quantityBySize, setQuantityBySize] = useState<Record<string, number>>({});
   const [productPreviewLoading, setProductPreviewLoading] = useState(false);
+  const [catalogProduct, setCatalogProduct] = useState<{
+    title: string;
+    titlePt: string | null;
+  } | null>(null);
   const [productPreviewError, setProductPreviewError] = useState<string | null>(null);
   const [saveSnapshotLoading, setSaveSnapshotLoading] = useState(false);
   const [adminTokenInvalidated, setAdminTokenInvalidated] = useState(false);
@@ -207,6 +212,33 @@ const Order = () => {
   useEffect(() => {
     fetchProductPreview();
   }, [fetchProductPreview]);
+
+  useEffect(() => {
+    if (!url) {
+      setCatalogProduct(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(apiUrl(`/api/products/catalog-by-url?url=${encodeURIComponent(url)}`))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (!data) {
+          setCatalogProduct(null);
+          return;
+        }
+        setCatalogProduct({
+          title: String(data.title ?? ""),
+          titlePt: data.titlePt != null ? String(data.titlePt) : null,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogProduct(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
 
   useEffect(() => {
     const fetchPreview = async () => {
@@ -283,6 +315,32 @@ const Order = () => {
     );
     return raw ? ensureHttpsImage(raw) : undefined;
   }, [productPreview, selectedOptionByGroup, selectedImageIndex]);
+
+  /** Nome exibido: catálogo (admin) manda sobre o scrape — mesmo link do Explorar. */
+  const pedidoProductDisplayTitle = useMemo(() => {
+    if (catalogProduct) {
+      const t = productDisplayTitle(
+        catalogProduct.titlePt,
+        catalogProduct.title,
+        "",
+      ).trim();
+      if (t) return t;
+    }
+    if (productPreview) {
+      const t = productDisplayTitle(
+        productPreview.titlePt,
+        productPreview.title,
+        "",
+      ).trim();
+      if (t) return t;
+    }
+    return "";
+  }, [catalogProduct, productPreview]);
+
+  const cartLineDisplayName = useMemo(
+    () => pedidoProductDisplayTitle || "Produto",
+    [pedidoProductDisplayTitle],
+  );
 
   const saveSnapshotForAll = useCallback(async () => {
     if (!url || !productPreview) return;
@@ -385,7 +443,9 @@ const Order = () => {
           </Link>
           <span aria-hidden>·</span>
           <span className="text-foreground/80">
-            {productPreviewLoading ? (
+            {pedidoProductDisplayTitle ? (
+              pedidoProductDisplayTitle
+            ) : productPreviewLoading ? (
               <span className="inline-flex items-center gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
                 Buscando informações do produto...
@@ -586,17 +646,16 @@ const Order = () => {
                 </div>
               ) : (
                 <>
-              {/* Título do produto — como em qualquer e-commerce */}
-              {(productPreview?.titlePt || productPreview?.title) && (
+              {/* Título: catálogo (admin) tem prioridade sobre o scrape */}
+              {pedidoProductDisplayTitle ? (
                 <h1 className="font-heading font-bold text-foreground text-xl leading-snug">
-                  {productPreview.titlePt || productPreview.title}
+                  {pedidoProductDisplayTitle}
                 </h1>
-              )}
-              {!(productPreview?.titlePt || productPreview?.title) && productPreview && (
+              ) : !productPreviewLoading && productPreview ? (
                 <h1 className="font-heading font-bold text-foreground text-xl leading-snug">
                   Produto
                 </h1>
-              )}
+              ) : null}
 
               {/* Preço direto em reais — sem valor fake enquanto carrega */}
               <div className="pb-4 border-b border-border">
@@ -958,9 +1017,7 @@ const Order = () => {
                         : variation.trim();
 
                     // Detect product category for keepBox eligibility
-                    const productCategory = detectCategory(
-                      productPreview?.titlePt ?? productPreview?.title,
-                    );
+                    const productCategory = detectCategory(cartLineDisplayName);
                     const supportsKeepBox = categorySupportsKeepBox(productCategory);
 
                     const handleAddToCart = () => {
@@ -982,8 +1039,8 @@ const Order = () => {
                         size: hasQuantityBySize ? sizeBreakdown : selectedSize || undefined,
                         variation: variationStr || undefined,
                         notes: notes.trim() || undefined,
-                        title: productPreview?.title ?? undefined,
-                        titlePt: productPreview?.titlePt ?? undefined,
+                        title: cartLineDisplayName,
+                        titlePt: cartLineDisplayName,
                         priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                         priceBrl: preview?.totalProductBrl ?? undefined,
                         image: cartLineImage,
@@ -1033,8 +1090,8 @@ const Order = () => {
                               size: hasQuantityBySize ? sizeBreakdown : selectedSize || undefined,
                               variation: variationStr || undefined,
                               notes: notes.trim() || undefined,
-                              title: productPreview?.title ?? undefined,
-                              titlePt: productPreview?.titlePt ?? undefined,
+                              title: cartLineDisplayName,
+                              titlePt: cartLineDisplayName,
                               priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                               priceBrl: preview?.totalProductBrl ?? undefined,
                               image: cartLineImage,
