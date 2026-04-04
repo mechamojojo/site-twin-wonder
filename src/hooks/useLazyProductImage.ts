@@ -1,32 +1,107 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  type RefObject,
+} from "react";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
 
 const imageCache = new Map<string, string>();
 const IMAGE_CACHE_MAX = 120;
 
-function extractPreviewImageUrls(data: unknown): string[] {
+/** Máx. pedidos simultâneos ao /api/product/preview (evita saturar mobile / backend). */
+const PREVIEW_QUEUE_MAX = 5;
+let previewQueueActive = 0;
+const previewQueueWaiting: Array<() => void> = [];
+
+function pumpPreviewQueue() {
+  while (
+    previewQueueActive < PREVIEW_QUEUE_MAX &&
+    previewQueueWaiting.length > 0
+  ) {
+    const job = previewQueueWaiting.shift()!;
+    previewQueueActive++;
+    void (async () => {
+      try {
+        await job();
+      } finally {
+        previewQueueActive--;
+        pumpPreviewQueue();
+      }
+    })();
+  }
+}
+
+function enqueuePreviewJob(job: () => Promise<void>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    previewQueueWaiting.push(async () => {
+      try {
+        await job();
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
+    pumpPreviewQueue();
+  });
+}
+
+/** Galeria principal + miniaturas em optionGroups + colorImages. */
+function extractAllImageUrlsFromPreview(data: unknown): string[] {
   if (!data || typeof data !== "object") return [];
-  const images = (data as { images?: unknown }).images;
-  if (!Array.isArray(images)) return [];
+  const o = data as Record<string, unknown>;
   const out: string[] = [];
-  for (const x of images) {
-    if (typeof x === "string" && x.trim().startsWith("http")) {
-      const u = ensureHttpsImage(x.trim());
-      if (!out.includes(u)) out.push(u);
+  const push = (raw: string) => {
+    const t = raw.trim();
+    if (!t.startsWith("http")) return;
+    const u = ensureHttpsImage(t);
+    if (!out.includes(u)) out.push(u);
+  };
+
+  const images = o.images;
+  if (Array.isArray(images)) {
+    for (const x of images) if (typeof x === "string") push(x);
+  }
+
+  const groups = o.optionGroups;
+  if (Array.isArray(groups)) {
+    for (const g of groups) {
+      if (!g || typeof g !== "object") continue;
+      const gi = (g as { images?: unknown }).images;
+      if (Array.isArray(gi)) {
+        for (const x of gi) if (typeof x === "string") push(x);
+      }
     }
   }
+
+  const variants = o.variants;
+  if (variants && typeof variants === "object") {
+    const ci = (variants as { colorImages?: unknown }).colorImages;
+    if (Array.isArray(ci)) {
+      for (const x of ci) if (typeof x === "string") push(x);
+    }
+  }
+
   return out;
 }
 
-async function fetchPreviewImageUrls(productUrl: string): Promise<string[]> {
+async function fetchPreviewImageUrls(
+  productUrl: string,
+  opts?: { nocache?: boolean },
+): Promise<string[]> {
   try {
+    const nocache = opts?.nocache ? "&nocache=1" : "";
     const res = await fetch(
-      apiUrl(`/api/product/preview?url=${encodeURIComponent(productUrl)}`),
+      apiUrl(
+        `/api/product/preview?url=${encodeURIComponent(productUrl)}${nocache}`,
+      ),
     );
     if (!res.ok) return [];
     const data = await res.json();
-    return extractPreviewImageUrls(data);
+    return extractAllImageUrlsFromPreview(data);
   } catch {
     return [];
   }
@@ -41,15 +116,16 @@ function cachePut(productUrl: string, imageUrl: string) {
 }
 
 /**
- * [url | null, ref, onError]. Catálogo primeiro; se falhar, tenta outras URLs do preview.
- * Margem ampla no IntersectionObserver para mobile; preview também em onError.
+ * [url | null, ref, onError]. Sem imagem no catálogo: pede preview na montagem
+ * (fila global, não só IntersectionObserver — iOS falhava muito).
  */
 export function useLazyProductImage(
   productUrl: string | undefined,
   existingImage: string | null | undefined,
-  options?: { enabled?: boolean },
-): [string | null, React.RefObject<HTMLDivElement | null>, () => void] {
+  options?: { enabled?: boolean; eager?: boolean },
+): [string | null, RefObject<HTMLDivElement | null>, () => void] {
   const enabled = options?.enabled !== false;
+  const eager = options?.eager === true;
   const normalizedPrimary = useMemo(() => {
     const s = existingImage?.trim();
     return s ? ensureHttpsImage(s) : null;
@@ -80,70 +156,68 @@ export function useLazyProductImage(
     setCandidates(cached ? [ensureHttpsImage(cached)] : []);
   }, [productUrl, normalizedPrimary]);
 
-  const appendPreviewUrls = useCallback(async (): Promise<boolean> => {
-    if (!productUrl || fetchingRef.current) return false;
-    const gen = urlGenRef.current;
-    fetchingRef.current = true;
-    const urls = await fetchPreviewImageUrls(productUrl);
-    fetchingRef.current = false;
-    if (gen !== urlGenRef.current) return false;
-    if (urls.length === 0) return false;
-    cachePut(productUrl, urls[0]);
+  const mergePreviewUrls = useCallback(
+    (urls: string[], gen: number): boolean => {
+      if (gen !== urlGenRef.current || urls.length === 0) return false;
+      cachePut(productUrl!, urls[0]);
+      const prev = candidatesRef.current;
+      const merged = [...prev];
+      for (const u of urls) if (!merged.includes(u)) merged.push(u);
+      if (merged.length === prev.length) return false;
+      const firstNew = prev.length;
+      setCandidates(merged);
+      setIdx(firstNew === 0 ? 0 : firstNew);
+      return true;
+    },
+    [productUrl],
+  );
 
-    const prev = candidatesRef.current;
-    const merged = [...prev];
-    for (const u of urls) if (!merged.includes(u)) merged.push(u);
-    if (merged.length === prev.length) return false;
-    const firstNew = prev.length;
-    setCandidates(merged);
-    setIdx(firstNew);
-    return true;
-  }, [productUrl]);
+  const appendPreviewUrls = useCallback(
+    async (opts?: { nocache?: boolean }): Promise<boolean> => {
+      if (!productUrl || fetchingRef.current) return false;
+      const gen = urlGenRef.current;
+      fetchingRef.current = true;
+      const urls = await fetchPreviewImageUrls(productUrl, opts);
+      fetchingRef.current = false;
+      if (gen !== urlGenRef.current) return false;
+      return mergePreviewUrls(urls, gen);
+    },
+    [productUrl, mergePreviewUrls],
+  );
 
+  /** Sem imagem no catálogo: carrega preview ao montar (fila), com retry nocache. */
   useEffect(() => {
     if (!productUrl || !enabled) return;
     if (normalizedPrimary) return;
-    if (candidates.length > 0) return;
 
-    const rootMargin =
-      typeof window !== "undefined" && window.innerWidth < 768
-        ? "320px 0px 480px 0px"
-        : "200px 0px 280px 0px";
+    const gen = urlGenRef.current;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (!entry?.isIntersecting) return;
-
-        void (async () => {
-          if (!productUrl) return;
-          const gen = urlGenRef.current;
-          if (imageCache.has(productUrl)) {
-            if (gen !== urlGenRef.current) return;
-            setCandidates([ensureHttpsImage(imageCache.get(productUrl)!)]);
-            setIdx(0);
-            return;
-          }
-          await appendPreviewUrls();
-        })();
-        observer.disconnect();
-      },
-      { rootMargin, threshold: 0.01 },
-    );
-
-    const el = ref.current;
-    if (el) observer.observe(el);
-    else {
-      const id = requestAnimationFrame(() => {
-        if (ref.current) observer.observe(ref.current);
-      });
-      return () => {
-        cancelAnimationFrame(id);
-        observer.disconnect();
-      };
+    if (imageCache.has(productUrl)) {
+      setCandidates([ensureHttpsImage(imageCache.get(productUrl)!)]);
+      setIdx(0);
+      return;
     }
-    return () => observer.disconnect();
-  }, [productUrl, enabled, normalizedPrimary, candidates.length, appendPreviewUrls]);
+
+    let cancelled = false;
+    const delay = eager ? 0 : Math.floor(Math.random() * 350);
+
+    const t = window.setTimeout(() => {
+      void enqueuePreviewJob(async () => {
+        if (cancelled || gen !== urlGenRef.current) return;
+        let ok = await appendPreviewUrls();
+        if (!ok && !cancelled && gen === urlGenRef.current) {
+          await new Promise((r) => setTimeout(r, 2200));
+          if (cancelled || gen !== urlGenRef.current) return;
+          ok = await appendPreviewUrls({ nocache: true });
+        }
+      });
+    }, delay);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [productUrl, enabled, normalizedPrimary, eager, appendPreviewUrls]);
 
   const onImageError = useCallback(() => {
     if (!productUrl || !enabled || giveUp) return;
@@ -157,7 +231,10 @@ export function useLazyProductImage(
 
     void (async () => {
       const ok = await appendPreviewUrls();
-      if (!ok) setGiveUp(true);
+      if (!ok) {
+        const ok2 = await appendPreviewUrls({ nocache: true });
+        if (!ok2) setGiveUp(true);
+      }
     })();
   }, [productUrl, enabled, giveUp, idx, appendPreviewUrls]);
 
