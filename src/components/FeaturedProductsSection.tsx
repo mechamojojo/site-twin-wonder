@@ -22,7 +22,10 @@ type ProductLike = { id: string; url?: string; originalUrl?: string; title: stri
 
 function ProductCard({ product }: { product: ProductLike }) {
   const url = product.originalUrl ?? product.url ?? "";
-  const [lazyImage, containerRef] = useLazyProductImage(url || undefined, product.image ?? undefined);
+  const [lazyImage, containerRef, onProductImageError] = useLazyProductImage(
+    url || undefined,
+    product.image ?? undefined,
+  );
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER_IMAGE;
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
   const priceStr = displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
@@ -34,13 +37,15 @@ function ProductCard({ product }: { product: ProductLike }) {
         <Link to={to} className="flex flex-col flex-1 group">
           <div className="aspect-[3/4] bg-muted/50 relative overflow-hidden">
             <img
+              key={imgSrc}
               src={imgSrc}
               alt={productDisplayTitle(product.titlePt, product.title, "Produto")}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               referrerPolicy={referrerPolicyForImage(imgSrc)}
               loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+              decoding="async"
+              onError={() => {
+                onProductImageError();
               }}
             />
           </div>

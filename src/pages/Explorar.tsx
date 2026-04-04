@@ -51,8 +51,11 @@ const PLACEHOLDER =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect fill='%23f1f5f9' width='400' height='400'/%3E%3Ctext fill='%2394a3b8' font-family='sans-serif' font-size='18' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle'%3EProduto%3C/text%3E%3C/svg%3E";
 
 function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
-  const url = (p.originalUrl ?? p.url ?? "").replace(/\?.*$/, "");
-  const [lazyImage, containerRef] = useLazyProductImage(url || undefined, p.image ?? undefined);
+  const url = (p.originalUrl ?? p.url ?? "").trim();
+  const [lazyImage, containerRef, onProductImageError] = useLazyProductImage(
+    url || undefined,
+    p.image ?? undefined,
+  );
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER;
   const displayTitle = productDisplayTitle(p.titlePt, p.title, "Produto");
   const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
@@ -63,12 +66,15 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
       <Link to={to} className="group flex flex-col bg-transparent h-full">
         <div className="aspect-[3/4] bg-muted/30 relative overflow-hidden rounded-sm">
           <img
+            key={imgSrc}
             src={imgSrc}
             alt=""
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             referrerPolicy={referrerPolicyForImage(imgSrc)}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = PLACEHOLDER;
+            loading="lazy"
+            decoding="async"
+            onError={() => {
+              onProductImageError();
             }}
           />
         </div>
