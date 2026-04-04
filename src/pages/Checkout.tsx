@@ -15,7 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
-import { productImageDisplayUrl } from "@/lib/productImageDisplayUrl";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { Truck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -378,9 +377,10 @@ const Checkout = () => {
                   <div className="shrink-0 w-14 h-14 rounded-lg border border-border bg-muted overflow-hidden">
                     {i.image ? (
                       <img
-                        src={productImageDisplayUrl(ensureHttpsImage(i.image))}
+                        src={ensureHttpsImage(i.image)}
                         alt=""
                         className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-muted-foreground text-[10px]">

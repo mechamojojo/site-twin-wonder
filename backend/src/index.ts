@@ -32,10 +32,6 @@ import cors from "cors";
 import { json } from "body-parser";
 import { PrismaClient, OrderStatus, ShippingMethod } from "@prisma/client";
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
-import {
-  isAllowedProductImageUrl,
-  refererForImageHost,
-} from "./productImageAllowlist";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -70,17 +66,6 @@ const authRateLimiter = rateLimit({
   message: { error: "Muitas tentativas. Tente novamente em alguns minutos." },
   standardHeaders: true,
 });
-
-/** Proxy de miniaturas (Safari / hotlink): não exige auth; limite por IP. */
-const productImageRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 600,
-  message: { error: "Muitas imagens. Tente em instantes." },
-  standardHeaders: true,
-});
-
-const PRODUCT_IMAGE_FETCH_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 const PORT = process.env.PORT || 4000;
 const isProduction = process.env.NODE_ENV === "production";
@@ -939,69 +924,6 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// Admin: títulos fixos na faixa "Clientes já estão comprando" (por URL canônica)
-app.get("/api/admin/recent-strip-overrides", requireAdmin, async (_req, res) => {
-  try {
-    const entries = await prisma.recentStripTitleOverride.findMany({
-      orderBy: { updatedAt: "desc" },
-    });
-    res.json({ entries });
-  } catch (err) {
-    console.error("Admin list recent-strip-overrides:", err);
-    res
-      .status(500)
-      .json({ error: safeErrorMessage(err, "Erro ao listar títulos da faixa") });
-  }
-});
-
-app.put("/api/admin/recent-strip-overrides", requireAdmin, async (req, res) => {
-  try {
-    const body = req.body ?? {};
-    const urlKeyDirect =
-      typeof body.urlKey === "string" ? body.urlKey.trim() : "";
-    const titleRaw = body.title;
-    const deleteIt =
-      titleRaw === null ||
-      titleRaw === undefined ||
-      (typeof titleRaw === "string" && !titleRaw.trim());
-    if (urlKeyDirect && deleteIt) {
-      await prisma.recentStripTitleOverride.deleteMany({
-        where: { urlKey: urlKeyDirect },
-      });
-      return res.json({ ok: true, removed: true });
-    }
-    const originalUrl =
-      typeof body.originalUrl === "string" ? body.originalUrl.trim() : "";
-    if (!originalUrl.startsWith("http")) {
-      return res
-        .status(400)
-        .json({ error: "Cole uma URL de produto válida (começando com http)." });
-    }
-    const urlKey = normalizeProductPreviewUrlKey(originalUrl);
-    if (deleteIt) {
-      await prisma.recentStripTitleOverride.deleteMany({ where: { urlKey } });
-      return res.json({ ok: true, removed: true });
-    }
-    const title =
-      typeof titleRaw === "string" ? titleRaw.trim().slice(0, 300) : "";
-    if (!title) {
-      await prisma.recentStripTitleOverride.deleteMany({ where: { urlKey } });
-      return res.json({ ok: true, removed: true });
-    }
-    await prisma.recentStripTitleOverride.upsert({
-      where: { urlKey },
-      create: { urlKey, title },
-      update: { title },
-    });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("Admin put recent-strip-overrides:", err);
-    res
-      .status(500)
-      .json({ error: safeErrorMessage(err, "Erro ao salvar título da faixa") });
-  }
-});
-
 // Catálogo de produtos — busca e listagem (ordem = mesma do admin, sortOrder)
 app.get("/api/products", async (req, res) => {
   try {
@@ -1091,55 +1013,6 @@ app.get("/api/products/most-saved", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao buscar produtos mais salvos" });
-  }
-});
-
-// Catálogo por URL do marketplace — alinha /pedido?url= com títulos do admin (antes de :idOrSlug)
-app.get("/api/products/catalog-by-url", async (req, res) => {
-  try {
-    const raw = (req.query.url as string)?.trim() || "";
-    if (!raw.startsWith("http")) {
-      return res.status(400).json({ error: "Parâmetro url inválido" });
-    }
-    const norm = normalizeProductPreviewUrlKey(raw);
-    const candidates = [...new Set([raw, norm])];
-    let product = await prisma.product.findFirst({
-      where: { originalUrl: { in: candidates } },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    });
-    if (!product) {
-      const rows = await prisma.product.findMany({
-        select: { id: true, originalUrl: true },
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        take: 3000,
-      });
-      const match = rows.find(
-        (r) => normalizeProductPreviewUrlKey(r.originalUrl) === norm,
-      );
-      if (match) {
-        product = await prisma.product.findUnique({ where: { id: match.id } });
-      }
-    }
-    if (!product) {
-      return res.status(404).json({ error: "Produto não está no catálogo" });
-    }
-
-    let withImage = product;
-    if (!product.image) {
-      try {
-        const parsed = product.images ? JSON.parse(product.images) : null;
-        const first = Array.isArray(parsed)
-          ? parsed.find((x) => typeof x === "string" && x.startsWith("http"))
-          : null;
-        withImage = { ...product, image: first ?? null };
-      } catch {
-        /* keep */
-      }
-    }
-    res.json(withImage);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro ao buscar produto por URL" });
   }
 });
 
@@ -1946,18 +1819,6 @@ app.get("/api/recent-purchases", async (_req, res) => {
       );
     }
 
-    const normKeysUnique = [
-      ...new Set(
-        uniqueOrders.map((o) => normalizeProductPreviewUrlKey(o.originalUrl)),
-      ),
-    ];
-    const stripOverrides = await prisma.recentStripTitleOverride.findMany({
-      where: { urlKey: { in: normKeysUnique } },
-    });
-    const stripTitleByKey = new Map(
-      stripOverrides.map((s) => [s.urlKey, s.title]),
-    );
-
     const items = uniqueOrders.map((o) => {
       const norm = normalizeProductPreviewUrlKey(o.originalUrl);
       const cat = catalogByNormKey.get(norm);
@@ -1966,9 +1827,7 @@ app.get("/api/recent-purchases", async (_req, res) => {
         : "";
       const barOverride = (o.barDisplayTitle ?? "").trim();
       const orderTitle = (o.productTitle ?? "").trim();
-      const stripFixed = (stripTitleByKey.get(norm) ?? "").trim();
       const title =
-        stripFixed ||
         barOverride ||
         orderTitle ||
         fromCatalog ||
@@ -2077,62 +1936,6 @@ function normalizeProductPreviewUrlKey(url: string): string {
     return url;
   }
 }
-
-// Miniaturas via servidor (evita falha no Safari com referrer / hotlink de CDNs chinesas)
-app.get("/api/product-image", productImageRateLimiter, async (req, res) => {
-  const raw = typeof req.query.url === "string" ? req.query.url.trim() : "";
-  if (!raw) return res.status(400).end();
-  const normalized =
-    raw.startsWith("http://") ? "https://" + raw.slice(7) : raw;
-  if (!isAllowedProductImageUrl(normalized)) {
-    return res.status(403).json({ error: "Host não permitido." });
-  }
-  let target: URL;
-  try {
-    target = new URL(normalized);
-  } catch {
-    return res.status(400).end();
-  }
-  try {
-    const r = await fetch(target.href, {
-      headers: {
-        "User-Agent": PRODUCT_IMAGE_FETCH_UA,
-        Referer: refererForImageHost(target.hostname),
-        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!r.ok) return res.status(502).end();
-    const ct = (r.headers.get("content-type") || "").toLowerCase();
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length > 6 * 1024 * 1024) return res.status(413).end();
-    const okByMime = ct.startsWith("image/");
-    const okByMagic =
-      (buf[0] === 0xff && buf[1] === 0xd8) ||
-      (buf[0] === 0x89 &&
-        buf[1] === 0x50 &&
-        buf[2] === 0x4e &&
-        buf[3] === 0x47) ||
-      (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) ||
-      (buf[0] === 0x52 &&
-        buf[1] === 0x49 &&
-        buf[2] === 0x46 &&
-        buf[3] === 0x46);
-    if (!okByMime && !okByMagic) return res.status(415).end();
-    const outType = okByMime ? ct.split(";")[0].trim() : "image/jpeg";
-    res.setHeader(
-      "Cache-Control",
-      "public, max-age=86400, stale-while-revalidate=604800",
-    );
-    res.setHeader("Content-Type", outType);
-    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    res.send(buf);
-  } catch (e) {
-    console.error("[product-image]", target.href.slice(0, 120), e);
-    res.status(504).end();
-  }
-});
 
 // Preview do produto (scraping): título, preço, imagens, variantes
 app.get("/api/product/preview", async (req, res) => {

@@ -1,7 +1,6 @@
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
 import { ensureHttpsImage } from "@/lib/utils";
-import { productImageDisplayUrl } from "@/lib/productImageDisplayUrl";
 import { isValidProductUrl } from "@/lib/urlValidation";
 import { ExternalLink, ShoppingCart, ArrowLeft, RefreshCw, AlertCircle, Search, Save } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
@@ -11,15 +10,12 @@ import { useCart } from "@/context/CartContext";
 import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
-import { productDisplayTitle } from "@/lib/productDisplayTitle";
 import { toast } from "sonner";
 
 const getQueryParam = (search: string, key: string) => {
   const params = new URLSearchParams(search);
   return params.get(key) ?? "";
 };
-
-const previewImgSrc = (u: string) => productImageDisplayUrl(ensureHttpsImage(u));
 
 const ADMIN_TOKEN_KEY = "compraschina-admin-token";
 
@@ -149,10 +145,6 @@ const Order = () => {
   /** Quantidade por tamanho (estilo CSSBuy): M: 2, L: 1 */
   const [quantityBySize, setQuantityBySize] = useState<Record<string, number>>({});
   const [productPreviewLoading, setProductPreviewLoading] = useState(false);
-  const [catalogProduct, setCatalogProduct] = useState<{
-    title: string;
-    titlePt: string | null;
-  } | null>(null);
   const [productPreviewError, setProductPreviewError] = useState<string | null>(null);
   const [saveSnapshotLoading, setSaveSnapshotLoading] = useState(false);
   const [adminTokenInvalidated, setAdminTokenInvalidated] = useState(false);
@@ -215,33 +207,6 @@ const Order = () => {
   useEffect(() => {
     fetchProductPreview();
   }, [fetchProductPreview]);
-
-  useEffect(() => {
-    if (!url) {
-      setCatalogProduct(null);
-      return;
-    }
-    let cancelled = false;
-    fetch(apiUrl(`/api/products/catalog-by-url?url=${encodeURIComponent(url)}`))
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        if (!data) {
-          setCatalogProduct(null);
-          return;
-        }
-        setCatalogProduct({
-          title: String(data.title ?? ""),
-          titlePt: data.titlePt != null ? String(data.titlePt) : null,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setCatalogProduct(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
 
   useEffect(() => {
     const fetchPreview = async () => {
@@ -318,32 +283,6 @@ const Order = () => {
     );
     return raw ? ensureHttpsImage(raw) : undefined;
   }, [productPreview, selectedOptionByGroup, selectedImageIndex]);
-
-  /** Nome exibido: catálogo (admin) manda sobre o scrape — mesmo link do Explorar. */
-  const pedidoProductDisplayTitle = useMemo(() => {
-    if (catalogProduct) {
-      const t = productDisplayTitle(
-        catalogProduct.titlePt,
-        catalogProduct.title,
-        "",
-      ).trim();
-      if (t) return t;
-    }
-    if (productPreview) {
-      const t = productDisplayTitle(
-        productPreview.titlePt,
-        productPreview.title,
-        "",
-      ).trim();
-      if (t) return t;
-    }
-    return "";
-  }, [catalogProduct, productPreview]);
-
-  const cartLineDisplayName = useMemo(
-    () => pedidoProductDisplayTitle || "Produto",
-    [pedidoProductDisplayTitle],
-  );
 
   const saveSnapshotForAll = useCallback(async () => {
     if (!url || !productPreview) return;
@@ -446,9 +385,7 @@ const Order = () => {
           </Link>
           <span aria-hidden>·</span>
           <span className="text-foreground/80">
-            {pedidoProductDisplayTitle ? (
-              pedidoProductDisplayTitle
-            ) : productPreviewLoading ? (
+            {productPreviewLoading ? (
               <span className="inline-flex items-center gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
                 Buscando informações do produto...
@@ -481,7 +418,7 @@ const Order = () => {
                         {/* Imagem principal — segue a miniatura clicada (grupo com imagens ou galeria) */}
                         <div className="aspect-square sm:aspect-[4/3] max-h-[420px] flex items-center justify-center p-4 sm:p-6 bg-white border-b border-[#e8e8e8]">
                           <img
-                            src={previewImgSrc((() => {
+                            src={ensureHttpsImage((() => {
                               const imageGroup = productPreview.optionGroups?.find((g) => !isSizeGroup(g.name, g.values) && !isQualityGradeGroup(g.name) && (g.displayAsImages === true || (g.displayAsImages !== false && g.images?.some(Boolean))));
                               const selectedVal = imageGroup ? selectedOptionByGroup[imageGroup.name] : undefined;
                               const imgIdx = selectedVal && imageGroup ? imageGroup.values.indexOf(selectedVal) : -1;
@@ -495,6 +432,7 @@ const Order = () => {
                             alt=""
                             className="max-w-full max-h-full w-auto h-auto object-contain"
                             loading="lazy"
+                            referrerPolicy="no-referrer"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
                         </div>
@@ -516,7 +454,7 @@ const Order = () => {
                                     className={`shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded border-2 overflow-hidden bg-[#fafafa] transition-colors ${isSelected ? "border-china-red ring-2 ring-china-red/30" : "border-[#e0e0e0] hover:border-[#bdbdbd]"}`}
                                     title={value}
                                   >
-                                    <img src={previewImgSrc(thumb!)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                    <img src={ensureHttpsImage(thumb!)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                                   </button>
                                 );
                               });
@@ -530,7 +468,7 @@ const Order = () => {
                                   selectedImageIndex === i ? "border-china-red ring-2 ring-china-red/30" : "border-[#e0e0e0] hover:border-[#bdbdbd]"
                                 }`}
                               >
-                                <img src={previewImgSrc(src)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                <img src={ensureHttpsImage(src)} alt="" className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                               </button>
                             ));
                           })()}
@@ -648,16 +586,17 @@ const Order = () => {
                 </div>
               ) : (
                 <>
-              {/* Título: catálogo (admin) tem prioridade sobre o scrape */}
-              {pedidoProductDisplayTitle ? (
+              {/* Título do produto — como em qualquer e-commerce */}
+              {(productPreview?.titlePt || productPreview?.title) && (
                 <h1 className="font-heading font-bold text-foreground text-xl leading-snug">
-                  {pedidoProductDisplayTitle}
+                  {productPreview.titlePt || productPreview.title}
                 </h1>
-              ) : !productPreviewLoading && productPreview ? (
+              )}
+              {!(productPreview?.titlePt || productPreview?.title) && productPreview && (
                 <h1 className="font-heading font-bold text-foreground text-xl leading-snug">
                   Produto
                 </h1>
-              ) : null}
+              )}
 
               {/* Preço direto em reais — sem valor fake enquanto carrega */}
               <div className="pb-4 border-b border-border">
@@ -796,7 +735,7 @@ const Order = () => {
                                     title={value}
                                   >
                                     <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
-                                      <img src={previewImgSrc(thumb)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                                      <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
                                     </div>
                                   </button>
                                 );
@@ -860,7 +799,7 @@ const Order = () => {
                               >
                                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded overflow-hidden bg-muted flex items-center justify-center shrink-0">
                                   {thumb ? (
-                                    <img src={previewImgSrc(thumb)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
+                                    <img src={ensureHttpsImage(thumb)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden"); }} />
                                   ) : (
                                     <span className="text-[10px] font-medium text-muted-foreground">{c.slice(0, 4)}</span>
                                   )}
@@ -1019,7 +958,9 @@ const Order = () => {
                         : variation.trim();
 
                     // Detect product category for keepBox eligibility
-                    const productCategory = detectCategory(cartLineDisplayName);
+                    const productCategory = detectCategory(
+                      productPreview?.titlePt ?? productPreview?.title,
+                    );
                     const supportsKeepBox = categorySupportsKeepBox(productCategory);
 
                     const handleAddToCart = () => {
@@ -1041,8 +982,8 @@ const Order = () => {
                         size: hasQuantityBySize ? sizeBreakdown : selectedSize || undefined,
                         variation: variationStr || undefined,
                         notes: notes.trim() || undefined,
-                        title: cartLineDisplayName,
-                        titlePt: cartLineDisplayName,
+                        title: productPreview?.title ?? undefined,
+                        titlePt: productPreview?.titlePt ?? undefined,
                         priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                         priceBrl: preview?.totalProductBrl ?? undefined,
                         image: cartLineImage,
@@ -1092,8 +1033,8 @@ const Order = () => {
                               size: hasQuantityBySize ? sizeBreakdown : selectedSize || undefined,
                               variation: variationStr || undefined,
                               notes: notes.trim() || undefined,
-                              title: cartLineDisplayName,
-                              titlePt: cartLineDisplayName,
+                              title: productPreview?.title ?? undefined,
+                              titlePt: productPreview?.titlePt ?? undefined,
                               priceCny: effectivePriceCny ?? productPreview?.priceCny ?? undefined,
                               priceBrl: preview?.totalProductBrl ?? undefined,
                               image: cartLineImage,

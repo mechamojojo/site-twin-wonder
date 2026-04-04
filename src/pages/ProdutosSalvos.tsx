@@ -8,7 +8,6 @@ import { getAuthToken } from "@/context/AuthContext";
 import { apiUrl } from "@/lib/api";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import { ensureHttpsImage, referrerPolicyForImage } from "@/lib/utils";
-import { productImageDisplayUrl } from "@/lib/productImageDisplayUrl";
 import { Heart, ShoppingBag } from "lucide-react";
 
 const PLACEHOLDER =
@@ -97,18 +96,10 @@ const ProdutosSalvos = () => {
                   >
                     <div className="aspect-[3/4] bg-muted/30 relative overflow-hidden">
                       <img
-                        src={
-                          p.image
-                            ? productImageDisplayUrl(ensureHttpsImage(p.image))
-                            : PLACEHOLDER
-                        }
+                        src={p.image ? ensureHttpsImage(p.image) : PLACEHOLDER}
                         alt=""
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        referrerPolicy={referrerPolicyForImage(
-                          p.image
-                            ? productImageDisplayUrl(ensureHttpsImage(p.image))
-                            : PLACEHOLDER,
-                        )}
+                        referrerPolicy={referrerPolicyForImage(p.image ?? PLACEHOLDER)}
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = PLACEHOLDER;
                         }}
