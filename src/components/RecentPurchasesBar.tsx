@@ -45,8 +45,7 @@ export default function RecentPurchasesBar() {
               Clientes já estão comprando
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5 leading-snug max-w-xl">
-              Estes são alguns produtos comprados recentemente por clientes na
-              plataforma.
+              Estes são alguns produtos comprados recentemente na plataforma.
             </p>
           </div>
         </div>
