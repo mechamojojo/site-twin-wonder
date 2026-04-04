@@ -268,7 +268,7 @@ const AdminPedido = () => {
     if (!token || !order) return;
     setSaving(true);
     try {
-      await Promise.all([
+      const [orderRes, shipRes] = await Promise.all([
         fetch(apiUrl(`/api/admin/orders/${order.id}`), {
           method: "PATCH",
           headers: {
@@ -295,18 +295,45 @@ const AdminPedido = () => {
           }),
         }),
       ]);
+      if (!orderRes.ok) {
+        const err = await orderRes.json().catch(() => ({}));
+        toast.error(
+          (err as { error?: string }).error ||
+            `Erro ao salvar pedido (${orderRes.status})`,
+        );
+        return;
+      }
+      if (!shipRes.ok) {
+        const err = await shipRes.json().catch(() => ({}));
+        toast.error(
+          (err as { error?: string }).error ||
+            `Erro ao salvar envio (${shipRes.status})`,
+        );
+        return;
+      }
+      const updated = (await orderRes.json()) as Order;
+      const shipJson = shipRes.ok
+        ? ((await shipRes.json().catch(() => null)) as Order["shipment"] | null)
+        : null;
       setOrder({
         ...order,
-        status: form.status,
-        cssbuyOrderId: form.cssbuyOrderId.trim() || null,
-        internalNotes: form.internalNotes.trim() || null,
-        productTitle: form.productTitle.trim() || null,
-        barDisplayTitle: form.barDisplayTitle.trim() || null,
-        shipment: {
-          trackingCode: form.trackingCode.trim() || null,
-          carrier: form.carrier.trim() || null,
-        },
+        ...updated,
+        shipment:
+          shipJson ??
+          updated.shipment ??
+          order.shipment ?? {
+            trackingCode: form.trackingCode.trim() || null,
+            carrier: form.carrier.trim() || null,
+          },
       });
+      setForm((f) => ({
+        ...f,
+        status: updated.status ?? f.status,
+        cssbuyOrderId: updated.cssbuyOrderId ?? "",
+        internalNotes: updated.internalNotes ?? "",
+        productTitle: updated.productTitle ?? "",
+        barDisplayTitle: updated.barDisplayTitle ?? "",
+      }));
       toast.success("Salvo!");
     } catch {
       toast.error("Erro ao salvar");
@@ -754,10 +781,15 @@ const AdminPedido = () => {
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
                   placeholder="Nome legível do produto"
                 />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Também aparece na faixa &quot;últimas compras&quot; da home
+                  (antes do nome do catálogo). Limpe o campo e salve para voltar
+                  a usar só o catálogo.
+                </p>
               </div>
               <div>
                 <label className="block text-xs text-muted-foreground mb-1">
-                  Título na faixa &quot;O que estão comprando&quot; (opcional)
+                  Título só na faixa da home (opcional)
                 </label>
                 <input
                   value={form.barDisplayTitle}
@@ -765,12 +797,11 @@ const AdminPedido = () => {
                     setForm((f) => ({ ...f, barDisplayTitle: e.target.value }))
                   }
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
-                  placeholder="Deixe vazio para usar catálogo ou título acima"
+                  placeholder="Só se quiser um texto diferente do título acima"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Se você preencher, esse texto aparece na home nessa faixa,
-                  ignorando o nome do catálogo. Útil para encurtar ou corrigir
-                  um nome feio vindo do checkout.
+                  Se preencher, vale só na faixa horizontal da home e substitui
+                  até o título do produto acima (útil para um nome mais curto).
                 </p>
               </div>
             </div>

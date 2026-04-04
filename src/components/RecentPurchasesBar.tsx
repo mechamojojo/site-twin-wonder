@@ -38,13 +38,16 @@ export default function RecentPurchasesBar() {
   return (
     <section className="bg-muted/40 py-6 border-y border-border">
       <div className="container mx-auto px-4">
-        <div className="flex items-center gap-2 mb-3">
-          <ShoppingBag className="w-4 h-4 text-china-red" />
-          <div>
-            <h2 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider">
-              O que estão comprando
+        <div className="flex items-start gap-2.5 mb-3">
+          <ShoppingBag className="w-4 h-4 text-china-red shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <h2 className="text-sm font-heading font-bold text-foreground tracking-tight">
+              Últimas compras feitas no site
             </h2>
-            <p className="text-xs text-muted-foreground">Atualizado com as últimas compras do site</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug max-w-xl">
+              Pedidos reais de quem já fechou com a gente — inspire-se e peça o
+              seu pelo mesmo link, com intermediação e suporte até o Brasil.
+            </p>
           </div>
         </div>
         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent -mx-1">
@@ -66,7 +69,10 @@ export default function RecentPurchasesBar() {
                   }}
                 />
               </div>
-              <p className="text-xs font-medium text-foreground line-clamp-2 group-hover:text-china-red transition-colors">
+              <p
+                className="text-xs font-medium text-foreground line-clamp-3 group-hover:text-china-red transition-colors"
+                title={item.title}
+              >
                 {item.title}
               </p>
             </Link>

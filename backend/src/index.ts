@@ -856,12 +856,19 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
     if (typeof body.internalNotes === "string") {
       updates.internalNotes = body.internalNotes.trim().slice(0, 2000) || null;
     }
-    if (typeof body.productTitle === "string") {
-      updates.productTitle = body.productTitle.trim().slice(0, 300) || null;
+    if (Object.prototype.hasOwnProperty.call(body, "productTitle")) {
+      updates.productTitle =
+        typeof body.productTitle === "string" &&
+        body.productTitle.trim().length > 0
+          ? body.productTitle.trim().slice(0, 300)
+          : null;
     }
-    if (typeof body.barDisplayTitle === "string") {
+    if (Object.prototype.hasOwnProperty.call(body, "barDisplayTitle")) {
       updates.barDisplayTitle =
-        body.barDisplayTitle.trim().slice(0, 300) || null;
+        typeof body.barDisplayTitle === "string" &&
+        body.barDisplayTitle.trim().length > 0
+          ? body.barDisplayTitle.trim().slice(0, 300)
+          : null;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -1786,10 +1793,12 @@ app.get("/api/recent-purchases", async (_req, res) => {
         ? catalogProductDisplayTitle(cat.titlePt, cat.title)
         : "";
       const barOverride = (o.barDisplayTitle ?? "").trim();
+      const orderTitle = (o.productTitle ?? "").trim();
+      // Pedido (admin/cliente) antes do catálogo: edição em "Nomes na loja" passa a valer na faixa.
       const title =
         barOverride ||
+        orderTitle ||
         fromCatalog ||
-        (o.productTitle && o.productTitle.trim()) ||
         (o.productDescription && o.productDescription.trim()) ||
         "Produto";
       const catalogImg =
@@ -1804,6 +1813,7 @@ app.get("/api/recent-purchases", async (_req, res) => {
         slug: cat?.slug ?? null,
       };
     });
+    res.set("Cache-Control", "no-store");
     res.json({ items });
   } catch (err) {
     console.error(err);
