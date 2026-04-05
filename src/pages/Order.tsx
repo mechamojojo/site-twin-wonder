@@ -183,6 +183,11 @@ const Order = () => {
   );
   const [saveSnapshotLoading, setSaveSnapshotLoading] = useState(false);
   const [adminTokenInvalidated, setAdminTokenInvalidated] = useState(false);
+  /** Mesmo preço base do Explorar quando o link está no catálogo (URL exata). */
+  const [catalogMatch, setCatalogMatch] = useState<{
+    priceCny: number | null;
+    priceBrl: number | null;
+  } | null>(null);
 
   const isAdmin =
     typeof localStorage !== "undefined" &&
@@ -259,6 +264,42 @@ const Order = () => {
   }, [fetchProductPreview]);
 
   useEffect(() => {
+    if (!url) {
+      setCatalogMatch(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(
+      apiUrl(`/api/products/match-url?url=${encodeURIComponent(url)}`),
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { product?: { priceCny?: unknown; priceBrl?: unknown } } | null) => {
+        if (cancelled) return;
+        const p = data?.product;
+        if (!p) {
+          setCatalogMatch(null);
+          return;
+        }
+        setCatalogMatch({
+          priceCny:
+            p.priceCny != null && Number(p.priceCny) > 0
+              ? Number(p.priceCny)
+              : null,
+          priceBrl:
+            p.priceBrl != null && Number(p.priceBrl) >= 0
+              ? Number(p.priceBrl)
+              : null,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogMatch(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  useEffect(() => {
     const fetchPreview = async () => {
       if (!url) return;
       try {
@@ -289,10 +330,26 @@ const Order = () => {
     fetchPreview();
   }, [url]);
 
-  // Preço efetivo: da variante selecionada (priceByValue por grupo). Prioriza Quality grade quando selecionado, depois Cor/Estilo, depois base.
-  const effectivePriceCny = (() => {
-    if (!productPreview?.priceCny) return null;
-    const groupsWithPrice = (productPreview.optionGroups ?? []).filter((g) => {
+  const catalogBaseCny = useMemo(() => {
+    if (catalogMatch?.priceCny == null) return null;
+    const n = Number(catalogMatch.priceCny);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [catalogMatch?.priceCny]);
+
+  const scrapedBaseCny = useMemo(() => {
+    if (productPreview?.priceCny == null) return null;
+    const n = Number(productPreview.priceCny);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [productPreview?.priceCny]);
+
+  // Base em CNY: catálogo (Explorar) tem prioridade sobre o scrape quando o link coincide.
+  // Preço efetivo: variante (priceByValue) por grupo; senão a base acima.
+  const effectivePriceCny = useMemo(() => {
+    const base = catalogBaseCny ?? scrapedBaseCny;
+    if (base == null) return null;
+    const groups = productPreview?.optionGroups;
+    if (!groups?.length) return base;
+    const groupsWithPrice = groups.filter((g) => {
       const selected = selectedOptionByGroup[g.name];
       return selected && g.priceByValue?.[selected] != null;
     });
@@ -305,15 +362,23 @@ const Order = () => {
       if (selected && groupWithPrice.priceByValue?.[selected] != null)
         return groupWithPrice.priceByValue[selected];
     }
-    return productPreview.priceCny;
-  })();
+    return base;
+  }, [
+    catalogBaseCny,
+    scrapedBaseCny,
+    productPreview?.optionGroups,
+    selectedOptionByGroup,
+  ]);
+
+  const baselineCnyForPriceApi = catalogBaseCny ?? scrapedBaseCny;
 
   // Quando o product preview ou a variante selecionada mudar, atualiza o preço em reais (usa preço da variante quando existir)
   useEffect(() => {
     if (!url || effectivePriceCny == null || productPreviewLoading) return;
     let cancelled = false;
     const priceParam =
-      effectivePriceCny !== productPreview?.priceCny
+      baselineCnyForPriceApi != null &&
+      Math.abs(effectivePriceCny - baselineCnyForPriceApi) > 1e-6
         ? `&priceCny=${effectivePriceCny}`
         : "";
     fetch(
@@ -334,7 +399,40 @@ const Order = () => {
     return () => {
       cancelled = true;
     };
-  }, [url, effectivePriceCny, productPreview?.priceCny, productPreviewLoading]);
+  }, [
+    url,
+    effectivePriceCny,
+    baselineCnyForPriceApi,
+    productPreviewLoading,
+  ]);
+
+  /** Preço em R$ alinhado ao Explorar: API /price/preview, senão catálogo, senão CNY efetivo. */
+  const displayProductBrl = useMemo(() => {
+    if (
+      preview?.totalProductBrl != null &&
+      Number.isFinite(preview.totalProductBrl)
+    ) {
+      return preview.totalProductBrl;
+    }
+    const fromCatalog = getDisplayPriceBrl(
+      catalogMatch?.priceCny,
+      catalogMatch?.priceBrl,
+    );
+    if (fromCatalog != null) return fromCatalog;
+    if (effectivePriceCny != null && effectivePriceCny > 0) {
+      return priceCnyToBrl(effectivePriceCny);
+    }
+    return null;
+  }, [
+    preview?.totalProductBrl,
+    catalogMatch,
+    effectivePriceCny,
+  ]);
+
+  const displayBrlLabel =
+    displayProductBrl != null
+      ? `R$ ${displayProductBrl.toFixed(2)}`
+      : ("—" as const);
 
   /** Imagem do item no carrinho/checkout: igual à galeria (opção com miniatura ou índice clicado). */
   const cartLineImage = useMemo(() => {
@@ -798,13 +896,13 @@ const Order = () => {
                       </h1>
                     )}
 
-                  {/* Preço direto em reais — sem valor fake enquanto carrega */}
+                  {/* Preço direto em reais — alinhado ao Explorar quando o link está no catálogo */}
                   <div className="pb-4 border-b border-border">
-                    {preview?.totalProductBrl != null ? (
+                    {displayProductBrl != null ? (
                       <>
                         <div className="flex flex-wrap items-baseline gap-2">
                           <span className="text-3xl font-heading font-bold text-china-red">
-                            R$ {preview.totalProductBrl.toFixed(2)}
+                            R$ {displayProductBrl.toFixed(2)}
                           </span>
                           <span
                             className="text-muted-foreground/70"
@@ -817,18 +915,13 @@ const Order = () => {
                           Você paga em reais · Entrega no Brasil · Preço já
                           inclui nosso serviço
                         </p>
-                        {preview.productPriceCny != null && (
+                        {(preview?.productPriceCny != null ||
+                          catalogMatch != null) && (
                           <p className="text-[11px] text-muted-foreground/80 mt-0.5">
                             Preço em reais (já inclui nosso serviço)
                           </p>
                         )}
                       </>
-                    ) : productPreview?.priceCny != null ? (
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <span className="text-2xl font-heading font-bold text-china-red">
-                          R$ {priceCnyToBrl(productPreview.priceCny).toFixed(2)}
-                        </span>
-                      </div>
                     ) : productPreviewLoading || previewLoading ? (
                       <div className="animate-pulse h-10 w-28 rounded bg-muted/50" />
                     ) : null}
@@ -899,12 +992,6 @@ const Order = () => {
                                     group.inventoryByValue?.[value];
                                   const maxQty =
                                     stock != null ? Math.min(99, stock) : 99;
-                                  const priceStr =
-                                    preview?.totalProductBrl != null
-                                      ? `R$ ${preview.totalProductBrl.toFixed(2)}`
-                                      : productPreview.priceCny != null
-                                        ? `R$ ${priceCnyToBrl(productPreview.priceCny).toFixed(2)}`
-                                        : "—";
                                   return (
                                     <li
                                       key={value}
@@ -914,7 +1001,7 @@ const Order = () => {
                                         {value}
                                       </span>
                                       <span className="text-sm font-medium text-china-red">
-                                        {priceStr}
+                                        {displayBrlLabel}
                                       </span>
                                       <span className="text-[11px] text-muted-foreground">
                                         Estoque:{" "}
@@ -1087,12 +1174,7 @@ const Order = () => {
                                 </div>
                               )}
                               <p className="text-[11px] text-muted-foreground mt-2">
-                                {preview?.totalProductBrl != null
-                                  ? `R$ ${preview.totalProductBrl.toFixed(2)}`
-                                  : productPreview.priceCny != null
-                                    ? `R$ ${priceCnyToBrl(productPreview.priceCny).toFixed(2)}`
-                                    : "—"}{" "}
-                                · Inventário: consultar
+                                {displayBrlLabel} · Inventário: consultar
                               </p>
                             </div>
                           ),
@@ -1201,12 +1283,7 @@ const Order = () => {
                               })}
                             </div>
                             <p className="text-[11px] text-muted-foreground mt-2">
-                              {preview?.totalProductBrl != null
-                                ? `R$ ${preview.totalProductBrl.toFixed(2)}`
-                                : productPreview.priceCny != null
-                                  ? `R$ ${priceCnyToBrl(productPreview.priceCny).toFixed(2)}`
-                                  : "—"}{" "}
-                              · Inventário: consultar
+                              {displayBrlLabel} · Inventário: consultar
                             </p>
                             {!productPreview.variants.size?.length && (
                               <div className="flex items-center gap-0 mt-2">
@@ -1276,12 +1353,6 @@ const Order = () => {
                                 const maxQty =
                                   stock != null ? Math.min(99, stock) : 99;
                                 const qty = quantityBySize[value] ?? 0;
-                                const priceStr =
-                                  preview?.totalProductBrl != null
-                                    ? `R$ ${preview.totalProductBrl.toFixed(2)}`
-                                    : productPreview.priceCny != null
-                                      ? `R$ ${priceCnyToBrl(productPreview.priceCny).toFixed(2)}`
-                                      : "—";
                                 return (
                                   <li
                                     key={value}
@@ -1291,7 +1362,7 @@ const Order = () => {
                                       {value}
                                     </span>
                                     <span className="text-sm font-medium text-china-red">
-                                      {priceStr}
+                                      {displayBrlLabel}
                                     </span>
                                     <span className="text-[11px] text-muted-foreground">
                                       Estoque:{" "}
@@ -1610,7 +1681,7 @@ const Order = () => {
                               effectivePriceCny ??
                               productPreview?.priceCny ??
                               undefined,
-                            priceBrl: preview?.totalProductBrl ?? undefined,
+                            priceBrl: displayProductBrl ?? undefined,
                             image: cartLineImage,
                             category: productCategory,
                             keepBox,
@@ -1680,8 +1751,7 @@ const Order = () => {
                                     effectivePriceCny ??
                                     productPreview?.priceCny ??
                                     undefined,
-                                  priceBrl:
-                                    preview?.totalProductBrl ?? undefined,
+                                  priceBrl: displayProductBrl ?? undefined,
                                   image: cartLineImage,
                                   category: productCategory,
                                   keepBox,

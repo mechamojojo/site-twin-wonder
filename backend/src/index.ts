@@ -956,6 +956,32 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   }
 });
 
+/** JSON: Prisma Decimal vira string — normaliza para número no cliente. */
+function serializeCatalogProduct<
+  P extends { priceCny: unknown; priceBrl: unknown },
+>(
+  p: P,
+): Omit<P, "priceCny" | "priceBrl"> & {
+  priceCny: number | null;
+  priceBrl: number | null;
+} {
+  const cnyRaw = p.priceCny;
+  const brlRaw = p.priceBrl;
+  const cny =
+    cnyRaw != null && String(cnyRaw) !== ""
+      ? Number(cnyRaw as string | number)
+      : null;
+  const brl =
+    brlRaw != null && String(brlRaw) !== ""
+      ? Number(brlRaw as string | number)
+      : null;
+  return {
+    ...p,
+    priceCny: cny != null && Number.isFinite(cny) ? cny : null,
+    priceBrl: brl != null && Number.isFinite(brl) ? brl : null,
+  };
+}
+
 // Catálogo de produtos — busca e listagem (ordem = mesma do admin, sortOrder)
 app.get("/api/products", async (req, res) => {
   try {
@@ -988,16 +1014,19 @@ app.get("/api/products", async (req, res) => {
     ]);
 
     const withImageFallback = products.map((p) => {
-      if (p.image) return p;
-      try {
-        const parsed = p.images ? JSON.parse(p.images) : null;
-        const first = Array.isArray(parsed)
-          ? parsed.find((x) => typeof x === "string" && x.startsWith("http"))
-          : null;
-        return { ...p, image: first ?? null };
-      } catch {
-        return p;
+      let row = p;
+      if (!p.image) {
+        try {
+          const parsed = p.images ? JSON.parse(p.images) : null;
+          const first = Array.isArray(parsed)
+            ? parsed.find((x) => typeof x === "string" && x.startsWith("http"))
+            : null;
+          row = { ...p, image: first ?? null };
+        } catch {
+          row = p;
+        }
       }
+      return serializeCatalogProduct(row);
     });
 
     res.json({ products: withImageFallback, total });
@@ -1034,17 +1063,45 @@ app.get("/api/products/most-saved", async (req, res) => {
       .map((slug) => {
         const product = bySlug.get(slug);
         if (!product) return null;
-        return { product, saveCount: countBySlug.get(slug) ?? 0 };
+        return {
+          product: serializeCatalogProduct(product),
+          saveCount: countBySlug.get(slug) ?? 0,
+        };
       })
       .filter(
-        (x): x is { product: (typeof products)[number]; saveCount: number } =>
-          x !== null,
+        (
+          x,
+        ): x is {
+          product: ReturnType<typeof serializeCatalogProduct<
+            (typeof products)[number]
+          >>;
+          saveCount: number;
+        } => x !== null,
       );
 
     res.json({ items, total: items.length });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao buscar produtos mais salvos" });
+  }
+});
+
+// Preço alinhado ao Explorar: mesmo link do catálogo (URL exata) — usado na página /pedido
+app.get("/api/products/match-url", async (req, res) => {
+  try {
+    const raw = String(req.query.url ?? "").trim();
+    if (!raw.startsWith("http")) {
+      return res.status(400).json({ error: "Parâmetro url inválido" });
+    }
+    const product = await prisma.product.findFirst({
+      where: { originalUrl: raw },
+      select: { priceCny: true, priceBrl: true, slug: true },
+    });
+    if (!product) return res.json({ product: null });
+    res.json({ product: serializeCatalogProduct(product) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao buscar produto" });
   }
 });
 
@@ -1073,7 +1130,10 @@ app.get("/api/products/:idOrSlug", async (req, res) => {
         // keep product
       }
     }
-    return res.json({ ...withImage, saveCount });
+    return res.json({
+      ...serializeCatalogProduct(withImage),
+      saveCount,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao buscar produto" });
