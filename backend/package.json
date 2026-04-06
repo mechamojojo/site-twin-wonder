@@ -17,7 +17,8 @@
     "seed-explorar": "ts-node scripts/seed-explorar.ts",
     "export-explorar-to-code": "ts-node scripts/export-explorar-to-code.ts",
     "update-explorar-previews": "ts-node scripts/update-explorar-previews.ts",
-    "update-featured-products": "ts-node scripts/update-featured-products.ts"
+    "update-featured-products": "ts-node scripts/update-featured-products.ts",
+    "resync-catalog-prices": "ts-node scripts/resync-catalog-prices.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
