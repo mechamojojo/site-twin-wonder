@@ -112,6 +112,8 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_CNY = 0.81;
 /** Preço exibido = custo em R$ (CNY × taxa) × fator. 2 = dobro do custo. */
 const DISPLAY_PRICE_MULTIPLIER = 2;
+/** Frete estimado (R$) na cotação automática — igual ao POST /api/orders */
+const FREIGHT_ESTIMATE_BRL = 45;
 
 const ADMIN_JWT_EXPIRES = "7d";
 
@@ -956,6 +958,352 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   }
 });
 
+const ORDER_STATUS_VALUES = new Set<string>(Object.values(OrderStatus));
+
+/** Preenche endereço do pedido com perfil do usuário quando o corpo omite. */
+function orderShippingDefaultsFromUser(
+  user: {
+    name: string;
+    email: string;
+    customerCpf: string | null;
+    customerWhatsapp: string | null;
+    cep: string | null;
+    addressStreet: string | null;
+    addressNumber: string | null;
+    addressComplement: string | null;
+    addressNeighborhood: string | null;
+    addressCity: string | null;
+    addressState: string | null;
+  },
+  body: Record<string, unknown>,
+) {
+  const s = (k: string): string | undefined =>
+    typeof body[k] === "string" ? (body[k] as string).trim() : undefined;
+  return {
+    customerName: s("customerName") || user.name,
+    customerEmail: s("customerEmail") || user.email,
+    customerWhatsapp:
+      (s("customerWhatsapp")?.replace(/\D/g, "") || user.customerWhatsapp) ??
+      null,
+    customerCpf:
+      (s("customerCpf")?.replace(/\D/g, "") || user.customerCpf) ?? null,
+    cep: (s("cep")?.replace(/\D/g, "") || user.cep) ?? "",
+    addressStreet: s("addressStreet") || user.addressStreet || null,
+    addressNumber: s("addressNumber") || user.addressNumber || null,
+    addressComplement: s("addressComplement") || user.addressComplement || null,
+    addressNeighborhood:
+      s("addressNeighborhood") || user.addressNeighborhood || null,
+    addressCity: s("addressCity") || user.addressCity || null,
+    addressState: s("addressState") || user.addressState || null,
+  };
+}
+
+type ManualOrderDb = Pick<PrismaClient, "order" | "orderQuote">;
+
+async function createAdminManualOrder(
+  db: ManualOrderDb,
+  userId: string,
+  userRow: NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>,
+  body: Record<string, unknown>,
+) {
+  const originalUrl = typeof body.originalUrl === "string" ? body.originalUrl.trim() : "";
+  const productDescription =
+    typeof body.productDescription === "string"
+      ? body.productDescription.trim()
+      : "";
+  if (!originalUrl || !productDescription) {
+    return { error: "originalUrl e productDescription são obrigatórios" as const };
+  }
+
+  const qty = Number(body.quantity);
+  if (!Number.isFinite(qty) || qty < 1 || qty > 999) {
+    return { error: "quantity inválida (1–999)" as const };
+  }
+
+  const statusRaw =
+    typeof body.status === "string" && body.status.trim()
+      ? body.status.trim()
+      : "COMPRADO";
+  if (!ORDER_STATUS_VALUES.has(statusRaw)) {
+    return { error: `status inválido: ${statusRaw}` as const };
+  }
+
+  const ship = orderShippingDefaultsFromUser(userRow, body);
+  if (!ship.cep || ship.cep.length !== 8) {
+    return { error: "CEP do pedido inválido (8 dígitos). Preencha no pedido ou no perfil do cliente." as const };
+  }
+
+  let createdAt: Date | undefined;
+  if (body.createdAt != null) {
+    const d = new Date(String(body.createdAt));
+    if (!Number.isNaN(d.getTime())) createdAt = d;
+  }
+
+  const productTitle =
+    typeof body.productTitle === "string" && body.productTitle.trim()
+      ? body.productTitle.trim().slice(0, 300)
+      : null;
+  const productImage =
+    typeof body.productImage === "string" && body.productImage.trim()
+      ? body.productImage.trim().slice(0, 2000)
+      : null;
+  const productColor =
+    typeof body.productColor === "string" && body.productColor.trim()
+      ? body.productColor.trim().slice(0, 200)
+      : null;
+  const productSize =
+    typeof body.productSize === "string" && body.productSize.trim()
+      ? body.productSize.trim().slice(0, 500)
+      : null;
+  const productVariation =
+    typeof body.productVariation === "string" && body.productVariation.trim()
+      ? body.productVariation.trim().slice(0, 500)
+      : null;
+  const notes =
+    typeof body.notes === "string" && body.notes.trim()
+      ? body.notes.trim().slice(0, 2000)
+      : null;
+  const cssbuyOrderId =
+    typeof body.cssbuyOrderId === "string" && body.cssbuyOrderId.trim()
+      ? body.cssbuyOrderId.trim().slice(0, 120)
+      : null;
+  const internalNotes =
+    typeof body.internalNotes === "string" && body.internalNotes.trim()
+      ? body.internalNotes.trim().slice(0, 2000)
+      : null;
+
+  const order = await db.order.create({
+    data: {
+      userId,
+      originalUrl,
+      productDescription,
+      productTitle,
+      productImage,
+      productColor,
+      productSize,
+      productVariation,
+      quantity: qty,
+      cep: ship.cep,
+      shippingMethod: ShippingMethod.FJ_BR_EXP,
+      status: statusRaw as OrderStatus,
+      notes,
+      cssbuyOrderId,
+      internalNotes,
+      customerName: ship.customerName,
+      customerEmail: ship.customerEmail,
+      customerWhatsapp: ship.customerWhatsapp,
+      customerCpf: ship.customerCpf,
+      addressStreet: ship.addressStreet,
+      addressNumber: ship.addressNumber,
+      addressComplement: ship.addressComplement,
+      addressNeighborhood: ship.addressNeighborhood,
+      addressCity: ship.addressCity,
+      addressState: ship.addressState,
+      ...(createdAt ? { createdAt } : {}),
+    },
+  });
+
+  const quoteTotal = Number(body.quoteTotalBrl);
+  if (Number.isFinite(quoteTotal) && quoteTotal > 0) {
+    const productsBrl = Math.max(1, quoteTotal - FREIGHT_ESTIMATE_BRL);
+    const productsCny = productsBrl / (RATE_CNY * 1.25);
+    const freightCny = FREIGHT_ESTIMATE_BRL / (RATE_CNY * 1.1);
+    await db.orderQuote.create({
+      data: {
+        orderId: order.id,
+        productsCny,
+        freightCny,
+        serviceFeeBrl: 10,
+        taxesEstimatedBrl: 10,
+        currencyRateCnyToBrl: RATE_CNY,
+        totalBrl: quoteTotal,
+      },
+    });
+  }
+
+  return { order };
+}
+
+// Admin: criar conta de cliente + pedidos retroativos (sem Telegram / e-mail automático)
+app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
+  try {
+    const payload = req.body ?? {};
+    const u = payload.user ?? payload;
+    const ordersIn = Array.isArray(payload.orders) ? payload.orders : [];
+
+    const email =
+      typeof u.email === "string" ? u.email.trim().toLowerCase() : "";
+    const name = typeof u.name === "string" ? u.name.trim() : "";
+    if (!email || !name) {
+      return res.status(400).json({ error: "E-mail e nome do cliente são obrigatórios" });
+    }
+
+    let password =
+      typeof u.password === "string" && u.password.length >= 6
+        ? u.password
+        : "";
+    const generatedPassword = !password;
+    if (!password) {
+      password = crypto.randomBytes(12).toString("base64url").slice(0, 14);
+      if (password.length < 6) password += "Aa1!xx";
+    }
+
+    const cpf =
+      typeof u.customerCpf === "string" ? u.customerCpf.replace(/\D/g, "") : "";
+    if (cpf.length !== 11) {
+      return res.status(400).json({ error: "CPF inválido (11 dígitos)" });
+    }
+    const wa =
+      typeof u.customerWhatsapp === "string"
+        ? u.customerWhatsapp.replace(/\D/g, "")
+        : "";
+    if (!wa) {
+      return res.status(400).json({ error: "WhatsApp obrigatório" });
+    }
+    const cepClean =
+      typeof u.cep === "string" ? u.cep.replace(/\D/g, "") : "";
+    if (cepClean.length !== 8) {
+      return res.status(400).json({ error: "CEP inválido (8 dígitos)" });
+    }
+    if (
+      typeof u.addressStreet !== "string" ||
+      !u.addressStreet.trim() ||
+      typeof u.addressNumber !== "string" ||
+      !u.addressNumber.trim()
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Rua e número do endereço são obrigatórios" });
+    }
+    if (
+      typeof u.addressCity !== "string" ||
+      !u.addressCity.trim() ||
+      typeof u.addressState !== "string" ||
+      !u.addressState.trim()
+    ) {
+      return res.status(400).json({ error: "Cidade e estado são obrigatórios" });
+    }
+
+    if (ordersIn.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "Inclua ao menos um pedido em orders: [...]" });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(409).json({
+        error:
+          "E-mail já cadastrado. Use POST /api/admin/users/:userId/orders com o userId deste cliente.",
+        userId: existing.id,
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email,
+          password: hashPassword(password),
+          name,
+          emailVerified: true,
+          emailVerificationToken: null,
+          emailVerificationTokenExpires: null,
+          termsAcceptedAt: new Date(),
+          customerCpf: cpf,
+          customerWhatsapp: wa,
+          cep: cepClean,
+          addressStreet: u.addressStreet.trim(),
+          addressNumber: u.addressNumber.trim(),
+          addressComplement:
+            typeof u.addressComplement === "string"
+              ? u.addressComplement.trim() || null
+              : null,
+          addressNeighborhood:
+            typeof u.addressNeighborhood === "string"
+              ? u.addressNeighborhood.trim() || null
+              : null,
+          addressCity: u.addressCity.trim(),
+          addressState: u.addressState.trim(),
+        },
+      });
+
+      const orderIds: string[] = [];
+      for (const raw of ordersIn) {
+        if (!raw || typeof raw !== "object") continue;
+        const row = await createAdminManualOrder(
+          tx,
+          user.id,
+          user,
+          raw as Record<string, unknown>,
+        );
+        if ("error" in row) {
+          throw new Error(row.error);
+        }
+        orderIds.push(row.order.id);
+      }
+      if (orderIds.length === 0) {
+        throw new Error("Nenhum pedido válido em orders");
+      }
+      return { user, orderIds };
+    });
+
+    res.status(201).json({
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+      },
+      orderIds: result.orderIds,
+      ...(generatedPassword ? { temporaryPassword: password } : {}),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (
+      msg.includes("inválido") ||
+      msg.includes("obrigatório") ||
+      msg.includes("originalUrl")
+    ) {
+      return res.status(400).json({ error: msg });
+    }
+    console.error("Admin bootstrap user:", err);
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao criar cliente e pedidos") });
+  }
+});
+
+// Admin: adicionar pedido retroativo a um usuário existente
+app.post("/api/admin/users/:userId/orders", requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const userRow = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userRow) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
+    const body = req.body ?? {};
+    const row = await createAdminManualOrder(
+      prisma,
+      userId,
+      userRow,
+      body as Record<string, unknown>,
+    );
+    if ("error" in row) {
+      return res.status(400).json({ error: row.error });
+    }
+
+    res.status(201).json({
+      id: row.order.id,
+      status: row.order.status,
+    });
+  } catch (err) {
+    console.error("Admin manual order:", err);
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao criar pedido") });
+  }
+});
+
 /** JSON: Prisma Decimal vira string — normaliza para número no cliente. */
 function serializeCatalogProduct<
   P extends { priceCny: unknown; priceBrl: unknown },
@@ -1673,8 +2021,6 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
 });
 
 // Criar pedido (a partir da página /pedido) — com auto-quote para pagamento imediato
-const FREIGHT_ESTIMATE_BRL = 45;
-
 app.post("/api/orders", optionalUser, async (req, res) => {
   try {
     const reqWithUser = req as express.Request & { userId?: string };

@@ -994,6 +994,12 @@ const Admin = () => {
               >
                 Resgate CSV
               </Link>
+              <Link
+                to="/admin/cliente-pedido"
+                className="text-xs font-semibold text-china-red hover:underline mr-1"
+              >
+                Cliente + pedido
+              </Link>
               {(
                 [
                   "all",

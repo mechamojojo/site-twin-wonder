@@ -24,6 +24,7 @@ const PoliticaPrivacidade = lazy(() => import("./pages/PoliticaPrivacidade"));
 const TermosServico = lazy(() => import("./pages/TermosServico"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminResgate = lazy(() => import("./pages/AdminResgate"));
+const AdminClientePedido = lazy(() => import("./pages/AdminClientePedido"));
 const AdminPedido = lazy(() => import("./pages/AdminPedido"));
 const Explorar = lazy(() => import("./pages/Explorar"));
 const Produto = lazy(() => import("./pages/Produto"));
@@ -70,6 +71,10 @@ const App = () => (
                 <Route path="/termos-de-servico" element={<TermosServico />} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/admin/resgate-dados" element={<AdminResgate />} />
+                <Route
+                  path="/admin/cliente-pedido"
+                  element={<AdminClientePedido />}
+                />
                 <Route path="/admin/pedido/:id" element={<AdminPedido />} />
                 <Route path="/explorar" element={<Explorar />} />
                 <Route path="/produto/:slug" element={<Produto />} />
