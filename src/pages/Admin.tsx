@@ -16,6 +16,7 @@ import {
   ChevronUp,
   ExternalLink,
   GripVertical,
+  Loader2,
   Lock,
   LogOut,
   Package,
@@ -237,6 +238,14 @@ const Admin = () => {
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState("");
   const [addSuccess, setAddSuccess] = useState("");
+  /** Uma URL por linha — importação sequencial (uma de cada vez no servidor). */
+  const [bulkUrlsText, setBulkUrlsText] = useState("");
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{
+    current: number;
+    total: number;
+    url: string;
+  } | null>(null);
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>(
@@ -491,6 +500,84 @@ const Admin = () => {
       setAddError("Erro de conexão. Tente novamente.");
     } finally {
       setAddLoading(false);
+    }
+  };
+
+  const parseBulkUrls = (text: string): string[] => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const line of text.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("http")) continue;
+      if (seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+    return out;
+  };
+
+  const BULK_IMPORT_MAX = 150;
+  const BULK_GAP_MS = 450;
+
+  const handleBulkImportProducts = async () => {
+    if (!token) return;
+    const urls = parseBulkUrls(bulkUrlsText);
+    if (urls.length === 0) {
+      toast.error("Cole pelo menos uma URL válida (uma por linha).");
+      return;
+    }
+    if (urls.length > BULK_IMPORT_MAX) {
+      toast.error(`No máximo ${BULK_IMPORT_MAX} links por vez.`);
+      return;
+    }
+    setAddError("");
+    setAddSuccess("");
+    setBulkImporting(true);
+    let imported = 0;
+    let skipped = 0;
+    let failed = 0;
+    try {
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i]!;
+        setBulkProgress({ current: i + 1, total: urls.length, url });
+        try {
+          const res = await fetch(apiUrl("/api/admin/products"), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              url,
+              category: addCategory,
+              featured: addFeatured,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 201) {
+            imported++;
+          } else if (res.ok) {
+            skipped++;
+          } else {
+            failed++;
+            console.warn("[bulk import]", url, data);
+          }
+        } catch {
+          failed++;
+        }
+        if (i < urls.length - 1) {
+          await new Promise((r) => setTimeout(r, BULK_GAP_MS));
+        }
+      }
+      setBulkUrlsText("");
+      setBulkProgress(null);
+      await fetchCatalogProducts({ mergeWithPrevious: true });
+      toast.success(
+        `Lista concluída: ${imported} novos, ${skipped} já existiam, ${failed} falharam.`,
+      );
+    } finally {
+      setBulkImporting(false);
+      setBulkProgress(null);
     }
   };
 
@@ -1105,15 +1192,15 @@ const Admin = () => {
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Cole o link de um produto (Taobao, 1688, Weidian, TMALL, etc.)
-                para importá-lo automaticamente. Marque &quot;Em destaque na
-                home&quot; para o produto aparecer na página inicial e no
-                Explorar. Use &quot;Excluir&quot; abaixo para remover itens da
-                lista.
+                ou use a caixa abaixo para várias URLs de uma vez — cada link é
+                processado em sequência (um após o outro). A categoria e
+                &quot;Em destaque&quot; valem para todos. Use &quot;Excluir&quot;
+                na lista para remover itens.
               </p>
               <form onSubmit={handleAddProduct} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    URL do produto
+                    URL do produto (um só)
                   </label>
                   <input
                     type="url"
@@ -1124,7 +1211,7 @@ const Admin = () => {
                       setAddError("");
                     }}
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
-                    disabled={addLoading}
+                    disabled={addLoading || bulkImporting}
                   />
                 </div>
                 <div className="flex flex-wrap gap-4">
@@ -1136,7 +1223,7 @@ const Admin = () => {
                       value={addCategory}
                       onChange={(e) => setAddCategory(e.target.value)}
                       className="px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
-                      disabled={addLoading}
+                      disabled={addLoading || bulkImporting}
                     >
                       {CATEGORIES.map((c) => (
                         <option key={c} value={c}>
@@ -1150,7 +1237,7 @@ const Admin = () => {
                       type="checkbox"
                       checked={addFeatured}
                       onChange={(e) => setAddFeatured(e.target.checked)}
-                      disabled={addLoading}
+                      disabled={addLoading || bulkImporting}
                       className="rounded border-border"
                     />
                     <span className="text-sm text-foreground">
@@ -1164,7 +1251,7 @@ const Admin = () => {
                 )}
                 <button
                   type="submit"
-                  disabled={addLoading}
+                  disabled={addLoading || bulkImporting}
                   className="bg-china-red text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-china-red/90 disabled:opacity-60 flex items-center gap-2"
                 >
                   {addLoading ? (
@@ -1177,6 +1264,68 @@ const Admin = () => {
                   )}
                 </button>
               </form>
+
+              <div className="mt-8 pt-6 border-t border-border space-y-3">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Várias URLs de uma vez
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Uma URL por linha. O site importa na ordem,{" "}
+                  <strong>uma de cada vez</strong> (pausa curta entre cada uma
+                  para não sobrecarregar o scraper). Máximo {BULK_IMPORT_MAX}{" "}
+                  links.
+                </p>
+                <textarea
+                  value={bulkUrlsText}
+                  onChange={(e) => setBulkUrlsText(e.target.value)}
+                  placeholder={
+                    "https://weidian.com/item.html?itemID=...\nhttps://item.taobao.com/item.htm?id=..."
+                  }
+                  rows={8}
+                  disabled={addLoading || bulkImporting}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm font-mono outline-none focus:ring-2 focus:ring-china-red/40 resize-y min-h-[120px]"
+                />
+                {bulkProgress && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>
+                        Processando {bulkProgress.current} de{" "}
+                        {bulkProgress.total}
+                      </span>
+                      <span className="truncate max-w-[60%] text-right">
+                        {bulkProgress.url.slice(0, 70)}
+                        {bulkProgress.url.length > 70 ? "…" : ""}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-china-red transition-[width] duration-300"
+                        style={{
+                          width: `${(bulkProgress.current / bulkProgress.total) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleBulkImportProducts}
+                  disabled={addLoading || bulkImporting}
+                  className="bg-foreground text-background px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 disabled:opacity-60 flex items-center gap-2"
+                >
+                  {bulkImporting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Importando lista…
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Importar lista (sequencial)
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Sync static products */}
