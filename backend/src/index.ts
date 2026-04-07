@@ -1958,6 +1958,132 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: importar produtos em massa a partir de URLs (com scraping automático) — protegido
+app.post(
+  "/api/admin/products/bulk-import-urls",
+  requireAdmin,
+  async (req, res) => {
+    const { urls, category = "outros" } = (req.body ?? {}) as {
+      urls?: unknown;
+      category?: string;
+    };
+
+    if (!Array.isArray(urls) || urls.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "Envie { urls: [\"https://...\", ...] }" });
+    }
+
+    const MAX_URLS = 200;
+    const urlList = (urls as unknown[])
+      .map((u) => (typeof u === "string" ? u.trim() : ""))
+      .filter((u) => u.startsWith("http"))
+      .slice(0, MAX_URLS);
+
+    if (urlList.length === 0) {
+      return res.status(400).json({ error: "Nenhuma URL válida encontrada" });
+    }
+
+    console.log(
+      `[bulk-import-urls] Iniciando importação de ${urlList.length} URL(s), categoria="${category}"`,
+    );
+
+    const { getProductPreview } = await import("./scraper/productPreview");
+
+    let imported = 0;
+    let skipped = 0;
+    let failed = 0;
+    const errors: { url: string; reason: string }[] = [];
+
+    for (let i = 0; i < urlList.length; i++) {
+      const url = urlList[i]!;
+      console.log(
+        `[bulk-import-urls] [${i + 1}/${urlList.length}] Processando: ${url.slice(0, 80)}`,
+      );
+
+      // Skip duplicates by originalUrl
+      const existing = await prisma.product.findUnique({
+        where: { originalUrl: url },
+      });
+      if (existing) {
+        console.log(`[bulk-import-urls] Já existe (slug=${existing.slug}), pulando.`);
+        skipped++;
+        continue;
+      }
+
+      try {
+        const preview = await getProductPreview(url);
+        if (!preview) {
+          console.warn(`[bulk-import-urls] Scrape retornou null para: ${url.slice(0, 80)}`);
+          failed++;
+          errors.push({ url, reason: "Scrape não retornou dados" });
+          continue;
+        }
+
+        const rawTitle = (preview.titlePt || preview.title || "Produto")
+          .trim()
+          .slice(0, 300);
+        const baseSlug = slugify(rawTitle);
+        let slug = baseSlug;
+        let n = 0;
+        while (await prisma.product.findUnique({ where: { slug } })) {
+          slug = `${baseSlug}-${++n}`;
+        }
+
+        const priceCny = preview.priceCny ?? null;
+        let priceBrl: number | null = null;
+        if (priceCny != null && priceCny > 0) {
+          const costBrl = priceCny * RATE_CNY;
+          priceBrl = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
+        }
+
+        const maxSort = await prisma.product
+          .aggregate({ _max: { sortOrder: true } })
+          .then((r) => r._max.sortOrder ?? -1);
+
+        await prisma.product.create({
+          data: {
+            originalUrl: url,
+            title: preview.title || rawTitle,
+            titlePt: preview.titlePt || rawTitle,
+            description: preview.description?.slice(0, 2000) ?? null,
+            image: preview.images?.[0] ?? null,
+            images: preview.images?.length
+              ? JSON.stringify(preview.images)
+              : null,
+            priceCny,
+            priceBrl,
+            source: getSourceFromUrl(url),
+            category: (category as string) || "outros",
+            slug,
+            featured: false,
+            sortOrder: maxSort + 1,
+          },
+        });
+
+        console.log(`[bulk-import-urls] ✓ Importado: "${rawTitle.slice(0, 60)}" (slug=${slug})`);
+        imported++;
+      } catch (err) {
+        const reason =
+          err instanceof Error ? err.message : String(err);
+        console.error(`[bulk-import-urls] ✗ Erro em ${url.slice(0, 80)}:`, reason);
+        failed++;
+        errors.push({ url, reason });
+      }
+
+      // Small delay between requests to avoid hammering scrapers
+      if (i < urlList.length - 1) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+
+    console.log(
+      `[bulk-import-urls] Concluído — importados=${imported}, pulados=${skipped}, falhas=${failed}`,
+    );
+    res.json({ imported, skipped, failed, errors });
+  },
+);
+
 // Admin: atualizar títulos em massa por slug (para sync local→prod)
 app.post(
   "/api/admin/products/bulk-update-titles",
