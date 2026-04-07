@@ -264,6 +264,12 @@ const Admin = () => {
   });
   const catalogImageInputRef = useRef<HTMLInputElement>(null);
   const [catalogImageUploading, setCatalogImageUploading] = useState(false);
+  /** Rascunhos locais do título exibido no site (por id) — limpo após salvar. */
+  const [inlineTitleDrafts, setInlineTitleDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [savingTitleId, setSavingTitleId] = useState<string | null>(null);
+  const catalogTitleRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<{
     created: number;
@@ -702,6 +708,68 @@ const Admin = () => {
       toast.error("Erro de conexão");
     }
   };
+
+  const saveInlineTitle = useCallback(
+    async (p: CatalogProduct, value: string) => {
+      if (!token) return;
+      const next = value.trim();
+      const prev = (p.titlePt || p.title || "").trim();
+      if (next === prev) {
+        setInlineTitleDrafts((d) => {
+          if (!(p.id in d)) return d;
+          const { [p.id]: _, ...rest } = d;
+          return rest;
+        });
+        return;
+      }
+      if (!next) {
+        toast.error("Título não pode ficar vazio.");
+        setInlineTitleDrafts((d) => ({
+          ...d,
+          [p.id]: prev || p.title || "",
+        }));
+        return;
+      }
+      setSavingTitleId(p.id);
+      try {
+        const res = await fetch(apiUrl(`/api/admin/products/${p.id}`), {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ title: next, titlePt: next }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          toast.error(data.error || "Erro ao salvar título");
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        if (data && typeof data === "object") {
+          const updated = toCatalogProduct(data as Record<string, unknown>);
+          setCatalogProducts((list) =>
+            list.map((x) => (x.id === p.id ? updated : x)),
+          );
+        } else {
+          setCatalogProducts((list) =>
+            list.map((x) =>
+              x.id === p.id ? { ...x, title: next, titlePt: next } : x,
+            ),
+          );
+        }
+        setInlineTitleDrafts((d) => {
+          const { [p.id]: _, ...rest } = d;
+          return rest;
+        });
+      } catch {
+        toast.error("Erro de conexão");
+      } finally {
+        setSavingTitleId(null);
+      }
+    },
+    [token],
+  );
 
   const handleReorder = useCallback(
     async (orderedIds: string[]) => {
@@ -1427,6 +1495,20 @@ const Admin = () => {
                 </code>
                 .
               </p>
+              {!catalogLoading && catalogProducts.length > 0 && (
+                <p className="text-xs text-muted-foreground mb-3 rounded-lg border border-border bg-muted/20 px-3 py-2">
+                  <strong>Título no site:</strong> edite na caixa de cada
+                  produto; ao sair do campo salva sozinho.{" "}
+                  <kbd className="px-1 py-0.5 rounded bg-muted text-[10px] font-mono">
+                    Enter
+                  </kbd>{" "}
+                  pula para o próximo;{" "}
+                  <kbd className="px-1 py-0.5 rounded bg-muted text-[10px] font-mono">
+                    Shift+Enter
+                  </kbd>{" "}
+                  quebra linha no título.
+                </p>
+              )}
               {catalogLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando...</p>
               ) : catalogProducts.length === 0 ? (
@@ -1473,9 +1555,54 @@ const Admin = () => {
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            {p.titlePt || p.title}
-                          </p>
+                          <label
+                            htmlFor={`catalog-title-${p.id}`}
+                            className="sr-only"
+                          >
+                            Título no site
+                          </label>
+                          <textarea
+                            id={`catalog-title-${p.id}`}
+                            ref={(el) => {
+                              if (el)
+                                catalogTitleRefs.current.set(p.id, el);
+                              else catalogTitleRefs.current.delete(p.id);
+                            }}
+                            rows={2}
+                            className="w-full text-sm font-medium text-foreground bg-background border border-border rounded-md px-2 py-1.5 resize-y min-h-[2.75rem] leading-snug focus:outline-none focus:ring-2 focus:ring-china-red/30 disabled:opacity-60"
+                            value={
+                              inlineTitleDrafts[p.id] ??
+                              (p.titlePt || p.title)
+                            }
+                            onChange={(e) =>
+                              setInlineTitleDrafts((d) => ({
+                                ...d,
+                                [p.id]: e.target.value,
+                              }))
+                            }
+                            onBlur={(e) =>
+                              void saveInlineTitle(p, e.target.value)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                (e.currentTarget as HTMLTextAreaElement).blur();
+                                const idx = catalogProducts.findIndex(
+                                  (x) => x.id === p.id,
+                                );
+                                const nextId = catalogProducts[idx + 1]?.id;
+                                if (nextId) {
+                                  requestAnimationFrame(() => {
+                                    const ta =
+                                      catalogTitleRefs.current.get(nextId);
+                                    ta?.focus();
+                                    ta?.select();
+                                  });
+                                }
+                              }
+                            }}
+                            disabled={savingTitleId === p.id}
+                          />
                           <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5 flex-wrap">
                             <span>{p.source}</span>
                             <span>·</span>
