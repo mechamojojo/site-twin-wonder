@@ -63,6 +63,21 @@ function emptyOrder(): OrderDraft {
   };
 }
 
+function messageFromApiError(
+  data: unknown,
+  res: Response,
+  fallback: string,
+): string {
+  if (data && typeof data === "object") {
+    const o = data as Record<string, unknown>;
+    if (typeof o.error === "string" && o.error.trim()) return o.error.trim();
+    if (typeof o.message === "string" && o.message.trim()) return o.message.trim();
+  }
+  if (res.status)
+    return `HTTP ${res.status}${res.statusText ? ` — ${res.statusText}` : ""}`;
+  return fallback;
+}
+
 function orderToPayload(o: OrderDraft): Record<string, unknown> {
   const out: Record<string, unknown> = {
     originalUrl: o.originalUrl.trim(),
@@ -193,28 +208,45 @@ const AdminClientePedido = () => {
           orders: payloadOrders,
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      let data: Record<string, unknown> = {};
+      try {
+        const text = await res.text();
+        if (text) data = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        data = {};
+      }
       if (res.status === 409 && data.userId) {
         toast.error(
-          `E-mail já existe. ID do usuário: ${data.userId}. Use a aba “Pedido extra”.`,
+          `E-mail já existe. ID do usuário: ${String(data.userId)}. Use a aba “Pedido extra”.`,
         );
-        setExtraUserId(data.userId);
+        setExtraUserId(String(data.userId));
         setTab("extra");
         return;
       }
       if (!res.ok) {
-        toast.error(typeof data.error === "string" ? data.error : "Erro");
+        console.warn("[bootstrap]", res.status, data);
+        toast.error(
+          messageFromApiError(data, res, "Resposta inválida do servidor."),
+        );
         return;
       }
+      const u = data.user as { id?: string; email?: string } | undefined;
+      const tp =
+        typeof data.temporaryPassword === "string"
+          ? data.temporaryPassword
+          : undefined;
+      const oids = Array.isArray(data.orderIds)
+        ? (data.orderIds as string[])
+        : [];
       setLastResult({
-        temporaryPassword: data.temporaryPassword,
-        userId: data.user?.id,
-        email: data.user?.email,
-        orderIds: data.orderIds ?? [],
+        temporaryPassword: tp,
+        userId: u?.id ?? "",
+        email: u?.email ?? "",
+        orderIds: oids,
       });
-      setExtraUserId(data.user?.id ?? "");
+      setExtraUserId(u?.id ?? "");
       toast.success("Cliente e pedidos criados.");
-      if (data.temporaryPassword) {
+      if (tp) {
         toast.message("Copie a senha provisória exibida abaixo.", {
           duration: 8000,
         });
@@ -250,12 +282,21 @@ const AdminClientePedido = () => {
           body: JSON.stringify(p),
         },
       );
-      const data = await res.json().catch(() => ({}));
+      let data: Record<string, unknown> = {};
+      try {
+        const text = await res.text();
+        if (text) data = JSON.parse(text) as Record<string, unknown>;
+      } catch {
+        data = {};
+      }
       if (!res.ok) {
-        toast.error(typeof data.error === "string" ? data.error : "Erro");
+        console.warn("[order extra]", res.status, data);
+        toast.error(
+          messageFromApiError(data, res, "Resposta inválida do servidor."),
+        );
         return;
       }
-      toast.success(`Pedido criado: ${data.id}`);
+      toast.success(`Pedido criado: ${String(data.id ?? "")}`);
       setExtraOrder(emptyOrder());
     } catch {
       toast.error("Erro de conexão");

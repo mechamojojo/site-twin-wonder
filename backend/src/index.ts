@@ -1257,11 +1257,22 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
       ...(generatedPassword ? { temporaryPassword: password } : {}),
     });
   } catch (err) {
+    const prismaCode =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code: unknown }).code)
+        : "";
+    if (prismaCode === "P2002") {
+      return res.status(409).json({
+        error:
+          "Registro duplicado (ex.: e-mail já existe). Use a aba “Só pedido” com o userId ou outro e-mail.",
+      });
+    }
     const msg = err instanceof Error ? err.message : String(err);
+    // Erros de validação vindos de createAdminManualOrder (inclui "inválida", não só "inválido")
     if (
-      msg.includes("inválido") ||
-      msg.includes("obrigatório") ||
-      msg.includes("originalUrl")
+      /inválid|obrigatório|originalUrl|quantity|CEP|status|Nenhum pedido/i.test(
+        msg,
+      )
     ) {
       return res.status(400).json({ error: msg });
     }
