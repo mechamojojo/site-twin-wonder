@@ -1,11 +1,12 @@
+# Deploy sem Docker: mesmo fluxo mínimo do Dockerfile (sem playwright install no CI — use imagem Docker para preview).
 [phases.setup]
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm ci", "npx playwright install chromium"]
+cmds = ["npm ci"]
 
 [phases.build]
 cmds = ["npx prisma generate", "npm run build"]
 
-[phases.run]
-cmd = "npx prisma migrate resolve --rolled-back 20260403120000_add_checkout_group_order_items_json; npx prisma migrate deploy && node dist/index.js"
+[start]
+cmd = "npx prisma migrate deploy && node dist/index.js"

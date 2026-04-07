@@ -1,7 +1,7 @@
 /**
  * Lista de produtos do Explorar / "Produtos que você pode comprar".
- * Inclui: export do Admin (ou lista embutida) + FEATURED_PRODUCTS (produtos adicionados com npm run add-product).
- * Para exportar após editar no Admin: cd backend && npm run export-explorar-to-code
+ * Inclui: export do Admin (ou lista embutida) + FEATURED_PRODUCTS.
+ * Export JSON após editar no Admin: na pasta backend, `npx ts-node scripts/export-explorar-to-code.ts`
  */
 import exportedFromAdmin from "./explorarProducts.export.json";
 import { FEATURED_PRODUCTS } from "./featuredProducts";

@@ -7,18 +7,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
-    "start": "node dist/index.js",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
-    "scraper:install": "playwright install chromium",
-    "add-product": "ts-node scripts/add-product-to-explorer.ts",
-    "seed-catalog": "ts-node scripts/seed-catalog.ts",
-    "seed-explorar": "ts-node scripts/seed-explorar.ts",
-    "export-explorar-to-code": "ts-node scripts/export-explorar-to-code.ts",
-    "update-explorar-previews": "ts-node scripts/update-explorar-previews.ts",
-    "update-featured-products": "ts-node scripts/update-featured-products.ts",
-    "resync-catalog-prices": "ts-node scripts/resync-catalog-prices.ts"
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",

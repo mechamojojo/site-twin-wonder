@@ -20,8 +20,8 @@ Isso sobe o Postgres na porta 5432 (usuário/senha/db: `postgres`/`postgres`/`co
 cd backend
 cp .env.example .env
 npm install
-npm run prisma:generate
-npm run prisma:migrate
+npx prisma generate
+npx prisma migrate dev
 npm run dev
 ```
 
@@ -29,7 +29,7 @@ npm run dev
 - Para o **preview de produto** (imagens, preço, variantes ao colar um link) funcionar, instale o Chromium do Playwright uma vez:
 
 ```bash
-npm run scraper:install
+npx playwright install chromium
 ```
 
 A API fica em **http://localhost:4000**.

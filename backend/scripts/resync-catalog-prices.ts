@@ -1,6 +1,5 @@
 /**
- * Recalcula priceBrl no catálogo (CLI). Em produção (Railway), prefira:
- *   POST /api/admin/catalog/resync-prices  (token admin)
+ * Recalcula priceBrl no catálogo (CLI local). Produção: Admin → Sincronizar preços BRL.
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";

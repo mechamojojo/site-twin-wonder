@@ -1,8 +1,7 @@
 /**
  * Produtos em destaque para a home e para Explorar.
  *
- * Para adicionar um produto: cd backend && npm run add-product "https://link-do-produto"
- * Para atualizar títulos/imagens de todos os produtos: cd backend && npm run update-featured-products
+ * Manutenção: na pasta backend use `npx ts-node scripts/add-product-to-explorer.ts` ou `update-featured-products.ts` se precisar.
  *
  * Use category: "mais-vendidos", "tendencias" ou "marcas-chinesas" para marcas chinesas.
  */

@@ -6,8 +6,8 @@
 cd backend
 cp .env.example .env
 npm install
-npm run prisma:generate
-npm run prisma:migrate
+npx prisma generate
+npx prisma migrate dev
 npm run dev
 ```
 
@@ -36,7 +36,7 @@ Para o preço e os dados do produto virem do site (1688, Taobao, etc.), o backen
 
 ```bash
 cd backend
-npm run scraper:install
+npx playwright install chromium
 ```
 
 Depois, ao abrir um link de produto, o backend tenta abrir a página e extrair título, preço e imagens. Sites chineses às vezes bloqueiam ou demoram; se não aparecer nada, o preço simulado ainda é exibido (backend) ou o preço de teste (frontend em dev).
@@ -55,7 +55,7 @@ Para adicionar um link à seção Explorar com título, imagem e preço obtidos 
 
 ```bash
 cd backend
-npm run add-product "https://weidian.com/item.html?itemID=123"
+npx ts-node scripts/add-product-to-explorer.ts "https://weidian.com/item.html?itemID=123"
 ```
 
 Ou com link 1688, Taobao, etc. O script usa o scraper para extrair os dados e grava em `src/data/featuredProducts.ts`.

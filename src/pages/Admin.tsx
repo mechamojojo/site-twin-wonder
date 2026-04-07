@@ -1267,9 +1267,10 @@ const Admin = () => {
                 ou use Subir/Descer; o número é a posição (1 = primeiro).
               </p>
               <p className="text-xs text-muted-foreground mb-4">
-                Para levar alterações para o código:{" "}
+                Para levar alterações para o código (na pasta{" "}
+                <code className="bg-muted px-1 rounded">backend</code>):{" "}
                 <code className="bg-muted px-1 rounded">
-                  cd backend &amp;&amp; npm run export-explorar-to-code
+                  npx ts-node scripts/export-explorar-to-code.ts
                 </code>{" "}
                 e commite{" "}
                 <code className="bg-muted px-1 rounded">

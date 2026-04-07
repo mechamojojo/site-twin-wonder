@@ -4,26 +4,18 @@ API em Node + Express + Prisma + PostgreSQL.
 
 ## Pré-requisitos
 
-- Node 18+
-- PostgreSQL (ou `docker compose up -d` na raiz do projeto)
-- Para o **preview de produto** (imagens, título, preço do link): Chromium do Playwright
+- Node 20+
+- PostgreSQL
+- Para **preview de produto** (`/api/product/preview`): Chromium do Playwright (em produção use a imagem Docker com Playwright; em local: `npx playwright install chromium`)
 
 ## Instalação
 
 ```bash
 npm install
 cp .env.example .env
-npm run prisma:generate
-npm run prisma:migrate -- --name init
+npx prisma generate
+npx prisma migrate dev
 ```
-
-Para o endpoint `/api/product/preview` funcionar (scraping de páginas Taobao/1688/etc.):
-
-```bash
-npm run scraper:install
-```
-
-Isso instala o navegador Chromium usado pelo Playwright. Sem isso, o endpoint retornará 404/erro ao acessar um link.
 
 ## Rodar
 
@@ -31,19 +23,26 @@ Isso instala o navegador Chromium usado pelo Playwright. Sem isso, o endpoint re
 npm run dev
 ```
 
-API em `http://localhost:4000`.
+API em `http://localhost:4000`. Deploy: `npm run build` e `npm start` (ou Docker — ver `Dockerfile`).
+
+## Scripts npm (só estes)
+
+| Script   | Uso                          |
+|----------|------------------------------|
+| `dev`    | API em modo desenvolvimento  |
+| `build`  | Gera Prisma client + `dist/` |
+| `start`  | `node dist/index.js`         |
+
+Manutenção pontual (rodar na pasta `backend` com `npx ts-node scripts/…`): arquivos em `scripts/` (export catálogo, seeds, etc.). **Sincronizar preços BRL em produção:** Admin → “Sincronizar preços BRL” (`POST /api/admin/catalog/resync-prices`).
 
 ## Endpoints
 
 - `GET /api/health` — healthcheck
-- `POST /api/orders` — criar pedido (body: originalUrl, productDescription, quantity, cep; opcional: productTitle, productImage)
+- `POST /api/orders` — criar pedido
 - `GET /api/orders/:id` — buscar pedido
-- `PATCH /api/orders/:id/status` — atualizar status (body: { status }) — use ao confirmar pagamento
-- `GET /api/recent-purchases` — compras recentes (PAGO/EM_ENVIO/CONCLUIDO) para barra na home
-- `GET /api/product/preview?url=...` — scraping do produto (título, preço, imagens, variantes)
-- `GET /api/price/preview?url=...` — preço estimado em BRL (simulado)
-- `POST /api/orders/:id/quote` — registrar cotação (admin)
+- `GET /api/product/preview?url=...` — scraping (requer Chromium)
+- Ver código em `src/index.ts` para lista completa
 
 ## Scraping
 
-O preview de produto usa Playwright (Chromium) para abrir o link, carregar a página e extrair título, preço em CNY, imagens e opções de cor/tamanho. Sites chineses podem bloquear IPs fora da China; para produção, considere usar um proxy na China.
+O preview usa Playwright. Sites podem bloquear IPs fora da China; em produção use proxy se necessário.

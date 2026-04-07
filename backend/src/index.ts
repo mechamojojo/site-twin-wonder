@@ -1339,7 +1339,7 @@ app.post("/api/admin/users/:userId/orders", requireAdmin, async (req, res) => {
   }
 });
 
-// Admin: recalcular priceBrl a partir de priceCny (equivalente a npm run resync-catalog-prices — útil no Railway)
+// Admin: recalcular priceBrl a partir de priceCny (substitui script CLI em produção)
 app.post(
   "/api/admin/catalog/resync-prices",
   requireAdmin,
