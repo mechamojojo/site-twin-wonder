@@ -391,6 +391,36 @@ const Admin = () => {
     toast.success("Sessão encerrada");
   };
 
+  const [resyncPricesLoading, setResyncPricesLoading] = useState(false);
+
+  const handleResyncCatalogPrices = async () => {
+    if (!token) return;
+    setResyncPricesLoading(true);
+    try {
+      const res = await fetch(apiUrl("/api/admin/catalog/resync-prices"), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          typeof data.error === "string"
+            ? data.error
+            : "Falha ao sincronizar preços",
+        );
+        return;
+      }
+      toast.success(
+        `Preços BRL: ${data.updated ?? 0} atualizados, ${data.skipped ?? 0} ignorados.`,
+      );
+      if (activeTab === "catálogo") void fetchCatalogProducts();
+    } catch {
+      toast.error("Erro de conexão");
+    } finally {
+      setResyncPricesLoading(false);
+    }
+  };
+
   const [processarCssBuyId, setProcessarCssBuyId] = useState<string | null>(
     null,
   );
@@ -1000,6 +1030,16 @@ const Admin = () => {
               >
                 Cliente + pedido
               </Link>
+              <button
+                type="button"
+                onClick={handleResyncCatalogPrices}
+                disabled={resyncPricesLoading}
+                className="text-xs font-semibold text-china-red hover:underline mr-1 disabled:opacity-50"
+              >
+                {resyncPricesLoading
+                  ? "Sincronizando preços…"
+                  : "Sincronizar preços BRL"}
+              </button>
               {(
                 [
                   "all",

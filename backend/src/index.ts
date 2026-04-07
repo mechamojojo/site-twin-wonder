@@ -35,6 +35,7 @@ import cors from "cors";
 import { json } from "body-parser";
 import { PrismaClient, OrderStatus, ShippingMethod } from "@prisma/client";
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
+import { resyncCatalogPrices } from "./resyncCatalogPrices";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -52,6 +53,8 @@ const defaultOrigins = [
   "http://127.0.0.1:5173",
   "http://127.0.0.1:8080",
 ];
+const frontendUrl = (process.env.FRONTEND_URL ?? "").trim().replace(/\/$/, "");
+if (frontendUrl) defaultOrigins.push(frontendUrl);
 const envOrigins = (process.env.CORS_ORIGINS ?? "")
   .split(",")
   .map((o) => o.trim())
@@ -60,7 +63,7 @@ const corsOrigins = envOrigins?.length
   ? [...new Set([...defaultOrigins, ...envOrigins])]
   : defaultOrigins;
 app.use(cors({ origin: corsOrigins }));
-app.use(json());
+app.use(json({ limit: "2mb" }));
 
 const CATALOG_UPLOAD_DIR = path.join(process.cwd(), "uploads", "catalog");
 fs.mkdirSync(CATALOG_UPLOAD_DIR, { recursive: true });
@@ -958,7 +961,19 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   }
 });
 
-const ORDER_STATUS_VALUES = new Set<string>(Object.values(OrderStatus));
+/** Lista explícita — evita depender só de Object.values em runtime (bundlers / Prisma). */
+const ORDER_STATUS_VALUES = new Set<string>([
+  OrderStatus.AGUARDANDO_COTACAO,
+  OrderStatus.AGUARDANDO_PAGAMENTO,
+  OrderStatus.PAGO,
+  OrderStatus.ENVIADO_PARA_CSSBUY,
+  OrderStatus.COMPRADO,
+  OrderStatus.NO_ESTOQUE,
+  OrderStatus.AGUARDANDO_ENVIO,
+  OrderStatus.EM_ENVIO,
+  OrderStatus.CONCLUIDO,
+  OrderStatus.CANCELADO,
+]);
 
 /** Preenche endereço do pedido com perfil do usuário quando o corpo omite. */
 function orderShippingDefaultsFromUser(
@@ -1199,7 +1214,8 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
       });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(
+      async (tx) => {
       const user = await tx.user.create({
         data: {
           email,
@@ -1245,7 +1261,9 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
         throw new Error("Nenhum pedido válido em orders");
       }
       return { user, orderIds };
-    });
+    },
+      { maxWait: 15_000, timeout: 30_000 },
+    );
 
     res.status(201).json({
       user: {
@@ -1265,6 +1283,12 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
       return res.status(409).json({
         error:
           "Registro duplicado (ex.: e-mail já existe). Use a aba “Só pedido” com o userId ou outro e-mail.",
+      });
+    }
+    if (prismaCode === "P2028") {
+      return res.status(503).json({
+        error:
+          "Tempo esgotado no banco de dados. Tente de novo em instantes ou com menos pedidos de uma vez.",
       });
     }
     const msg = err instanceof Error ? err.message : String(err);
@@ -1314,6 +1338,23 @@ app.post("/api/admin/users/:userId/orders", requireAdmin, async (req, res) => {
       .json({ error: safeErrorMessage(err, "Erro ao criar pedido") });
   }
 });
+
+// Admin: recalcular priceBrl a partir de priceCny (equivalente a npm run resync-catalog-prices — útil no Railway)
+app.post(
+  "/api/admin/catalog/resync-prices",
+  requireAdmin,
+  async (_req, res) => {
+    try {
+      const { updated, skipped } = await resyncCatalogPrices(prisma);
+      res.json({ ok: true, updated, skipped });
+    } catch (err) {
+      console.error("Admin resync catalog prices:", err);
+      res.status(500).json({
+        error: safeErrorMessage(err, "Erro ao sincronizar preços do catálogo"),
+      });
+    }
+  },
+);
 
 /** JSON: Prisma Decimal vira string — normaliza para número no cliente. */
 function serializeCatalogProduct<
