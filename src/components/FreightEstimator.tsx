@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Calculator } from "lucide-react";
+import { QuantityStepper } from "@/components/QuantityStepper";
 import { calcCartShipping, detectCategory, type ProductCategory } from "@/lib/shipping";
 
 type Option = { label: string; example: string; category: ProductCategory };
@@ -54,27 +55,24 @@ export default function FreightEstimator() {
         </div>
 
         {/* Quantity */}
-        <div>
-          <label className="text-xs font-semibold text-foreground mb-1.5 block">Quantidade de itens</label>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setQty(q => Math.max(1, q - 1))}
-              className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-foreground hover:border-china-red/40 transition-colors font-bold"
-            >
-              −
-            </button>
-            <span className="text-lg font-bold text-foreground w-6 text-center">{qty}</span>
-            <button
-              type="button"
-              onClick={() => setQty(q => Math.min(10, q + 1))}
-              className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-foreground hover:border-china-red/40 transition-colors font-bold"
-            >
-              +
-            </button>
-            <span className="text-xs text-muted-foreground ml-1">peso estimado: ~{weightKg} kg</span>
+        <label className="block">
+          <span className="text-xs font-semibold text-foreground mb-1.5 block">
+            Quantidade de itens
+          </span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <QuantityStepper
+              variant="spaced"
+              value={qty}
+              onChange={setQty}
+              min={1}
+              max={10}
+              ariaLabel="Quantidade de itens para simulação de frete"
+            />
+            <span className="text-xs text-muted-foreground">
+              peso estimado: ~{weightKg} kg
+            </span>
           </div>
-        </div>
+        </label>
 
         {/* Result */}
         <div className="bg-muted/40 rounded-xl p-4 space-y-2 border border-border/60">

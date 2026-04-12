@@ -10,6 +10,7 @@ import {
   itemWeightG,
 } from "@/lib/shipping";
 import { getDisplayPriceBrl } from "@/lib/pricing";
+import { QuantityStepper } from "@/components/QuantityStepper";
 
 const Cart = () => {
   const { items, removeItem, updateQuantity, updateKeepBox } = useCart();
@@ -149,29 +150,13 @@ const Cart = () => {
                     </div>
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t border-border pt-3 sm:border-0 sm:pt-0">
-                    <div className="flex items-center rounded-lg border border-border overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateQuantity(item.id, item.quantity - 1)
-                        }
-                        className="touch-target min-w-[44px] min-h-[44px] flex items-center justify-center bg-background hover:bg-muted text-sm font-bold"
-                      >
-                        −
-                      </button>
-                      <span className="min-w-[44px] min-h-[44px] flex items-center justify-center text-sm font-semibold border-x border-border">
-                        {item.quantity}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateQuantity(item.id, item.quantity + 1)
-                        }
-                        className="touch-target min-w-[44px] min-h-[44px] flex items-center justify-center bg-background hover:bg-muted text-sm font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
+                    <QuantityStepper
+                      value={item.quantity}
+                      onChange={(n) => updateQuantity(item.id, n)}
+                      min={1}
+                      max={99}
+                      ariaLabel={`Quantidade — ${item.titlePt ?? item.title}`}
+                    />
                     <button
                       type="button"
                       onClick={() => removeItem(item.id)}

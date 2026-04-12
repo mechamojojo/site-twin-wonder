@@ -17,6 +17,7 @@ import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
 import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
+import { QuantityStepper } from "@/components/QuantityStepper";
 import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
 import { toast } from "sonner";
 
@@ -1007,56 +1008,19 @@ const Order = () => {
                                         Estoque:{" "}
                                         {stock != null ? stock : "consultar"}
                                       </span>
-                                      <div className="flex items-center gap-0 ml-auto">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setQuantityBySize((prev) => ({
-                                              ...prev,
-                                              [value]: Math.max(
-                                                0,
-                                                (prev[value] ?? 0) - 1,
-                                              ),
-                                            }))
-                                          }
-                                          className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                                        >
-                                          −
-                                        </button>
-                                        <input
-                                          type="number"
+                                      <div className="ml-auto">
+                                        <QuantityStepper
+                                          value={qty}
                                           min={0}
                                           max={maxQty}
-                                          className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
-                                          value={qty}
-                                          onChange={(e) =>
+                                          onChange={(n) =>
                                             setQuantityBySize((prev) => ({
                                               ...prev,
-                                              [value]: Math.max(
-                                                0,
-                                                Math.min(
-                                                  maxQty,
-                                                  Number(e.target.value) || 0,
-                                                ),
-                                              ),
+                                              [value]: n,
                                             }))
                                           }
+                                          ariaLabel={`Quantidade — ${value}`}
                                         />
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setQuantityBySize((prev) => ({
-                                              ...prev,
-                                              [value]: Math.min(
-                                                maxQty,
-                                                (prev[value] ?? 0) + 1,
-                                              ),
-                                            }))
-                                          }
-                                          className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                                        >
-                                          +
-                                        </button>
                                       </div>
                                     </li>
                                   );
@@ -1186,41 +1150,12 @@ const Order = () => {
                             <p className="text-xs font-semibold text-muted-foreground mb-1.5">
                               Quantidade:
                             </p>
-                            <div className="flex items-center gap-0 w-fit">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setQuantity((q) => Math.max(1, q - 1))
-                                }
-                                className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                              >
-                                −
-                              </button>
-                              <input
-                                type="number"
-                                min={1}
-                                max={99}
-                                className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
-                                value={quantity}
-                                onChange={(e) =>
-                                  setQuantity(
-                                    Math.max(
-                                      1,
-                                      Math.min(99, Number(e.target.value) || 1),
-                                    ),
-                                  )
-                                }
-                              />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setQuantity((q) => Math.min(99, q + 1))
-                                }
-                                className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                              >
-                                +
-                              </button>
-                            </div>
+                            <QuantityStepper
+                              value={quantity}
+                              onChange={setQuantity}
+                              min={1}
+                              max={99}
+                            />
                           </div>
                         )}
                       </>
@@ -1286,43 +1221,13 @@ const Order = () => {
                               {displayBrlLabel} · Inventário: consultar
                             </p>
                             {!productPreview.variants.size?.length && (
-                              <div className="flex items-center gap-0 mt-2">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setQuantity((q) => Math.max(1, q - 1))
-                                  }
-                                  className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                                >
-                                  −
-                                </button>
-                                <input
-                                  type="number"
+                              <div className="mt-2">
+                                <QuantityStepper
+                                  value={quantity}
+                                  onChange={setQuantity}
                                   min={1}
                                   max={99}
-                                  className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
-                                  value={quantity}
-                                  onChange={(e) =>
-                                    setQuantity(
-                                      Math.max(
-                                        1,
-                                        Math.min(
-                                          99,
-                                          Number(e.target.value) || 1,
-                                        ),
-                                      ),
-                                    )
-                                  }
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setQuantity((q) => Math.min(99, q + 1))
-                                  }
-                                  className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                                >
-                                  +
-                                </button>
                               </div>
                             )}
                           </div>
@@ -1368,56 +1273,19 @@ const Order = () => {
                                       Estoque:{" "}
                                       {stock != null ? stock : "consultar"}
                                     </span>
-                                    <div className="flex items-center gap-0 ml-auto">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setQuantityBySize((prev) => ({
-                                            ...prev,
-                                            [value]: Math.max(
-                                              0,
-                                              (prev[value] ?? 0) - 1,
-                                            ),
-                                          }))
-                                        }
-                                        className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                                      >
-                                        −
-                                      </button>
-                                      <input
-                                        type="number"
+                                    <div className="ml-auto">
+                                      <QuantityStepper
+                                        value={qty}
                                         min={0}
                                         max={maxQty}
-                                        className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
-                                        value={qty}
-                                        onChange={(e) =>
+                                        onChange={(n) =>
                                           setQuantityBySize((prev) => ({
                                             ...prev,
-                                            [value]: Math.max(
-                                              0,
-                                              Math.min(
-                                                maxQty,
-                                                Number(e.target.value) || 0,
-                                              ),
-                                            ),
+                                            [value]: n,
                                           }))
                                         }
+                                        ariaLabel={`Quantidade — ${value}`}
                                       />
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setQuantityBySize((prev) => ({
-                                            ...prev,
-                                            [value]: Math.min(
-                                              maxQty,
-                                              (prev[value] ?? 0) + 1,
-                                            ),
-                                          }))
-                                        }
-                                        className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                                      >
-                                        +
-                                      </button>
                                     </div>
                                   </li>
                                 );
@@ -1440,41 +1308,12 @@ const Order = () => {
                             <p className="text-xs font-semibold text-muted-foreground mb-1.5">
                               Quantidade:
                             </p>
-                            <div className="flex items-center gap-0 w-fit">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setQuantity((q) => Math.max(1, q - 1))
-                                }
-                                className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                              >
-                                −
-                              </button>
-                              <input
-                                type="number"
-                                min={1}
-                                max={99}
-                                className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
-                                value={quantity}
-                                onChange={(e) =>
-                                  setQuantity(
-                                    Math.max(
-                                      1,
-                                      Math.min(99, Number(e.target.value) || 1),
-                                    ),
-                                  )
-                                }
-                              />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setQuantity((q) => Math.min(99, q + 1))
-                                }
-                                className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                              >
-                                +
-                              </button>
-                            </div>
+                            <QuantityStepper
+                              value={quantity}
+                              onChange={setQuantity}
+                              min={1}
+                              max={99}
+                            />
                           </div>
                         )}
                       </>
@@ -1499,41 +1338,12 @@ const Order = () => {
                           <p className="text-xs font-semibold text-muted-foreground mb-1.5">
                             Quantidade:
                           </p>
-                          <div className="flex items-center gap-0">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setQuantity((q) => Math.max(1, q - 1))
-                              }
-                              className="touch-target min-w-[44px] min-h-[44px] rounded-l-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                            >
-                              −
-                            </button>
-                            <input
-                              type="number"
-                              min={1}
-                              max={99}
-                              className="w-12 min-h-[44px] text-center border-y border-border bg-background py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-china-red/40"
-                              value={quantity}
-                              onChange={(e) =>
-                                setQuantity(
-                                  Math.max(
-                                    1,
-                                    Math.min(99, Number(e.target.value) || 1),
-                                  ),
-                                )
-                              }
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setQuantity((q) => Math.min(99, q + 1))
-                              }
-                              className="touch-target min-w-[44px] min-h-[44px] rounded-r-lg border border-border bg-background flex items-center justify-center text-lg font-bold hover:bg-muted"
-                            >
-                              +
-                            </button>
-                          </div>
+                          <QuantityStepper
+                            value={quantity}
+                            onChange={setQuantity}
+                            min={1}
+                            max={99}
+                          />
                         </div>
                       )}
 
