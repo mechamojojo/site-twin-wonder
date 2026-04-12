@@ -18,6 +18,7 @@ import { useCart } from "@/context/CartContext";
 import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { QuantityStepper } from "@/components/QuantityStepper";
+import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
 import { toast } from "sonner";
 
@@ -992,7 +993,9 @@ const Order = () => {
                                     ]?.[value] ??
                                     group.inventoryByValue?.[value];
                                   const maxQty =
-                                    stock != null ? Math.min(99, stock) : 99;
+                                    stock != null
+                                    ? Math.min(MAX_LINE_QUANTITY, stock)
+                                    : MAX_LINE_QUANTITY;
                                   return (
                                     <li
                                       key={value}
@@ -1154,7 +1157,7 @@ const Order = () => {
                               value={quantity}
                               onChange={setQuantity}
                               min={1}
-                              max={99}
+                              max={MAX_LINE_QUANTITY}
                             />
                           </div>
                         )}
@@ -1226,7 +1229,7 @@ const Order = () => {
                                   value={quantity}
                                   onChange={setQuantity}
                                   min={1}
-                                  max={99}
+                                  max={MAX_LINE_QUANTITY}
                                 />
                               </div>
                             )}
@@ -1256,7 +1259,9 @@ const Order = () => {
                                   ]?.[value] ??
                                   sizeGroup?.inventoryByValue?.[value];
                                 const maxQty =
-                                  stock != null ? Math.min(99, stock) : 99;
+                                  stock != null
+                                    ? Math.min(MAX_LINE_QUANTITY, stock)
+                                    : MAX_LINE_QUANTITY;
                                 const qty = quantityBySize[value] ?? 0;
                                 return (
                                   <li
@@ -1312,7 +1317,7 @@ const Order = () => {
                               value={quantity}
                               onChange={setQuantity}
                               min={1}
-                              max={99}
+                              max={MAX_LINE_QUANTITY}
                             />
                           </div>
                         )}
@@ -1342,7 +1347,7 @@ const Order = () => {
                             value={quantity}
                             onChange={setQuantity}
                             min={1}
-                            max={99}
+                            max={MAX_LINE_QUANTITY}
                           />
                         </div>
                       )}

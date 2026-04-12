@@ -1,7 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ProductCategory } from "@/lib/shipping";
+import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 
 const CART_STORAGE_KEY = "compraschina-cart";
+
+function clampCartQuantity(n: unknown): number {
+  const q = Math.floor(Number(n));
+  if (!Number.isFinite(q) || q < 1) return 1;
+  return Math.min(MAX_LINE_QUANTITY, q);
+}
 
 export type CartItem = {
   id: string;
@@ -41,7 +48,11 @@ function loadFromStorage(): CartItem[] {
     const raw = localStorage.getItem(CART_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((row: CartItem) => ({
+      ...row,
+      quantity: clampCartQuantity(row?.quantity),
+    }));
   } catch {
     return [];
   }
@@ -64,7 +75,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addItem = useCallback((item: Omit<CartItem, "id">) => {
     const id = crypto.randomUUID?.() ?? `cart-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setItems((prev) => [...prev, { ...item, id }]);
+    const quantity = clampCartQuantity(item.quantity);
+    setItems((prev) => [...prev, { ...item, id, quantity }]);
   }, []);
 
   const removeItem = useCallback((id: string) => {
@@ -72,7 +84,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateQuantity = useCallback((id: string, quantity: number) => {
-    const qty = Math.max(1, Math.min(99, quantity));
+    const qty = clampCartQuantity(quantity);
     setItems((prev) =>
       prev.map((i) => (i.id === id ? { ...i, quantity: qty } : i))
     );

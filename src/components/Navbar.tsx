@@ -156,7 +156,7 @@ const Navbar = () => {
             <ShoppingCart className="w-5 h-5" />
             {totalItems > 0 && (
               <span className="absolute -top-0.5 -right-0.5 min-w-[1rem] h-4 px-1 bg-china-red text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                {totalItems > 99 ? "99+" : totalItems}
+                {totalItems > 9999 ? "9999+" : totalItems}
               </span>
             )}
           </Link>

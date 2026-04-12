@@ -36,6 +36,7 @@ import { json } from "body-parser";
 import { PrismaClient, OrderStatus, ShippingMethod } from "@prisma/client";
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
 import { resyncCatalogPrices } from "./resyncCatalogPrices";
+import { MAX_ORDER_LINE_QUANTITY } from "./quantityLimits";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -1031,8 +1032,14 @@ async function createAdminManualOrder(
   }
 
   const qty = Number(body.quantity);
-  if (!Number.isFinite(qty) || qty < 1 || qty > 999) {
-    return { error: "quantity inválida (1–999)" as const };
+  if (
+    !Number.isFinite(qty) ||
+    qty < 1 ||
+    qty > MAX_ORDER_LINE_QUANTITY
+  ) {
+    return {
+      error: `quantity inválida (1–${MAX_ORDER_LINE_QUANTITY})` as const,
+    };
   }
 
   const statusRaw =
@@ -2237,6 +2244,17 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       });
     }
 
+    const orderQty = Number(quantity);
+    if (
+      !Number.isFinite(orderQty) ||
+      orderQty < 1 ||
+      orderQty > MAX_ORDER_LINE_QUANTITY
+    ) {
+      return res.status(400).json({
+        error: `Quantidade inválida (1–${MAX_ORDER_LINE_QUANTITY}).`,
+      });
+    }
+
     const checkoutGroupId =
       typeof bodyCheckoutGroupId === "string" &&
       bodyCheckoutGroupId.trim().length > 0
@@ -2286,7 +2304,7 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         productColor: productColor ?? null,
         productSize: productSize ?? null,
         productVariation: productVariation ?? null,
-        quantity: Number(quantity),
+        quantity: orderQty,
         cep,
         // Sempre expresso padrão (mesma base da estimativa no front). EMS/marítimo só pelo admin.
         shippingMethod: ShippingMethod.FJ_BR_EXP,

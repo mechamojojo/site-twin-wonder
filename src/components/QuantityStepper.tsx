@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 
 type QuantityStepperProps = {
   value: number;
@@ -15,7 +16,7 @@ export function QuantityStepper({
   value,
   onChange,
   min = 1,
-  max = 99,
+  max = MAX_LINE_QUANTITY,
   variant = "inline",
   ariaLabel = "Quantidade",
   className = "",
@@ -70,7 +71,7 @@ export function QuantityStepper({
           inputMode="numeric"
           autoComplete="off"
           aria-label={ariaLabel}
-          className="w-12 h-9 shrink-0 rounded-lg border border-border bg-background text-center text-lg font-bold text-foreground outline-none focus:ring-2 focus:ring-china-red/30 tabular-nums"
+          className="min-w-12 w-14 h-9 shrink-0 rounded-lg border border-border bg-background text-center text-lg font-bold text-foreground outline-none focus:ring-2 focus:ring-china-red/30 tabular-nums"
           value={displayValue}
           onFocus={() => {
             valueAtFocus.current = value;
@@ -110,7 +111,7 @@ export function QuantityStepper({
         inputMode="numeric"
         autoComplete="off"
         aria-label={ariaLabel}
-        className="min-h-[44px] min-w-[3rem] max-w-[4.5rem] px-2 text-center border-y border-border bg-background text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-china-red/40 focus:relative focus:z-10 tabular-nums"
+        className="min-h-[44px] min-w-[3.25rem] max-w-[5.5rem] px-2 text-center border-y border-border bg-background text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-china-red/40 focus:relative focus:z-10 tabular-nums"
         value={displayValue}
         onFocus={() => {
           valueAtFocus.current = value;

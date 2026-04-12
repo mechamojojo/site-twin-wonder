@@ -11,6 +11,7 @@ import {
 } from "@/lib/shipping";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import { QuantityStepper } from "@/components/QuantityStepper";
+import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 
 const Cart = () => {
   const { items, removeItem, updateQuantity, updateKeepBox } = useCart();
@@ -154,7 +155,7 @@ const Cart = () => {
                       value={item.quantity}
                       onChange={(n) => updateQuantity(item.id, n)}
                       min={1}
-                      max={99}
+                      max={MAX_LINE_QUANTITY}
                       ariaLabel={`Quantidade — ${item.titlePt ?? item.title}`}
                     />
                     <button
