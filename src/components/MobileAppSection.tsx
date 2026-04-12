@@ -1,11 +1,11 @@
 import { MessageCircle, Mail, Clock, Users } from "lucide-react";
-import { whatsAppUrl, CONTACT_EMAIL } from "@/data/siteConfig";
+import { whatsAppUrl, CONTACT_EMAIL, WHATSAPP_DISPLAY } from "@/data/siteConfig";
 
 const channels = [
   {
     icon: MessageCircle,
     title: "WhatsApp",
-    description: "Fale direto com nossa equipe. Resposta em até 2 horas nos dias úteis.",
+    description: `Fale direto no ${WHATSAPP_DISPLAY}. Resposta em até 2 horas nos dias úteis.`,
     cta: "Abrir conversa",
     href: whatsAppUrl("Olá! Tenho uma dúvida sobre compras da China."),
     external: true,

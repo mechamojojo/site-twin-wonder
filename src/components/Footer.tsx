@@ -1,6 +1,12 @@
 import { Link } from "react-router-dom";
 import { Mail, MessageCircle } from "lucide-react";
-import { CONTACT_EMAIL, whatsAppUrl, WHATSAPP_DEFAULT_MESSAGE } from "@/data/siteConfig";
+import {
+  CONTACT_EMAIL,
+  CNPJ,
+  whatsAppUrl,
+  WHATSAPP_DEFAULT_MESSAGE,
+  WHATSAPP_DISPLAY,
+} from "@/data/siteConfig";
 
 const Footer = () => {
   return (
@@ -30,8 +36,11 @@ const Footer = () => {
                 className="inline-flex items-center gap-2 text-sm text-background/70 hover:text-gold transition-colors"
               >
                 <MessageCircle className="w-4 h-4" />
-                WhatsApp
+                WhatsApp {WHATSAPP_DISPLAY}
               </a>
+              {CNPJ ? (
+                <p className="text-sm text-background/50 pt-1">CNPJ {CNPJ}</p>
+              ) : null}
             </div>
           </div>
 
@@ -69,7 +78,10 @@ const Footer = () => {
             <strong className="text-background/40">Aviso Legal:</strong> A ComprasChina atua como intermediária de compras (mandatária), adquirindo produtos indicados pelo cliente em marketplaces chineses (Taobao, 1688, Weidian, TMALL etc.) em seu nome. Não somos vendedores, distribuidores nem importadores comerciais. Os produtos exibidos neste site são exemplos de itens comprados por clientes e não constituem oferta, recomendação ou endosso. Não verificamos autenticidade, originalidade ou conformidade de produtos. A responsabilidade pela legalidade de cada importação, incluindo direitos de propriedade intelectual e normas aduaneiras, é exclusivamente do cliente.
           </p>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-            <span>© {new Date().getFullYear()} ComprasChina. Todos os direitos reservados.</span>
+            <span>
+              © {new Date().getFullYear()} ComprasChina. Todos os direitos reservados.
+              {CNPJ ? ` · CNPJ ${CNPJ}` : ""}
+            </span>
             <div className="flex gap-4">
               <Link to="/termos-de-servico" className="hover:text-background/60 transition-colors">Termos de Serviço</Link>
               <Link to="/politica-de-privacidade" className="hover:text-background/60 transition-colors">Privacidade</Link>
