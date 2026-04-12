@@ -19,6 +19,7 @@ import { detectCategory, categorySupportsKeepBox } from "@/lib/shipping";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
+import { getProductWeightOverrideG } from "@/lib/productWeightOverrides";
 import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
 import { toast } from "sonner";
 
@@ -1481,6 +1482,7 @@ const Order = () => {
                             toast.error("Selecione pelo menos 1 unidade.");
                             return;
                           }
+                          const weightOverrideG = getProductWeightOverrideG(url);
                           addItem({
                             url,
                             quantity: effectiveQuantity,
@@ -1500,6 +1502,9 @@ const Order = () => {
                             image: cartLineImage,
                             category: productCategory,
                             keepBox,
+                            ...(weightOverrideG != null
+                              ? { weightG: weightOverrideG }
+                              : {}),
                           });
                           navigate("/carrinho");
                         };
@@ -1551,6 +1556,7 @@ const Order = () => {
                                   );
                                   return;
                                 }
+                                const weightGAdd = getProductWeightOverrideG(url);
                                 addItem({
                                   url,
                                   quantity: effectiveQuantity,
@@ -1570,6 +1576,9 @@ const Order = () => {
                                   image: cartLineImage,
                                   category: productCategory,
                                   keepBox,
+                                  ...(weightGAdd != null
+                                    ? { weightG: weightGAdd }
+                                    : {}),
                                 });
                                 navigate("/carrinho");
                               }}
