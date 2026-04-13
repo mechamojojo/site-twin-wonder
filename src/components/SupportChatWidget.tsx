@@ -10,9 +10,29 @@ import {
   X,
 } from "lucide-react";
 
-/** Tempo na página antes do convite (uma vez por sessão). */
+/** Tempo no site antes do convite (só depois disso). */
 const WELCOME_NUDGE_DELAY_MS = 32_000;
-const WELCOME_NUDGE_SESSION_KEY = "compraschina-support-welcome-nudge-dismissed";
+/**
+ * Uma vez por navegador (localStorage): evita reaparecer a cada rota, aba ou
+ * remontagem do React. Limpar dados do site mostra de novo.
+ */
+const WELCOME_NUDGE_STORAGE_KEY = "compraschina-support-welcome-nudge-v1";
+
+function isWelcomeNudgeConsumed(): boolean {
+  try {
+    return localStorage.getItem(WELCOME_NUDGE_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function consumeWelcomeNudge(): void {
+  try {
+    localStorage.setItem(WELCOME_NUDGE_STORAGE_KEY, "1");
+  } catch {
+    /* private mode */
+  }
+}
 
 /**
  * Botão flutuante + painel (estilo leve, inspirado em widgets tipo Intercom/Crisp).
@@ -45,33 +65,22 @@ function SupportChatWidgetOpen() {
   useEffect(() => {
     if (open) {
       setShowWelcomeNudge(false);
-      try {
-        sessionStorage.setItem(WELCOME_NUDGE_SESSION_KEY, "1");
-      } catch {
-        /* private mode */
-      }
+      consumeWelcomeNudge();
     }
   }, [open]);
 
   useEffect(() => {
+    if (isWelcomeNudgeConsumed()) return;
+
     let cancelled = false;
-    try {
-      if (sessionStorage.getItem(WELCOME_NUDGE_SESSION_KEY) === "1") {
-        return;
-      }
-    } catch {
-      /* ignore */
-    }
     const t = window.setTimeout(() => {
       if (cancelled) return;
       if (openRef.current) return;
-      try {
-        if (sessionStorage.getItem(WELCOME_NUDGE_SESSION_KEY) === "1") return;
-      } catch {
-        /* ignore */
-      }
+      if (isWelcomeNudgeConsumed()) return;
+      consumeWelcomeNudge();
       setShowWelcomeNudge(true);
     }, WELCOME_NUDGE_DELAY_MS);
+
     return () => {
       cancelled = true;
       window.clearTimeout(t);
@@ -80,11 +89,7 @@ function SupportChatWidgetOpen() {
 
   const dismissWelcomeNudge = () => {
     setShowWelcomeNudge(false);
-    try {
-      sessionStorage.setItem(WELCOME_NUDGE_SESSION_KEY, "1");
-    } catch {
-      /* ignore */
-    }
+    consumeWelcomeNudge();
   };
 
   const {
@@ -416,49 +421,53 @@ function SupportChatWidgetOpen() {
           <span id="support-welcome-nudge-label" className="sr-only">
             Nova mensagem da equipe ComprasChina
           </span>
-          <button
-            type="button"
-            onClick={dismissWelcomeNudge}
-            className="absolute -right-1 -top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-background text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25"
-            aria-label="Dispensar mensagem"
-          >
-            <X className="h-3.5 w-3.5" strokeWidth={2} />
-          </button>
-
-          <div className="flex gap-2.5 pr-5 pt-1">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-china-red/10 text-sm font-heading font-bold text-china-red"
-              aria-hidden
+          {/* Cartão opaco: legível em cima de foto/hero escuro */}
+          <div className="rounded-2xl border-2 border-border bg-card p-3.5 shadow-[0_12px_40px_-4px_rgba(0,0,0,0.35)] ring-1 ring-black/5">
+            <button
+              type="button"
+              onClick={dismissWelcomeNudge}
+              className="absolute -right-1.5 -top-1.5 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-md hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25"
+              aria-label="Dispensar mensagem"
             >
-              CC
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-[13px] font-semibold text-foreground">
-                  ComprasChina
-                </span>
-                <span className="text-[11px] text-muted-foreground">agora</span>
-              </div>
-              <div className="rounded-2xl rounded-bl-md border border-border/70 bg-muted/40 px-3.5 py-3 text-[14px] leading-relaxed text-foreground shadow-sm">
-                <p>Oi! Seja bem-vindo.</p>
-                <p className="mt-2 text-foreground/90">
-                  Se tiver alguma dúvida, clique no chat no canto da tela e fale
-                  com nossa equipe.
-                </p>
-                <p className="mt-2 text-foreground/90">
-                  Tem um produto em mente, mas não o encontrou no site? Envie
-                  para nós e montamos o link para você.
-                </p>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="mt-2.5 h-9 w-full border border-border/80 bg-background text-[13px] font-medium shadow-sm hover:bg-muted/60"
-                onClick={() => setOpen(true)}
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+
+            <div className="flex gap-2.5 pr-6 pt-0.5">
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-china-red/15 text-sm font-heading font-bold text-china-red"
+                aria-hidden
               >
-                Abrir chat e responder
-              </Button>
+                CC
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1.5 flex items-center gap-2">
+                  <span className="text-[13px] font-semibold text-foreground">
+                    ComprasChina
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    agora
+                  </span>
+                </div>
+                <div className="rounded-2xl rounded-bl-md border border-border bg-muted px-3.5 py-3 text-[14px] leading-relaxed text-foreground shadow-inner">
+                  <p className="font-medium">Oi! Seja bem-vindo.</p>
+                  <p className="mt-2">
+                    Se tiver alguma dúvida, clique no chat no canto da tela e
+                    fale com nossa equipe.
+                  </p>
+                  <p className="mt-2">
+                    Tem um produto em mente, mas não o encontrou no site? Envie
+                    para nós e montamos o link para você.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-3 h-9 w-full bg-china-red text-[13px] font-semibold text-white shadow-sm hover:bg-china-red/90"
+                  onClick={() => setOpen(true)}
+                >
+                  Abrir chat e responder
+                </Button>
+              </div>
             </div>
           </div>
         </div>
