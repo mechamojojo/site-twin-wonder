@@ -260,6 +260,7 @@ export async function getCssbuyProductPreview(
         fabricValues: string[];
         optionGroups: { name: string; values: string[]; images: string[] }[];
         specs: { key: string; value: string }[];
+        cssbuySkuRows: { label: string; inventory: number; priceLabel: string }[];
       } = {
         title: null,
         priceCny: null,
@@ -270,6 +271,7 @@ export async function getCssbuyProductPreview(
         fabricValues: [],
         optionGroups: [],
         specs: [],
+        cssbuySkuRows: [],
       };
 
       function tryFromWindow(): boolean {
@@ -1068,6 +1070,34 @@ export async function getCssbuyProductPreview(
         }
       }
       extractSizeOptions();
+
+      /** CSSBuy 1688 EN layout: "S same as official website size 100-130" + "$ 26.40" + "Inventory: 197" */
+      function extractCssbuyOfficialSizeRows() {
+        const t = document.body?.innerText || "";
+        if (
+          !/Inventory:\s*\d+/i.test(t) ||
+          !/same\s+as\s+official\s+website\s+size/i.test(t)
+        )
+          return;
+        const rows: { label: string; inventory: number; priceLabel: string }[] =
+          [];
+        const re =
+          /\b(S|XS|M|L|XL|Xl|XXL|2XL|3XL)\s+same\s+as\s+official\s+website\s+size\s+([\d–\-\s]+)\s*[\s\S]{0,220}?\$\s*(\d+\.?\d*)[\s\S]{0,220}?Inventory:\s*(\d+)/gi;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(t)) !== null) {
+          const code = m[1];
+          const range = m[2].replace(/\s+/g, " ").trim();
+          const price = m[3];
+          const inv = parseInt(m[4], 10);
+          if (!Number.isFinite(inv) || inv < 0) continue;
+          const label = `${code} same as official website size ${range}`;
+          const priceLabel = `$ ${price}`;
+          if (!rows.some((r) => r.label === label))
+            rows.push({ label, inventory: inv, priceLabel });
+        }
+        if (rows.length > 0) result.cssbuySkuRows = rows;
+      }
+      extractCssbuyOfficialSizeRows();
 
       return result;
     });
@@ -2175,10 +2205,63 @@ export async function getCssbuyProductPreview(
       else if (isColorOrStyleGroup(g.name)) g.displayAsImages = true;
     }
 
+    /** CSSBuy 1688 (EN): keep labels in sync with inventory / source price keys */
+    const skipTranslateCssbuyOfficial = (val: string) =>
+      /^(S|XS|M|L|XL|Xl|XXL|2XL|3XL)\s+same\s+as\s+official\s+website\s+size\s+/i.test(
+        val.trim(),
+      );
+
+    const cssbuySkuRows = data.cssbuySkuRows;
+    /** Não sobrescrever cor+tamanho quando há grupo com miniaturas (estilo/cor). */
+    const hasImageStyleOptionGroup = optionGroups.some(
+      (g) =>
+        !SIZE_GROUP_NAME_RE.test(g.name) &&
+        !isQualityGradeGroup(g.name) &&
+        (g.images ?? []).some((u) => u && String(u).trim().length > 0),
+    );
+    if (
+      cssbuySkuRows &&
+      cssbuySkuRows.length > 0 &&
+      !hasImageStyleOptionGroup
+    ) {
+      const labels = cssbuySkuRows.map((r) => r.label);
+      const inventoryByValue: Record<string, number> = {};
+      const sourcePriceLabelByValue: Record<string, string> = {};
+      for (const r of cssbuySkuRows) {
+        inventoryByValue[r.label] = r.inventory;
+        sourcePriceLabelByValue[r.label] = r.priceLabel;
+      }
+      data.sizeValues = labels;
+      const sgIdx = optionGroups.findIndex((g) =>
+        SIZE_GROUP_NAME_RE.test(g.name),
+      );
+      if (sgIdx >= 0) {
+        const g = optionGroups[sgIdx];
+        g.values = labels;
+        g.images = labels.map(() => "");
+        g.inventoryByValue = inventoryByValue;
+        g.sourcePriceLabelByValue = sourcePriceLabelByValue;
+        g.displayAsImages = false;
+        delete g.inventoryByColorAndValue;
+      } else {
+        optionGroups.push({
+          name: "Tamanho",
+          values: labels,
+          images: labels.map(() => ""),
+          inventoryByValue,
+          sourcePriceLabelByValue,
+          displayAsImages: false,
+        });
+      }
+    }
+
     // Traduzir valores das opções (chinês/inglês → português)
     const uniqueValues = new Set<string>();
     for (const g of optionGroups) {
-      for (const v of g.values) if (v && v.trim()) uniqueValues.add(v.trim());
+      for (const v of g.values) {
+        if (v && v.trim() && !skipTranslateCssbuyOfficial(v))
+          uniqueValues.add(v.trim());
+      }
     }
     const valueToPt: Record<string, string> = {};
     const BATCH = 5;
@@ -2193,7 +2276,11 @@ export async function getCssbuyProductPreview(
       );
     }
     for (const g of optionGroups) {
-      g.values = g.values.map((v) => (v && valueToPt[v.trim()]) || v);
+      g.values = g.values.map((v) => {
+        if (!v || !v.trim()) return v;
+        if (skipTranslateCssbuyOfficial(v)) return v;
+        return (valueToPt[v.trim()] || v) as string;
+      });
     }
     // Re-key priceByValue e inventários para usar valores traduzidos
     for (const g of optionGroups) {
@@ -2226,6 +2313,16 @@ export async function getCssbuyProductPreview(
           }
         }
         g.inventoryByColorAndValue = next;
+      }
+      if (
+        g.sourcePriceLabelByValue &&
+        typeof g.sourcePriceLabelByValue === "object"
+      ) {
+        const next: Record<string, string> = {};
+        for (const [k, v] of Object.entries(g.sourcePriceLabelByValue)) {
+          next[valueToPt[k.trim()] || k] = v;
+        }
+        g.sourcePriceLabelByValue = next;
       }
     }
 

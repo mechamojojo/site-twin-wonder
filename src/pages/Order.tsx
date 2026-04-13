@@ -37,6 +37,9 @@ const SIZE_NUM =
   /^(2[5-9]|3[0-3])(\.5)?(码|号)?$|^(3[4-9]|4[0-8])(\.5)?(码|号)?$|^\d{2,3}\s*(men|women|男|女)?$/i;
 const SIZE_SPEC =
   /^C\d+\/\d+cm$|^J\d+\/\d+cm$|^M\d+m?\d*\/[\d-]+ code$|^M\d+\/[\d-]+ code$|^M\d+ code$/i;
+/** CSSBuy 1688: "S same as official website size 100-130" (EN) */
+const SIZE_CSSBUY_OFFICIAL =
+  /^(S|XS|M|L|XL|Xl|XXL|2XL|3XL)\s+same\s+as\s+official\s+website\s+size\s+/i;
 
 /** Detecta se o grupo é de tamanho (para UX quantidade por tamanho). Usa valores quando o nome é ambíguo. */
 const isSizeGroup = (name: string, values?: string[]) => {
@@ -47,7 +50,8 @@ const isSizeGroup = (name: string, values?: string[]) => {
       (v) =>
         SIZE_LIKE.test(v.trim()) ||
         SIZE_NUM.test(v.trim()) ||
-        SIZE_SPEC.test(v.trim()),
+        SIZE_SPEC.test(v.trim()) ||
+        SIZE_CSSBUY_OFFICIAL.test(v.trim()),
     );
     if (allLookLikeSizes) return true;
   }
@@ -171,6 +175,7 @@ const Order = () => {
       inventoryByValue?: Record<string, number>;
       inventoryByColorAndValue?: Record<string, Record<string, number>>;
       priceByValue?: Record<string, number>;
+      sourcePriceLabelByValue?: Record<string, string>;
     }[];
     specs: { key: string; value: string }[];
     description: string | null;
@@ -1020,12 +1025,26 @@ const Order = () => {
                                       key={value}
                                       className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-3 last:border-0 last:pb-0"
                                     >
-                                      <span className="text-sm font-medium text-foreground min-w-[64px]">
+                                      <span className="text-sm font-medium text-foreground flex-1 min-w-[120px] max-w-full pr-2 break-words">
                                         {value}
                                       </span>
-                                      <span className="text-sm font-medium text-china-red">
-                                        {displayBrlLabel}
-                                      </span>
+                                      <div className="flex flex-col gap-0.5 items-start shrink-0">
+                                        <span className="text-sm font-medium text-china-red">
+                                          {displayBrlLabel}
+                                        </span>
+                                        {group.sourcePriceLabelByValue?.[
+                                          value
+                                        ] ? (
+                                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                            CSSBuy:{" "}
+                                            {
+                                              group.sourcePriceLabelByValue[
+                                                value
+                                              ]
+                                            }
+                                          </span>
+                                        ) : null}
+                                      </div>
                                       <span className="text-[11px] text-muted-foreground">
                                         Estoque:{" "}
                                         {stock != null ? stock : "consultar"}
@@ -1287,12 +1306,26 @@ const Order = () => {
                                     key={value}
                                     className="flex items-center gap-3 flex-wrap border-b border-border/50 pb-3 last:border-0 last:pb-0"
                                   >
-                                    <span className="text-sm font-medium text-foreground min-w-[64px]">
+                                    <span className="text-sm font-medium text-foreground flex-1 min-w-[120px] max-w-full pr-2 break-words">
                                       {value}
                                     </span>
-                                    <span className="text-sm font-medium text-china-red">
-                                      {displayBrlLabel}
-                                    </span>
+                                    <div className="flex flex-col gap-0.5 items-start shrink-0">
+                                      <span className="text-sm font-medium text-china-red">
+                                        {displayBrlLabel}
+                                      </span>
+                                      {sizeGroup?.sourcePriceLabelByValue?.[
+                                        value
+                                      ] ? (
+                                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                          CSSBuy:{" "}
+                                          {
+                                            sizeGroup.sourcePriceLabelByValue[
+                                              value
+                                            ]
+                                          }
+                                        </span>
+                                      ) : null}
+                                    </div>
                                     <span className="text-[11px] text-muted-foreground">
                                       Estoque:{" "}
                                       {stock != null ? stock : "consultar"}

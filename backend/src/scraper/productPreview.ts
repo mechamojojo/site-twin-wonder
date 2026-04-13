@@ -20,6 +20,8 @@ export interface OptionGroup {
   inventoryByColorAndValue?: Record<string, Record<string, number>>;
   /** Price in CNY per option value (e.g. model "01" -> 69). From CSSBuy/source when each variant has different price. */
   priceByValue?: Record<string, number>;
+  /** Display-only price text from source (e.g. CSSBuy USD); does not affect cart pricing. */
+  sourcePriceLabelByValue?: Record<string, string>;
 }
 
 export interface ProductPreviewResult {
