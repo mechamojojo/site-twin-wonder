@@ -6,14 +6,12 @@ import MarketplaceBanner from "@/components/MarketplaceBanner";
 import RecentPurchasesBar from "@/components/RecentPurchasesBar";
 import FeaturedProductsSection from "@/components/FeaturedProductsSection";
 import HowItWorks from "@/components/HowItWorks";
-import ServicesSection from "@/components/ServicesSection";
 import ShippingRates from "@/components/ShippingRates";
 import AboutSection from "@/components/AboutSection";
 import MobileAppSection from "@/components/MobileAppSection";
 import CTASection from "@/components/CTASection";
 import FAQSection from "@/components/FAQSection";
 import Footer from "@/components/Footer";
-import { whatsAppUrl } from "@/data/siteConfig";
 
 /** Faixa CTA discreta entre seções */
 function InlineCTA({
@@ -98,26 +96,16 @@ const Index = () => {
       {/* Atendimento (chat + e-mail) — logo após “4 passos” */}
       <MobileAppSection />
 
-      {/* 6. Serviços */}
-      <ServicesSection />
-
-      {/* CTA: dúvida antes de comprar → WhatsApp */}
-      <InlineCTA
-        text="Ficou com alguma dúvida antes de comprar? Nossa equipe responde em português."
-        href={whatsAppUrl("Olá! Tenho uma dúvida antes de comprar.")}
-        linkLabel="Falar no WhatsApp →"
-      />
-
-      {/* 7. Entrega + estimador de frete */}
+      {/* 6. Entrega + estimador de frete */}
       <ShippingRates />
 
-      {/* 8. Sobre / diferenciais */}
+      {/* 7. Sobre / diferenciais */}
       <AboutSection />
 
-      {/* 9. CTA final */}
+      {/* 8. CTA final */}
       <CTASection />
 
-      {/* 10. FAQ */}
+      {/* 9. FAQ */}
       <FAQSection />
 
       <Footer />
