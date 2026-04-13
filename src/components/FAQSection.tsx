@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
-import { whatsAppUrl } from "@/data/siteConfig";
 
 const faqs = [
   {
@@ -77,15 +77,15 @@ const FAQSection = () => {
         </div>
 
         <div className="text-center mt-14">
-          <p className="text-muted-foreground mb-4">Ainda tem dúvidas? Nossa equipe responde rapidinho.</p>
-          <a
-            href={whatsAppUrl("Olá! Tenho uma dúvida sobre compras da China.")}
-            target="_blank"
-            rel="noreferrer"
+          <p className="text-muted-foreground mb-4">
+            Ainda tem dúvidas? Fale com nosso time pelo aplicativo — a conversa fica salva e a equipe responde por aqui.
+          </p>
+          <Link
+            to="/fale-conosco"
             className="inline-block bg-china-red text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-china-red/90 transition-colors shadow-md"
           >
-            Falar no WhatsApp →
-          </a>
+            Falar com nosso time →
+          </Link>
         </div>
       </div>
     </section>
