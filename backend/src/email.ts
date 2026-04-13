@@ -3,14 +3,19 @@
  * Se RESEND_API_KEY não estiver definida, os métodos não enviam e apenas logam.
  */
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const EMAIL_FROM = process.env.EMAIL_FROM || "ComprasChina <onboarding@resend.dev>";
+const EMAIL_FROM =
+  process.env.EMAIL_FROM || "ComprasChina <onboarding@resend.dev>";
 const SITE_URL = process.env.SITE_URL || "http://localhost:5173";
 
 function canSend(): boolean {
   return Boolean(RESEND_API_KEY?.trim());
 }
 
-export async function sendVerificationEmail(email: string, name: string, token: string): Promise<boolean> {
+export async function sendVerificationEmail(
+  email: string,
+  name: string,
+  token: string,
+): Promise<boolean> {
   const link = `${SITE_URL.replace(/\/$/, "")}/confirmar-email?token=${encodeURIComponent(token)}`;
   const html = `
     <p>Olá, ${escapeHtml(name)}!</p>
@@ -32,20 +37,23 @@ export async function sendOrderStatusEmail(
   name: string,
   orderId: string,
   status: string,
-  productTitle: string | null
+  productTitle: string | null,
 ): Promise<boolean> {
   const STATUS_LABELS: Record<string, { label: string; message: string }> = {
     PAGO: {
       label: "Pago ✓",
-      message: "Recebemos a confirmação do seu pagamento. Seu pedido está em processamento.",
+      message:
+        "Recebemos a confirmação do seu pagamento. Seu pedido está em processamento.",
     },
     COMPRADO: {
       label: "Comprado",
-      message: "Seu produto foi comprado no fornecedor e está sendo preparado para envio ao Brasil.",
+      message:
+        "Seu produto foi comprado no fornecedor e está sendo preparado para envio ao Brasil.",
     },
     NO_ESTOQUE: {
       label: "No estoque",
-      message: "Seu produto chegou ao nosso estoque na China e será enviado em breve.",
+      message:
+        "Seu produto chegou ao nosso estoque na China e será enviado em breve.",
     },
     AGUARDANDO_ENVIO: {
       label: "Aguardando envio",
@@ -53,15 +61,18 @@ export async function sendOrderStatusEmail(
     },
     EM_ENVIO: {
       label: "Em envio 🚀",
-      message: "Seu pedido foi despachado para o Brasil! Em breve você receberá o código de rastreamento.",
+      message:
+        "Seu pedido foi despachado para o Brasil! Em breve você receberá o código de rastreamento.",
     },
     CONCLUIDO: {
       label: "Entregue 🎉",
-      message: "Seu pedido foi concluído! Obrigado por comprar na ComprasChina.",
+      message:
+        "Seu pedido foi concluído! Obrigado por comprar na ComprasChina.",
     },
     CANCELADO: {
       label: "Cancelado",
-      message: "Seu pedido foi cancelado. Entre em contato conosco se precisar de ajuda.",
+      message:
+        "Seu pedido foi cancelado. Entre em contato conosco se precisar de ajuda.",
     },
   };
 
@@ -99,7 +110,69 @@ export async function sendOrderStatusEmail(
   });
 }
 
-export async function sendPasswordResetEmail(email: string, name: string, token: string): Promise<boolean> {
+/** Base pública onde `/uploads/...` está acessível (ex.: URL do backend na Railway). */
+function assetBaseForEmail(): string {
+  const api = process.env.API_PUBLIC_URL?.trim();
+  if (api) return api.replace(/\/$/, "");
+  return SITE_URL.replace(/\/$/, "");
+}
+
+export async function sendWarehousePhotosEmail(
+  toEmail: string,
+  name: string,
+  orderId: string,
+  productTitle: string | null,
+  photoPaths: string[],
+  extraMessage?: string,
+): Promise<boolean> {
+  const base = assetBaseForEmail();
+  const productName = productTitle || "seu pedido";
+  const orderLink = `${SITE_URL.replace(/\/$/, "")}/pedido-confirmado/${orderId}`;
+  const absUrls = photoPaths.map((p) =>
+    p.startsWith("http")
+      ? p
+      : `${base}${p.startsWith("/") ? p : `/${p}`}`,
+  );
+  const imgsHtml = absUrls
+    .map(
+      (url, i) =>
+        `<p style="margin:12px 0"><a href="${escapeHtml(url)}" style="color:#b22222">Abrir foto ${i + 1} em tamanho real</a></p>` +
+        `<p style="margin:0"><img src="${escapeHtml(url)}" alt="Foto ${i + 1} do armazém" width="560" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #eee;display:block" /></p>`,
+    )
+    .join("");
+  const noteBlock = extraMessage
+    ? `<p style="margin:16px 0;padding:12px;background:#f9f9f9;border-radius:8px">${escapeHtml(extraMessage)}</p>`
+    : "";
+  const html = `
+    <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111">
+      <h2 style="color:#b22222;margin-bottom:4px">ComprasChina</h2>
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0 20px">
+      <p>Olá, ${escapeHtml(name)}!</p>
+      <p>Seguem as <strong>fotos do seu produto</strong> recebidas no nosso armazém na China (conferência de qualidade) referentes a <strong>${escapeHtml(productName)}</strong>.</p>
+      ${noteBlock}
+      ${imgsHtml}
+      <p style="margin-top:24px">
+        <a href="${escapeHtml(orderLink)}" style="background:#b22222;color:#fff;padding:10px 20px;border-radius:20px;text-decoration:none;font-weight:bold;font-size:14px">
+          Ver pedido no site →
+        </a>
+      </p>
+      <p style="font-size:12px;color:#888;margin-top:20px">Se as imagens não aparecerem no e-mail, use os links &quot;Abrir foto&quot; acima.</p>
+      <hr style="border:none;border-top:1px solid #eee;margin:28px 0 12px">
+      <p style="font-size:12px;color:#888">ComprasChina — Intermediário brasileiro de compras na China</p>
+    </div>
+  `;
+  return sendEmail({
+    to: toEmail,
+    subject: `Fotos do seu produto no armazém — ComprasChina`,
+    html,
+  });
+}
+
+export async function sendPasswordResetEmail(
+  email: string,
+  name: string,
+  token: string,
+): Promise<boolean> {
   const link = `${SITE_URL.replace(/\/$/, "")}/redefinir-senha?token=${encodeURIComponent(token)}`;
   const html = `
     <p>Olá, ${escapeHtml(name)}!</p>
@@ -116,9 +189,18 @@ export async function sendPasswordResetEmail(email: string, name: string, token:
   });
 }
 
-async function sendEmail(params: { to: string; subject: string; html: string }): Promise<boolean> {
+async function sendEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<boolean> {
   if (!canSend()) {
-    console.log("[email] RESEND_API_KEY não configurada. E-mail não enviado:", params.subject, "→", params.to);
+    console.log(
+      "[email] RESEND_API_KEY não configurada. E-mail não enviado:",
+      params.subject,
+      "→",
+      params.to,
+    );
     return true; // não falha o fluxo em dev
   }
   try {

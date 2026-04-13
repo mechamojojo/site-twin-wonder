@@ -1,4 +1,5 @@
-import { MessageCircle, Mail, Clock, Users } from "lucide-react";
+import { Link } from "react-router-dom";
+import { MessageCircle, Mail, Clock, Users, MessagesSquare } from "lucide-react";
 import { whatsAppUrl, CONTACT_EMAIL, WHATSAPP_DISPLAY } from "@/data/siteConfig";
 
 const channels = [
@@ -19,6 +20,16 @@ const channels = [
     href: `mailto:${CONTACT_EMAIL}`,
     external: true,
     accent: "from-china-red to-china-red/70",
+  },
+  {
+    icon: MessagesSquare,
+    title: "Mensagem no site",
+    description:
+      "Conversa direta com a equipe: você escreve aqui e acompanha as respostas na mesma página.",
+    cta: "Abrir conversa",
+    href: "/fale-conosco",
+    external: false,
+    accent: "from-sky-500 to-sky-600",
   },
 ];
 
@@ -41,7 +52,7 @@ const MobileAppSection = () => (
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {channels.map((c, i) => (
             <div
               key={i}
@@ -52,14 +63,23 @@ const MobileAppSection = () => (
               </div>
               <h3 className="font-heading font-bold text-foreground text-lg mb-2">{c.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed flex-1">{c.description}</p>
-              <a
-                href={c.href}
-                target={c.external ? "_blank" : undefined}
-                rel={c.external ? "noreferrer" : undefined}
-                className="inline-block mt-5 bg-foreground text-background text-sm font-bold px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity text-center"
-              >
-                {c.cta} →
-              </a>
+              {c.external ? (
+                <a
+                  href={c.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block mt-5 bg-foreground text-background text-sm font-bold px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity text-center"
+                >
+                  {c.cta} →
+                </a>
+              ) : (
+                <Link
+                  to={c.href}
+                  className="inline-block mt-5 bg-foreground text-background text-sm font-bold px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity text-center"
+                >
+                  {c.cta} →
+                </Link>
+              )}
             </div>
           ))}
         </div>

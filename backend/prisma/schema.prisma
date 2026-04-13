@@ -39,8 +39,49 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orders        Order[]
-  savedProducts SavedProduct[]
+  orders               Order[]
+  savedProducts        SavedProduct[]
+  supportConversations SupportConversation[]
+}
+
+enum SupportConversationStatus {
+  OPEN
+  CLOSED
+}
+
+enum SupportMessageSender {
+  USER
+  STAFF
+}
+
+model SupportConversation {
+  id             String                    @id @default(cuid())
+  userId         String?
+  user           User?                     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName      String?
+  guestEmail     String?
+  /** Acesso para visitante sem login (URL / armazenamento local) */
+  visitorToken   String?                   @unique
+  status         SupportConversationStatus @default(OPEN)
+  lastMessageAt  DateTime                  @default(now())
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  messages       SupportMessage[]
+
+  @@index([userId, lastMessageAt])
+  @@index([status, lastMessageAt])
+}
+
+model SupportMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  conversation   SupportConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         SupportMessageSender
+  body           String               @db.Text
+  readByStaff    Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+
+  @@index([conversationId, createdAt])
 }
 
 model SavedProduct {
@@ -118,6 +159,8 @@ model Order {
   orderItemsJson     Json?
   cssbuyOrderId      String?      // ID do pedido no CSSBuy (para link direto)
   internalNotes      String?      // Notas internas (só admin)
+  /** URLs públicas (/uploads/order-warehouse/...) — fotos do produto recebidas no armazém (QC) */
+  warehousePhotosJson Json?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 

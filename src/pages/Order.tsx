@@ -34,7 +34,7 @@ const ADMIN_TOKEN_KEY = "compraschina-admin-token";
 const SIZE_LIKE =
   /^(M|L|XL|XXL|2XL|3XL|4XL|S|XS|均码|自由|Free|Large|Medium|Small|One\s*Size)$/i;
 const SIZE_NUM =
-  /^(3[4-9]|4[0-6])(\.5)?(码|号)?$|^\d{2,3}\s*(men|women|男|女)?$/i;
+  /^(2[5-9]|3[0-3])(\.5)?(码|号)?$|^(3[4-9]|4[0-8])(\.5)?(码|号)?$|^\d{2,3}\s*(men|women|男|女)?$/i;
 const SIZE_SPEC =
   /^C\d+\/\d+cm$|^J\d+\/\d+cm$|^M\d+m?\d*\/[\d-]+ code$|^M\d+\/[\d-]+ code$|^M\d+ code$/i;
 
@@ -51,7 +51,9 @@ const isSizeGroup = (name: string, values?: string[]) => {
     );
     if (allLookLikeSizes) return true;
   }
-  return /tamanho|size|尺码|尺寸|尺码选择/i.test(name);
+  return /tamanho|size|尺码|尺寸|尺码选择|鞋码|规格|内长|脚长|参考身高|身高/i.test(
+    name,
+  );
 };
 
 /** Grupo de nível de qualidade (não deve ser usado como galeria de imagens). */
@@ -218,7 +220,11 @@ const Order = () => {
         let optionGroups = Array.isArray(data.optionGroups)
           ? data.optionGroups
           : [];
-        const variants = data.variants ?? {};
+        let variants: {
+          color?: string[];
+          size?: string[];
+          colorImages?: string[];
+        } = { ...(data.variants ?? {}) };
         if (
           optionGroups.length === 0 &&
           (variants.color?.length || variants.size?.length)
@@ -239,6 +245,18 @@ const Order = () => {
               images: [],
             });
           }
+        }
+        const sizeGroupDetected = optionGroups.find((g) =>
+          isSizeGroup(g.name, g.values),
+        );
+        if (
+          sizeGroupDetected?.values?.length &&
+          !variants.size?.length
+        ) {
+          variants = {
+            ...variants,
+            size: [...sizeGroupDetected.values],
+          };
         }
         setProductPreview({
           title: data.title ?? null,

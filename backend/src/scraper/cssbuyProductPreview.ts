@@ -1078,9 +1078,11 @@ export async function getCssbuyProductPreview(
         .replace(/\s*(men|women|男|女|male|female)$/i, "")
         .trim();
       return (
+        /^(2[5-9]|3[0-3])(\.5)?(\s*(men|women|男|女|male|female))?$/i.test(t) ||
         /^(3[4-9]|4[0-8])(\.5)?(\s*(men|women|男|女))?$/i.test(t) ||
         /^\d{2,3}\s*(men|women|男|女|male|female)$/i.test(t) ||
-        (baseNum !== t && /^(3[4-9]|4[0-8]|\d{2})$/.test(baseNum)) ||
+        (baseNum !== t &&
+          /^(2[5-9]|3[0-3]|3[4-9]|4[0-8]|\d{2})$/.test(baseNum)) ||
         /^[1-9][0-2]?$/.test(t) ||
         /^(M|L|XL|XXL|2XL|3XL|4XL|S|XS)$/i.test(t) ||
         /^(Large|Medium|Small|One\s*Size|Free\s*Size)$/i.test(t) ||
@@ -1219,6 +1221,9 @@ export async function getCssbuyProductPreview(
 
     const { bestPropsList, bestSkuProps, bestSkuList } =
       mergeFromApiResponses(capturedApiResponses);
+    /** Nome de grupo = tamanho (1688/CSSBuy: 尺码, 鞋码, 规格…) */
+    const SIZE_GROUP_NAME_RE =
+      /tamanho|size|尺码|尺寸|鞋码|规格|内长|脚长|选择尺码|尺码选择/i;
     const propsList = bestPropsList;
     const skuProps = bestSkuProps;
     const skuList = bestSkuList;
@@ -1293,7 +1298,7 @@ export async function getCssbuyProductPreview(
     })();
 
     const isSizeLabel = (label: string) =>
-      /^size|尺码|尺寸|tamanho|规格|shoe|鞋码|码选择|选择尺码|spec|lv|码|号|eu|eur|us\s*size|uk\s*size|cn$/i.test(
+      /^size|尺码|尺寸|tamanho|规格|shoe|鞋码|内长|脚长|码选择|选择尺码|spec|lv|码|号|eu|eur|us\s*size|uk\s*size|cn$/i.test(
         label.trim(),
       );
     const isColorLabel = (label: string) =>
@@ -1603,11 +1608,19 @@ export async function getCssbuyProductPreview(
     // Don't show "Tamanho" when we have color/model options and "sizes" are really option IDs (e.g. 10–40 for bags/cases)
     const allNumericSizes = (vals: string[]) =>
       vals.length > 0 && vals.every((v) => /^\d+$/.test(v.trim()));
-    const hasLowOptionIds = (vals: string[]) =>
-      vals.some((v) => {
-        const n = parseInt(v.trim(), 10);
-        return !Number.isNaN(n) && n >= 10 && n <= 34;
-      });
+    /** Só trata como IDs de estilo falsos (ex. bolsas) quando há muitos números ~10–25 seguidos — não calçados infantis 26+ nem adultos 35+. */
+    const hasLowOptionIds = (vals: string[]) => {
+      const nums = vals
+        .map((v) =>
+          parseInt(String(v).replace(/码|号|#/gi, "").trim(), 10),
+        )
+        .filter((n) => !Number.isNaN(n));
+      if (nums.length < 8) return false;
+      const max = Math.max(...nums);
+      const min = Math.min(...nums);
+      if (min < 10 || max > 26) return false;
+      return max - min <= 18;
+    };
     const tooManyNumericOptions = (vals: string[]) =>
       vals.length > 8 && allNumericSizes(vals);
     if (data.colorValues.length > 0 && data.sizeValues.length > 0) {
@@ -1955,10 +1968,10 @@ export async function getCssbuyProductPreview(
     // Estoque por (estilo, tamanho) para Weidian com dois grupos — a partir de skuList
     const styleGroupFromProps = optionGroupsFromPropsList.find(
       (g) =>
-        !isQualityGradeGroup(g.name) && !/tamanho|size|尺码|尺寸/i.test(g.name),
+        !isQualityGradeGroup(g.name) && !SIZE_GROUP_NAME_RE.test(g.name),
     );
     const sizeGroupFromProps = optionGroupsFromPropsList.find((g) =>
-      /tamanho|size|尺码|尺寸/i.test(g.name),
+      SIZE_GROUP_NAME_RE.test(g.name),
     );
     if (
       styleGroupFromProps &&
@@ -2042,7 +2055,7 @@ export async function getCssbuyProductPreview(
     ) {
       optionGroups = optionGroupsFromPropsList;
       const hasSizeGroup = optionGroups.some((g) =>
-        /tamanho|size|尺码|尺寸/i.test(g.name),
+        SIZE_GROUP_NAME_RE.test(g.name),
       );
       if (!hasSizeGroup && sizeGroup.values.length > 0)
         optionGroups = [...optionGroups, sizeGroup];
@@ -2063,7 +2076,7 @@ export async function getCssbuyProductPreview(
     } else if (optionGroupsFromPropsList.length > 0) {
       optionGroups = optionGroupsFromPropsList;
       const hasSizeGroup = optionGroups.some((g) =>
-        /tamanho|size|尺码|尺寸/i.test(g.name),
+        SIZE_GROUP_NAME_RE.test(g.name),
       );
       if (!hasSizeGroup && sizeGroup.values.length > 0)
         optionGroups = [...optionGroups, sizeGroup];
@@ -2075,7 +2088,7 @@ export async function getCssbuyProductPreview(
 
     // Always include Tamanho when we have sizes from API (e.g. 1688) even if the chosen source didn't have a size group
     const hasSizeInOptionGroups = optionGroups.some((g) =>
-      /tamanho|size|尺码|尺寸/i.test(g.name),
+      SIZE_GROUP_NAME_RE.test(g.name),
     );
     if (!hasSizeInOptionGroups && sizeGroup.values.length > 0)
       optionGroups = [...optionGroups, sizeGroup];
@@ -2107,14 +2120,14 @@ export async function getCssbuyProductPreview(
     // Separar tamanhos misturados no grupo de cor/estilo (ex.: 颜色 com M,L,XL,XXL) — só quando o grupo de tamanho estiver vazio
     // Não separar quando o grupo tem imagens: são variações de produto (relógios, bolsas) que devem ficar todas em 颜色
     const sizeGroupExisting = optionGroups.find((g) =>
-      /tamanho|size|尺码|尺寸/i.test(g.name),
+      SIZE_GROUP_NAME_RE.test(g.name),
     );
     const sizeGroupEmpty =
       !sizeGroupExisting || sizeGroupExisting.values.length === 0;
     if (sizeGroupEmpty) {
       for (const g of optionGroups) {
         if (isQualityGradeGroup(g.name)) continue;
-        if (/tamanho|size|尺码|尺寸/i.test(g.name)) continue;
+        if (SIZE_GROUP_NAME_RE.test(g.name)) continue;
         const hasProductImages = (g.images ?? []).some((url) => url && String(url).trim().length > 0);
         if (hasProductImages) continue;
         const sizeLikeIndices: number[] = [];
@@ -2149,11 +2162,12 @@ export async function getCssbuyProductPreview(
     }
 
     // Marcar explicitamente: cor/estilo = sempre imagens; tamanho/quality/fabric = sempre pills (depois do split para incluir Tamanho criado acima)
-    const isSizeGroupByName = (name: string) =>
-      /tamanho|size|尺码|尺寸|尺码选择/i.test(name);
+    const isSizeGroupByName = (name: string) => SIZE_GROUP_NAME_RE.test(name);
     const isColorOrStyleGroup = (name: string) =>
       /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo|ws|款式图)$/i.test(name.trim()) ||
-      (/cor|color|estilo|style|颜色|款式|modelo|model/i.test(name) && !/tamanho|size|尺码|尺寸|quality|品质/i.test(name));
+      (/cor|color|estilo|style|颜色|款式|modelo|model/i.test(name) &&
+        !SIZE_GROUP_NAME_RE.test(name) &&
+        !/quality|品质/i.test(name));
     for (const g of optionGroups) {
       if (isSizeGroupByName(g.name)) g.displayAsImages = false;
       else if (isQualityGradeGroup(g.name)) g.displayAsImages = false;
@@ -2241,7 +2255,7 @@ export async function getCssbuyProductPreview(
     const imageBasedGroup = optionGroups.find(
       (g) =>
         !isQualityGradeGroup(g.name) &&
-        !/tamanho|size|尺码|尺寸/i.test(g.name) &&
+        !SIZE_GROUP_NAME_RE.test(g.name) &&
         (g.images ?? []).some((url) => url && String(url).trim().length > 0),
     );
     const mainImages =
@@ -2257,6 +2271,16 @@ export async function getCssbuyProductPreview(
       ? imageBasedGroup.images
       : colorGroup.images;
 
+    const sizeGroupFromOptions = optionGroups.find((g) =>
+      SIZE_GROUP_NAME_RE.test(g.name),
+    );
+    const resolvedSizeValues =
+      sizeGroupFromOptions && sizeGroupFromOptions.values.length > 0
+        ? sizeGroupFromOptions.values
+        : sizeGroup.values.length > 0
+          ? sizeGroup.values
+          : [];
+
     return {
       title: data.title || null,
       titlePt: normalizedPt || titlePt || data.title || null,
@@ -2265,7 +2289,7 @@ export async function getCssbuyProductPreview(
         mainImages.length > 0 ? mainImages : (data.images || []).slice(0, 12),
       variants: {
         color: variantColorValues.length ? variantColorValues : undefined,
-        size: sizeGroup.values.length ? sizeGroup.values : undefined,
+        size: resolvedSizeValues.length ? resolvedSizeValues : undefined,
         colorImages: variantColorImages.length ? variantColorImages : undefined,
       },
       optionGroups,

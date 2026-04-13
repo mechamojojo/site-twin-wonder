@@ -22,6 +22,7 @@ import {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendOrderStatusEmail,
+  sendWarehousePhotosEmail,
 } from "./email";
 import { verifyTurnstile } from "./turnstile";
 import {
@@ -33,7 +34,13 @@ import {
 } from "./auth";
 import cors from "cors";
 import { json } from "body-parser";
-import { PrismaClient, OrderStatus, ShippingMethod } from "@prisma/client";
+import {
+  PrismaClient,
+  OrderStatus,
+  ShippingMethod,
+  SupportConversationStatus,
+  SupportMessageSender,
+} from "@prisma/client";
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
 import { resyncCatalogPrices } from "./resyncCatalogPrices";
 import { MAX_ORDER_LINE_QUANTITY } from "./quantityLimits";
@@ -93,6 +100,53 @@ const uploadCatalogImageMulter = multer({
 
 app.use("/uploads/catalog", express.static(CATALOG_UPLOAD_DIR));
 
+const ORDER_WAREHOUSE_DIR = path.join(process.cwd(), "uploads", "order-warehouse");
+fs.mkdirSync(ORDER_WAREHOUSE_DIR, { recursive: true });
+
+const orderWarehouseStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, ORDER_WAREHOUSE_DIR),
+  filename: (_req, file, cb) => {
+    let ext = path.extname(file.originalname || "").toLowerCase();
+    if (![".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(ext)) ext = ".jpg";
+    cb(
+      null,
+      `wh-${Date.now()}-${crypto.randomBytes(6).toString("hex")}${ext}`,
+    );
+  },
+});
+
+const uploadOrderWarehouseMulter = multer({
+  storage: orderWarehouseStorage,
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\/(jpeg|pjpeg|png|webp|gif)$/i.test(file.mimetype);
+    if (ok) cb(null, true);
+    else cb(new Error("Formato inválido. Use JPG, PNG, WebP ou GIF."));
+  },
+});
+
+app.use("/uploads/order-warehouse", express.static(ORDER_WAREHOUSE_DIR));
+
+const MAX_WAREHOUSE_PHOTOS_PER_ORDER = 24;
+
+function parseWarehousePhotosJson(val: unknown): string[] {
+  if (val == null) return [];
+  if (!Array.isArray(val)) return [];
+  return val.filter(
+    (x): x is string =>
+      typeof x === "string" &&
+      x.startsWith("/uploads/order-warehouse/") &&
+      !x.includes(".."),
+  );
+}
+
+function isValidWarehousePhotoPath(p: string): boolean {
+  return (
+    typeof p === "string" &&
+    /^\/uploads\/order-warehouse\/[a-zA-Z0-9._-]+$/.test(p)
+  );
+}
+
 // Rate limit para rotas de auth (cadastro, login, esqueci senha)
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -100,6 +154,64 @@ const authRateLimiter = rateLimit({
   message: { error: "Muitas tentativas. Tente novamente em alguns minutos." },
   standardHeaders: true,
 });
+
+const supportPostRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: "Muitas mensagens. Tente novamente em alguns minutos." },
+  standardHeaders: true,
+});
+
+const SUPPORT_MSG_MAX_LEN = 4000;
+
+function trimSupportText(v: unknown, max: number): string {
+  if (typeof v !== "string") return "";
+  return v.trim().slice(0, max);
+}
+
+function isSimpleEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function supportVisitorTokenFromReq(
+  req: express.Request,
+  body: { visitorToken?: unknown },
+): string | undefined {
+  const q = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  if (q) return q.slice(0, 128);
+  const b =
+    typeof body.visitorToken === "string" ? body.visitorToken.trim() : "";
+  if (b) return b.slice(0, 128);
+  return undefined;
+}
+
+async function assertUserSupportAccess(
+  conversationId: string,
+  userId: string | undefined,
+  visitorToken: string | undefined,
+) {
+  const conv = await prisma.supportConversation.findUnique({
+    where: { id: conversationId },
+  });
+  if (!conv) {
+    return {
+      ok: false as const,
+      status: 404,
+      error: "Conversa não encontrada.",
+    };
+  }
+  if (userId && conv.userId === userId) {
+    return { ok: true as const, conv };
+  }
+  if (conv.visitorToken && visitorToken && conv.visitorToken === visitorToken) {
+    return { ok: true as const, conv };
+  }
+  return {
+    ok: false as const,
+    status: 403,
+    error: "Acesso negado a esta conversa.",
+  };
+}
 
 const PORT = process.env.PORT || 4000;
 const isProduction = process.env.NODE_ENV === "production";
@@ -223,24 +335,20 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
     if (!name?.trim())
       return res.status(400).json({ error: "Nome obrigatório" });
     if (!termsAccepted)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Você precisa aceitar os Termos de Serviço e a Política de Privacidade",
-        });
+      return res.status(400).json({
+        error:
+          "Você precisa aceitar os Termos de Serviço e a Política de Privacidade",
+      });
 
     const turnstileOk = await verifyTurnstile(
       turnstileToken,
       req.ip || req.socket?.remoteAddress,
     );
     if (!turnstileOk)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Verificação de segurança falhou. Atualize a página e tente novamente.",
-        });
+      return res.status(400).json({
+        error:
+          "Verificação de segurança falhou. Atualize a página e tente novamente.",
+      });
 
     const existing = await prisma.user.findUnique({
       where: { email: email.trim().toLowerCase() },
@@ -375,12 +483,10 @@ app.post("/api/auth/forgot-password", authRateLimiter, async (req, res) => {
       req.ip || req.socket?.remoteAddress,
     );
     if (!turnstileOk)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Verificação de segurança falhou. Atualize a página e tente novamente.",
-        });
+      return res.status(400).json({
+        error:
+          "Verificação de segurança falhou. Atualize a página e tente novamente.",
+      });
 
     const user = await prisma.user.findUnique({
       where: { email: email.trim().toLowerCase() },
@@ -424,12 +530,10 @@ app.post("/api/auth/reset-password", async (req, res) => {
       },
     });
     if (!user)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Link inválido ou expirado. Solicite uma nova redefinição de senha.",
-        });
+      return res.status(400).json({
+        error:
+          "Link inválido ou expirado. Solicite uma nova redefinição de senha.",
+      });
 
     await prisma.user.update({
       where: { id: user.id },
@@ -460,12 +564,10 @@ app.post("/api/auth/verify-email", async (req, res) => {
       },
     });
     if (!user)
-      return res
-        .status(400)
-        .json({
-          error:
-            "Link inválido ou expirado. Solicite um novo e-mail de confirmação.",
-        });
+      return res.status(400).json({
+        error:
+          "Link inválido ou expirado. Solicite um novo e-mail de confirmação.",
+      });
 
     await prisma.user.update({
       where: { id: user.id },
@@ -796,7 +898,12 @@ app.get("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   try {
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },
-      include: { quote: true, payment: true, shipment: true },
+      include: {
+        quote: true,
+        payment: true,
+        shipment: true,
+        user: { select: { email: true, name: true } },
+      },
     });
     if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
     res.json(order);
@@ -877,6 +984,163 @@ app.patch("/api/admin/orders/:id/shipment", requireAdmin, async (req, res) => {
       .json({ error: safeErrorMessage(err, "Erro ao atualizar envio") });
   }
 });
+
+// Admin: upload de fotos do produto no armazém (QC)
+app.post(
+  "/api/admin/orders/:id/warehouse-photos",
+  requireAdmin,
+  (req, res, next) => {
+    uploadOrderWarehouseMulter.array("photos", 12)(req, res, (err: unknown) => {
+      if (err instanceof multer.MulterError) {
+        return res.status(400).json({ error: err.message });
+      }
+      if (err instanceof Error) {
+        return res.status(400).json({ error: err.message });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[] | undefined;
+      if (!files?.length) {
+        return res
+          .status(400)
+          .json({ error: "Envie ao menos uma imagem (campo photos)." });
+      }
+      const { id } = req.params;
+      const order = await prisma.order.findUnique({ where: { id } });
+      if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+      const existing = parseWarehousePhotosJson(order.warehousePhotosJson);
+      const room = MAX_WAREHOUSE_PHOTOS_PER_ORDER - existing.length;
+      if (room <= 0) {
+        return res.status(400).json({
+          error: `Limite de ${MAX_WAREHOUSE_PHOTOS_PER_ORDER} fotos por pedido.`,
+        });
+      }
+      const slice = files.slice(0, room);
+      const newPaths = slice.map(
+        (f) => `/uploads/order-warehouse/${f.filename}`,
+      );
+      const nextArr = [...existing, ...newPaths];
+      const updated = await prisma.order.update({
+        where: { id },
+        data: { warehousePhotosJson: nextArr },
+        include: {
+          quote: true,
+          payment: true,
+          shipment: true,
+          user: { select: { email: true, name: true } },
+        },
+      });
+      res.json(updated);
+    } catch (err) {
+      console.error("Admin warehouse photos upload:", err);
+      res.status(500).json({ error: "Erro ao salvar fotos" });
+    }
+  },
+);
+
+// Admin: remover uma foto do armazém
+app.post(
+  "/api/admin/orders/:id/warehouse-photos/remove",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const pathStr =
+        typeof req.body?.path === "string" ? req.body.path.trim() : "";
+      if (!isValidWarehousePhotoPath(pathStr)) {
+        return res.status(400).json({ error: "Path inválido" });
+      }
+      const { id } = req.params;
+      const order = await prisma.order.findUnique({ where: { id } });
+      if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+      const existing = parseWarehousePhotosJson(order.warehousePhotosJson);
+      if (!existing.includes(pathStr)) {
+        return res
+          .status(404)
+          .json({ error: "Foto não encontrada neste pedido" });
+      }
+      const nextArr = existing.filter((p) => p !== pathStr);
+      const fn = path.basename(pathStr);
+      const abs = path.join(ORDER_WAREHOUSE_DIR, fn);
+      if (abs.startsWith(ORDER_WAREHOUSE_DIR) && fs.existsSync(abs)) {
+        try {
+          fs.unlinkSync(abs);
+        } catch (e) {
+          console.warn("warehouse photo unlink:", e);
+        }
+      }
+      const updated = await prisma.order.update({
+        where: { id },
+        data: { warehousePhotosJson: nextArr },
+        include: {
+          quote: true,
+          payment: true,
+          shipment: true,
+          user: { select: { email: true, name: true } },
+        },
+      });
+      res.json(updated);
+    } catch (err) {
+      console.error("Admin warehouse photo remove:", err);
+      res.status(500).json({ error: "Erro ao remover foto" });
+    }
+  },
+);
+
+// Admin: enviar e-mail ao cliente com links das fotos do armazém
+app.post(
+  "/api/admin/orders/:id/email-warehouse-photos",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: { user: { select: { email: true, name: true } } },
+      });
+      if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+      const photos = parseWarehousePhotosJson(order.warehousePhotosJson);
+      if (photos.length === 0) {
+        return res
+          .status(400)
+          .json({ error: "Adicione fotos do armazém antes de enviar o e-mail." });
+      }
+      const email =
+        order.customerEmail?.trim() || order.user?.email?.trim() || "";
+      if (!email) {
+        return res
+          .status(400)
+          .json({ error: "Cliente sem e-mail (pedido ou conta)." });
+      }
+      const name =
+        order.customerName?.trim() || order.user?.name?.trim() || "Cliente";
+      const customNote =
+        typeof req.body?.message === "string"
+          ? req.body.message.trim().slice(0, 1000)
+          : "";
+      const ok = await sendWarehousePhotosEmail(
+        email,
+        name,
+        order.id,
+        order.productTitle || order.productDescription,
+        photos,
+        customNote || undefined,
+      );
+      if (!ok) {
+        return res.status(500).json({
+          error:
+            "Não foi possível enviar o e-mail. Verifique RESEND_API_KEY e API_PUBLIC_URL (URL pública do backend para as imagens).",
+        });
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("Admin email warehouse photos:", err);
+      res.status(500).json({ error: "Erro ao enviar e-mail" });
+    }
+  },
+);
 
 // Admin: atualizar pedido (status, cssbuyOrderId, internalNotes, títulos) (protegido)
 app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
@@ -1022,21 +1286,20 @@ async function createAdminManualOrder(
   userRow: NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>>,
   body: Record<string, unknown>,
 ) {
-  const originalUrl = typeof body.originalUrl === "string" ? body.originalUrl.trim() : "";
+  const originalUrl =
+    typeof body.originalUrl === "string" ? body.originalUrl.trim() : "";
   const productDescription =
     typeof body.productDescription === "string"
       ? body.productDescription.trim()
       : "";
   if (!originalUrl || !productDescription) {
-    return { error: "originalUrl e productDescription são obrigatórios" as const };
+    return {
+      error: "originalUrl e productDescription são obrigatórios" as const,
+    };
   }
 
   const qty = Number(body.quantity);
-  if (
-    !Number.isFinite(qty) ||
-    qty < 1 ||
-    qty > MAX_ORDER_LINE_QUANTITY
-  ) {
+  if (!Number.isFinite(qty) || qty < 1 || qty > MAX_ORDER_LINE_QUANTITY) {
     return {
       error: `quantity inválida (1–${MAX_ORDER_LINE_QUANTITY})` as const,
     };
@@ -1052,7 +1315,10 @@ async function createAdminManualOrder(
 
   const ship = orderShippingDefaultsFromUser(userRow, body);
   if (!ship.cep || ship.cep.length !== 8) {
-    return { error: "CEP do pedido inválido (8 dígitos). Preencha no pedido ou no perfil do cliente." as const };
+    return {
+      error:
+        "CEP do pedido inválido (8 dígitos). Preencha no pedido ou no perfil do cliente." as const,
+    };
   }
 
   let createdAt: Date | undefined;
@@ -1157,7 +1423,9 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
       typeof u.email === "string" ? u.email.trim().toLowerCase() : "";
     const name = typeof u.name === "string" ? u.name.trim() : "";
     if (!email || !name) {
-      return res.status(400).json({ error: "E-mail e nome do cliente são obrigatórios" });
+      return res
+        .status(400)
+        .json({ error: "E-mail e nome do cliente são obrigatórios" });
     }
 
     let password =
@@ -1182,8 +1450,7 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
     if (!wa) {
       return res.status(400).json({ error: "WhatsApp obrigatório" });
     }
-    const cepClean =
-      typeof u.cep === "string" ? u.cep.replace(/\D/g, "") : "";
+    const cepClean = typeof u.cep === "string" ? u.cep.replace(/\D/g, "") : "";
     if (cepClean.length !== 8) {
       return res.status(400).json({ error: "CEP inválido (8 dígitos)" });
     }
@@ -1203,7 +1470,9 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
       typeof u.addressState !== "string" ||
       !u.addressState.trim()
     ) {
-      return res.status(400).json({ error: "Cidade e estado são obrigatórios" });
+      return res
+        .status(400)
+        .json({ error: "Cidade e estado são obrigatórios" });
     }
 
     if (ordersIn.length === 0) {
@@ -1223,52 +1492,52 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
 
     const result = await prisma.$transaction(
       async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email,
-          password: hashPassword(password),
-          name,
-          emailVerified: true,
-          emailVerificationToken: null,
-          emailVerificationTokenExpires: null,
-          termsAcceptedAt: new Date(),
-          customerCpf: cpf,
-          customerWhatsapp: wa,
-          cep: cepClean,
-          addressStreet: u.addressStreet.trim(),
-          addressNumber: u.addressNumber.trim(),
-          addressComplement:
-            typeof u.addressComplement === "string"
-              ? u.addressComplement.trim() || null
-              : null,
-          addressNeighborhood:
-            typeof u.addressNeighborhood === "string"
-              ? u.addressNeighborhood.trim() || null
-              : null,
-          addressCity: u.addressCity.trim(),
-          addressState: u.addressState.trim(),
-        },
-      });
+        const user = await tx.user.create({
+          data: {
+            email,
+            password: hashPassword(password),
+            name,
+            emailVerified: true,
+            emailVerificationToken: null,
+            emailVerificationTokenExpires: null,
+            termsAcceptedAt: new Date(),
+            customerCpf: cpf,
+            customerWhatsapp: wa,
+            cep: cepClean,
+            addressStreet: u.addressStreet.trim(),
+            addressNumber: u.addressNumber.trim(),
+            addressComplement:
+              typeof u.addressComplement === "string"
+                ? u.addressComplement.trim() || null
+                : null,
+            addressNeighborhood:
+              typeof u.addressNeighborhood === "string"
+                ? u.addressNeighborhood.trim() || null
+                : null,
+            addressCity: u.addressCity.trim(),
+            addressState: u.addressState.trim(),
+          },
+        });
 
-      const orderIds: string[] = [];
-      for (const raw of ordersIn) {
-        if (!raw || typeof raw !== "object") continue;
-        const row = await createAdminManualOrder(
-          tx,
-          user.id,
-          user,
-          raw as Record<string, unknown>,
-        );
-        if ("error" in row) {
-          throw new Error(row.error);
+        const orderIds: string[] = [];
+        for (const raw of ordersIn) {
+          if (!raw || typeof raw !== "object") continue;
+          const row = await createAdminManualOrder(
+            tx,
+            user.id,
+            user,
+            raw as Record<string, unknown>,
+          );
+          if ("error" in row) {
+            throw new Error(row.error);
+          }
+          orderIds.push(row.order.id);
         }
-        orderIds.push(row.order.id);
-      }
-      if (orderIds.length === 0) {
-        throw new Error("Nenhum pedido válido em orders");
-      }
-      return { user, orderIds };
-    },
+        if (orderIds.length === 0) {
+          throw new Error("Nenhum pedido válido em orders");
+        }
+        return { user, orderIds };
+      },
       { maxWait: 15_000, timeout: 30_000 },
     );
 
@@ -1310,7 +1579,9 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
     console.error("Admin bootstrap user:", err);
     res
       .status(500)
-      .json({ error: safeErrorMessage(err, "Erro ao criar cliente e pedidos") });
+      .json({
+        error: safeErrorMessage(err, "Erro ao criar cliente e pedidos"),
+      });
   }
 });
 
@@ -1479,9 +1750,9 @@ app.get("/api/products/most-saved", async (req, res) => {
         (
           x,
         ): x is {
-          product: ReturnType<typeof serializeCatalogProduct<
-            (typeof products)[number]
-          >>;
+          product: ReturnType<
+            typeof serializeCatalogProduct<(typeof products)[number]>
+          >;
           saveCount: number;
         } => x !== null,
       );
@@ -1627,14 +1898,15 @@ async function ensureProductsFromOrderSnapshot(orderItemsJson: unknown) {
     const title = typeof row.title === "string" ? row.title : null;
     const image = typeof row.image === "string" ? row.image : null;
     const qty = typeof row.quantity === "number" ? row.quantity : 1;
-    const desc =
-      [titlePt, title].filter(Boolean).join(" — ") || "Produto";
+    const desc = [titlePt, title].filter(Boolean).join(" — ") || "Produto";
     try {
       await ensureProductFromOrder({
         originalUrl: url,
         productTitle: titlePt || title,
-        productDescription:
-          `${desc}${qty > 1 ? ` ×${qty}` : ""}`.slice(0, 2000),
+        productDescription: `${desc}${qty > 1 ? ` ×${qty}` : ""}`.slice(
+          0,
+          2000,
+        ),
         productImage: image,
       });
     } catch (err) {
@@ -1761,7 +2033,9 @@ app.post(
     if (!f?.filename) {
       return res
         .status(400)
-        .json({ error: "Envie uma imagem (campo image). JPG, PNG, WebP ou GIF." });
+        .json({
+          error: "Envie uma imagem (campo image). JPG, PNG, WebP ou GIF.",
+        });
     }
     res.json({ path: `/uploads/catalog/${f.filename}` });
   },
@@ -1827,11 +2101,9 @@ app.post("/api/admin/products/reorder", requireAdmin, async (req, res) => {
   try {
     const order = req.body?.order;
     if (!Array.isArray(order) || order.length === 0) {
-      return res
-        .status(400)
-        .json({
-          error: "Envie { order: string[] } com os ids na ordem desejada",
-        });
+      return res.status(400).json({
+        error: "Envie { order: string[] } com os ids na ordem desejada",
+      });
     }
     const ids = order
       .filter((id: unknown) => id != null && String(id).length > 0)
@@ -1978,7 +2250,7 @@ app.post(
     if (!Array.isArray(urls) || urls.length === 0) {
       return res
         .status(400)
-        .json({ error: "Envie { urls: [\"https://...\", ...] }" });
+        .json({ error: 'Envie { urls: ["https://...", ...] }' });
     }
 
     const MAX_URLS = 200;
@@ -2013,7 +2285,9 @@ app.post(
         where: { originalUrl: url },
       });
       if (existing) {
-        console.log(`[bulk-import-urls] Já existe (slug=${existing.slug}), pulando.`);
+        console.log(
+          `[bulk-import-urls] Já existe (slug=${existing.slug}), pulando.`,
+        );
         skipped++;
         continue;
       }
@@ -2021,7 +2295,9 @@ app.post(
       try {
         const preview = await getProductPreview(url);
         if (!preview) {
-          console.warn(`[bulk-import-urls] Scrape retornou null para: ${url.slice(0, 80)}`);
+          console.warn(
+            `[bulk-import-urls] Scrape retornou null para: ${url.slice(0, 80)}`,
+          );
           failed++;
           errors.push({ url, reason: "Scrape não retornou dados" });
           continue;
@@ -2068,12 +2344,16 @@ app.post(
           },
         });
 
-        console.log(`[bulk-import-urls] ✓ Importado: "${rawTitle.slice(0, 60)}" (slug=${slug})`);
+        console.log(
+          `[bulk-import-urls] ✓ Importado: "${rawTitle.slice(0, 60)}" (slug=${slug})`,
+        );
         imported++;
       } catch (err) {
-        const reason =
-          err instanceof Error ? err.message : String(err);
-        console.error(`[bulk-import-urls] ✗ Erro em ${url.slice(0, 80)}:`, reason);
+        const reason = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[bulk-import-urls] ✗ Erro em ${url.slice(0, 80)}:`,
+          reason,
+        );
         failed++;
         errors.push({ url, reason });
       }
@@ -2261,10 +2541,7 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         ? bodyCheckoutGroupId.trim().slice(0, 120)
         : null;
 
-    if (
-      bodyOrderItemsJson != null &&
-      !Array.isArray(bodyOrderItemsJson)
-    ) {
+    if (bodyOrderItemsJson != null && !Array.isArray(bodyOrderItemsJson)) {
       return res
         .status(400)
         .json({ error: "orderItemsJson deve ser um array quando enviado" });
@@ -2284,10 +2561,7 @@ app.post("/api/orders", optionalUser, async (req, res) => {
             sumLineProducts += v;
         }
       }
-      if (
-        sumLineProducts > 0 &&
-        totalBrlIncoming + 0.02 < sumLineProducts
-      ) {
+      if (sumLineProducts > 0 && totalBrlIncoming + 0.02 < sumLineProducts) {
         return res.status(400).json({
           error:
             "Total menor que a soma dos produtos (dados inválidos). Atualize o site e tente novamente.",
@@ -2321,9 +2595,7 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         addressCity: addressCity ?? null,
         addressState: addressState ?? null,
         checkoutGroupId,
-        ...(orderItemsJson !== undefined
-          ? { orderItemsJson }
-          : {}),
+        ...(orderItemsJson !== undefined ? { orderItemsJson } : {}),
       },
     });
 
@@ -2446,18 +2718,15 @@ app.get("/api/recent-purchases", async (_req, res) => {
 
     // Mesmo produto em vários pedidos: um só card. Quem foi salvo por último no admin
     // (updatedAt) vence — aí o título editado em "Nomes na loja" aparece.
-    const byNormKey = new Map<
-      string,
-      (typeof orders)[number]
-    >();
+    const byNormKey = new Map<string, (typeof orders)[number]>();
     for (const o of orders) {
       const key = normalizeProductPreviewUrlKey(o.originalUrl);
       const prev = byNormKey.get(key);
       if (!prev || o.updatedAt > prev.updatedAt) byNormKey.set(key, o);
     }
-    const uniqueOrders = [...byNormKey.values()].sort(
-      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
-    ).slice(0, 24);
+    const uniqueOrders = [...byNormKey.values()]
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, 24);
 
     const urlCandidates = new Set<string>();
     for (const o of uniqueOrders) {
@@ -2480,10 +2749,7 @@ app.get("/api/recent-purchases", async (_req, res) => {
       (typeof productsInCatalog)[number]
     >();
     for (const p of productsInCatalog) {
-      catalogByNormKey.set(
-        normalizeProductPreviewUrlKey(p.originalUrl),
-        p,
-      );
+      catalogByNormKey.set(normalizeProductPreviewUrlKey(p.originalUrl), p);
     }
 
     const items = uniqueOrders.map((o) => {
@@ -2662,19 +2928,15 @@ app.post("/api/admin/product-preview/save", requireAdmin, async (req, res) => {
     const { url: rawUrl, data } = req.body as { url?: string; data?: unknown };
     const url = rawUrl && typeof rawUrl === "string" ? rawUrl.trim() : "";
     if (!url || !url.startsWith("http")) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Body deve conter 'url' (URL do produto) e 'data' (objeto do preview).",
-        });
+      return res.status(400).json({
+        error:
+          "Body deve conter 'url' (URL do produto) e 'data' (objeto do preview).",
+      });
     }
     if (!data || typeof data !== "object") {
-      return res
-        .status(400)
-        .json({
-          error: "Body deve conter 'data' (objeto do preview do produto).",
-        });
+      return res.status(400).json({
+        error: "Body deve conter 'data' (objeto do preview do produto).",
+      });
     }
     const urlKey = normalizeProductPreviewUrlKey(url);
     await prisma.productPreviewSnapshot.upsert({
@@ -2852,11 +3114,9 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
   try {
     const accessToken = process.env.MP_ACCESS_TOKEN;
     if (!accessToken) {
-      return res
-        .status(500)
-        .json({
-          error: "Mercado Pago não configurado. Defina MP_ACCESS_TOKEN no .env",
-        });
+      return res.status(500).json({
+        error: "Mercado Pago não configurado. Defina MP_ACCESS_TOKEN no .env",
+      });
     }
 
     const order = await prisma.order.findUnique({
@@ -2878,11 +3138,9 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
     }
 
     if (!order.quote) {
-      return res
-        .status(400)
-        .json({
-          error: "Cotação ainda não disponível. Aguarde nosso contato.",
-        });
+      return res.status(400).json({
+        error: "Cotação ainda não disponível. Aguarde nosso contato.",
+      });
     }
 
     if (order.payment?.status === "PAGO") {
@@ -2914,12 +3172,9 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
 
     const isPix = payment_method_id?.toLowerCase() === "pix";
     if (!isPix && !token) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Token do cartão é obrigatório. Use o formulário de pagamento.",
-        });
+      return res.status(400).json({
+        error: "Token do cartão é obrigatório. Use o formulário de pagamento.",
+      });
     }
 
     const { createPayment } = await import("./mercadopago");
@@ -3027,6 +3282,401 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
     });
   }
 });
+
+// --- Suporte: conversas site ↔ equipe ---
+app.get("/api/support/conversations", requireUser, async (req, res) => {
+  try {
+    const userId = (req as express.Request & { userId: string }).userId;
+    const rows = await prisma.supportConversation.findMany({
+      where: { userId },
+      orderBy: { lastMessageAt: "desc" },
+      take: 50,
+      include: {
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+    res.json({
+      conversations: rows.map((c) => ({
+        id: c.id,
+        status: c.status,
+        lastMessageAt: c.lastMessageAt.toISOString(),
+        lastPreview:
+          c.messages[0]?.body.slice(0, 120) +
+          (c.messages[0] && c.messages[0].body.length > 120 ? "…" : ""),
+      })),
+    });
+  } catch (err) {
+    console.error("[support list]", err);
+    res.status(500).json({ error: "Erro ao listar conversas." });
+  }
+});
+
+app.post(
+  "/api/support/conversations",
+  supportPostRateLimiter,
+  optionalUser,
+  async (req, res) => {
+    try {
+      const userId = (req as express.Request & { userId?: string }).userId;
+      const rawBody = req.body as {
+        name?: unknown;
+        email?: unknown;
+        message?: unknown;
+      };
+      const message = trimSupportText(rawBody.message, SUPPORT_MSG_MAX_LEN);
+      if (!message) {
+        return res.status(400).json({ error: "Escreva uma mensagem." });
+      }
+
+      let guestName = trimStr(rawBody.name, 120);
+      let guestEmail = trimStr(rawBody.email, 200).toLowerCase();
+
+      if (userId) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true, email: true },
+        });
+        if (!user) {
+          return res.status(401).json({ error: "Sessão inválida." });
+        }
+        guestName = user.name;
+        guestEmail = user.email;
+      } else {
+        if (!guestName || !guestEmail) {
+          return res.status(400).json({
+            error: "Informe nome e e-mail para iniciar a conversa.",
+          });
+        }
+        if (!isSimpleEmail(guestEmail)) {
+          return res.status(400).json({ error: "E-mail inválido." });
+        }
+      }
+
+      const visitorToken = userId
+        ? null
+        : crypto.randomBytes(24).toString("hex");
+
+      const conv = await prisma.supportConversation.create({
+        data: {
+          userId: userId ?? null,
+          guestName,
+          guestEmail,
+          visitorToken,
+          lastMessageAt: new Date(),
+          messages: {
+            create: {
+              sender: SupportMessageSender.USER,
+              body: message,
+              readByStaff: false,
+            },
+          },
+        },
+      });
+
+      const siteBase = (process.env.SITE_URL || "https://compraschina.com.br")
+        .replace(/\/$/, "");
+      const adminInbox = `${siteBase}/admin/conversas`;
+      sendTelegram(
+        "💬 Nova conversa no site\n" +
+          guestName +
+          " <" +
+          guestEmail +
+          ">\n" +
+          message.slice(0, 280) +
+          (message.length > 280 ? "…" : "") +
+          "\n\n" +
+          adminInbox,
+      ).catch(() => {});
+
+      res.json({
+        id: conv.id,
+        visitorToken: conv.visitorToken,
+        status: conv.status,
+      });
+    } catch (err) {
+      console.error("[support create]", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      const hint = /does not exist|migrate|SupportConversation/i.test(msg)
+        ? " Execute prisma migrate deploy no banco."
+        : "";
+      res.status(500).json({ error: `Erro ao abrir conversa.${hint}` });
+    }
+  },
+);
+
+function trimStr(v: unknown, max: number): string {
+  if (typeof v !== "string") return "";
+  return v.trim().slice(0, max);
+}
+
+app.get(
+  "/api/support/conversations/:id",
+  optionalUser,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = (req as express.Request & { userId?: string }).userId;
+      const visitorToken = supportVisitorTokenFromReq(req, {});
+      const access = await assertUserSupportAccess(id, userId, visitorToken);
+      if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+      }
+      const messages = await prisma.supportMessage.findMany({
+        where: { conversationId: id },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          sender: true,
+          body: true,
+          createdAt: true,
+        },
+      });
+      res.json({
+        id: access.conv.id,
+        status: access.conv.status,
+        guestName: access.conv.guestName,
+        guestEmail: access.conv.guestEmail,
+        messages: messages.map((m) => ({
+          id: m.id,
+          sender: m.sender,
+          body: m.body,
+          createdAt: m.createdAt.toISOString(),
+        })),
+      });
+    } catch (err) {
+      console.error("[support get]", err);
+      res.status(500).json({ error: "Erro ao carregar conversa." });
+    }
+  },
+);
+
+app.post(
+  "/api/support/conversations/:id/messages",
+  supportPostRateLimiter,
+  optionalUser,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = (req as express.Request & { userId?: string }).userId;
+      const raw = req.body as { body?: unknown; visitorToken?: unknown };
+      const text = trimSupportText(raw.body, SUPPORT_MSG_MAX_LEN);
+      if (!text) {
+        return res.status(400).json({ error: "Escreva uma mensagem." });
+      }
+      const visitorToken = supportVisitorTokenFromReq(req, raw);
+      const access = await assertUserSupportAccess(id, userId, visitorToken);
+      if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+      }
+
+      const now = new Date();
+      await prisma.$transaction([
+        prisma.supportMessage.create({
+          data: {
+            conversationId: id,
+            sender: SupportMessageSender.USER,
+            body: text,
+            readByStaff: false,
+          },
+        }),
+        prisma.supportConversation.update({
+          where: { id },
+          data: {
+            lastMessageAt: now,
+            status: SupportConversationStatus.OPEN,
+          },
+        }),
+      ]);
+
+      const siteBase = (process.env.SITE_URL || "https://compraschina.com.br")
+        .replace(/\/$/, "");
+      sendTelegram(
+        "💬 Nova mensagem (suporte)\n" +
+          (access.conv.guestName || "Cliente") +
+          "\n" +
+          text.slice(0, 240) +
+          (text.length > 240 ? "…" : "") +
+          "\n\n" +
+          siteBase +
+          "/admin/conversas",
+      ).catch(() => {});
+
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[support message]", err);
+      res.status(500).json({ error: "Erro ao enviar mensagem." });
+    }
+  },
+);
+
+app.get("/api/admin/support/conversations", requireAdmin, async (_req, res) => {
+  try {
+    const list = await prisma.supportConversation.findMany({
+      orderBy: { lastMessageAt: "desc" },
+      take: 200,
+      include: {
+        user: { select: { name: true, email: true } },
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+    const ids = list.map((c) => c.id);
+    const unreadGroups =
+      ids.length === 0
+        ? []
+        : await prisma.supportMessage.groupBy({
+            by: ["conversationId"],
+            where: {
+              sender: SupportMessageSender.USER,
+              readByStaff: false,
+              conversationId: { in: ids },
+            },
+            _count: { _all: true },
+          });
+    const unreadMap = new Map(
+      unreadGroups.map((g) => [g.conversationId, g._count._all]),
+    );
+    res.json({
+      conversations: list.map((c) => ({
+        id: c.id,
+        status: c.status,
+        guestName: c.guestName,
+        guestEmail: c.guestEmail,
+        user: c.user,
+        lastMessageAt: c.lastMessageAt.toISOString(),
+        lastPreview:
+          (c.messages[0]?.body ?? "").slice(0, 140) +
+          (c.messages[0] && c.messages[0].body.length > 140 ? "…" : ""),
+        unreadFromUser: unreadMap.get(c.id) ?? 0,
+      })),
+    });
+  } catch (err) {
+    console.error("[admin support list]", err);
+    res.status(500).json({ error: "Erro ao listar conversas." });
+  }
+});
+
+app.get(
+  "/api/admin/support/conversations/:id",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const conv = await prisma.supportConversation.findUnique({
+        where: { id },
+        include: {
+          user: { select: { name: true, email: true } },
+        },
+      });
+      if (!conv) {
+        return res.status(404).json({ error: "Conversa não encontrada." });
+      }
+      await prisma.supportMessage.updateMany({
+        where: {
+          conversationId: id,
+          sender: SupportMessageSender.USER,
+          readByStaff: false,
+        },
+        data: { readByStaff: true },
+      });
+      const messages = await prisma.supportMessage.findMany({
+        where: { conversationId: id },
+        orderBy: { createdAt: "asc" },
+      });
+      res.json({
+        id: conv.id,
+        status: conv.status,
+        guestName: conv.guestName,
+        guestEmail: conv.guestEmail,
+        user: conv.user,
+        visitorToken: conv.visitorToken,
+        lastMessageAt: conv.lastMessageAt.toISOString(),
+        messages: messages.map((m) => ({
+          id: m.id,
+          sender: m.sender,
+          body: m.body,
+          createdAt: m.createdAt.toISOString(),
+        })),
+      });
+    } catch (err) {
+      console.error("[admin support get]", err);
+      res.status(500).json({ error: "Erro ao carregar conversa." });
+    }
+  },
+);
+
+app.post(
+  "/api/admin/support/conversations/:id/messages",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const raw = req.body as { body?: unknown };
+      const text = trimSupportText(raw.body, SUPPORT_MSG_MAX_LEN);
+      if (!text) {
+        return res.status(400).json({ error: "Escreva uma mensagem." });
+      }
+      const conv = await prisma.supportConversation.findUnique({
+        where: { id },
+      });
+      if (!conv) {
+        return res.status(404).json({ error: "Conversa não encontrada." });
+      }
+      const now = new Date();
+      await prisma.$transaction([
+        prisma.supportMessage.create({
+          data: {
+            conversationId: id,
+            sender: SupportMessageSender.STAFF,
+            body: text,
+            readByStaff: true,
+          },
+        }),
+        prisma.supportConversation.update({
+          where: { id },
+          data: { lastMessageAt: now },
+        }),
+      ]);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin support reply]", err);
+      res.status(500).json({ error: "Erro ao enviar resposta." });
+    }
+  },
+);
+
+app.patch(
+  "/api/admin/support/conversations/:id",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const raw = req.body as { status?: unknown };
+      const st = raw.status;
+      if (st !== "OPEN" && st !== "CLOSED") {
+        return res.status(400).json({ error: "status deve ser OPEN ou CLOSED." });
+      }
+      const conv = await prisma.supportConversation.findUnique({
+        where: { id },
+      });
+      if (!conv) {
+        return res.status(404).json({ error: "Conversa não encontrada." });
+      }
+      await prisma.supportConversation.update({
+        where: { id },
+        data: {
+          status:
+            st === "OPEN"
+              ? SupportConversationStatus.OPEN
+              : SupportConversationStatus.CLOSED,
+        },
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[admin support patch]", err);
+      res.status(500).json({ error: "Erro ao atualizar conversa." });
+    }
+  },
+);
 
 // Webhook Mercado Pago (PIX e pagamentos assíncronos)
 app.get("/api/webhooks/mercadopago", async (req, res) => {

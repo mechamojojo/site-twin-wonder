@@ -30,6 +30,8 @@ const Explorar = lazy(() => import("./pages/Explorar"));
 const Produto = lazy(() => import("./pages/Produto"));
 const ProdutosSalvos = lazy(() => import("./pages/ProdutosSalvos"));
 const MinhaConta = lazy(() => import("./pages/MinhaConta"));
+const FaleConosco = lazy(() => import("./pages/FaleConosco"));
+const AdminSuporte = lazy(() => import("./pages/AdminSuporte"));
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -76,10 +78,12 @@ const App = () => (
                   element={<AdminClientePedido />}
                 />
                 <Route path="/admin/pedido/:id" element={<AdminPedido />} />
+                <Route path="/admin/conversas" element={<AdminSuporte />} />
                 <Route path="/explorar" element={<Explorar />} />
                 <Route path="/produto/:slug" element={<Produto />} />
                 <Route path="/produtos-salvos" element={<ProdutosSalvos />} />
                 <Route path="/minha-conta" element={<MinhaConta />} />
+                <Route path="/fale-conosco" element={<FaleConosco />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

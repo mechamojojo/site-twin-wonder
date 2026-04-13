@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, publicUploadUrl } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
@@ -16,9 +16,20 @@ type OrderResponse = {
   customerEmail: string | null;
   customerWhatsapp: string | null;
   status: string;
+  warehousePhotosJson?: unknown;
   quote?: { totalBrl: string };
   shipment?: { trackingCode: string | null; carrier: string | null } | null;
 };
+
+function warehousePhotoPaths(raw: unknown): string[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw.filter(
+    (x): x is string =>
+      typeof x === "string" &&
+      x.startsWith("/uploads/order-warehouse/") &&
+      !x.includes(".."),
+  );
+}
 
 const isPaid = (status: string) => status === "PAGO";
 
@@ -121,6 +132,35 @@ const OrderConfirmed = () => {
                 )}
               </div>
             </div>
+
+            {warehousePhotoPaths(order.warehousePhotosJson).length > 0 && (
+              <div className="rounded-2xl border border-sky-200 bg-sky-50/40 dark:bg-sky-950/20 dark:border-sky-800 p-4 space-y-3">
+                <h2 className="font-heading font-semibold text-foreground text-base">
+                  Fotos do produto no armazém
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Imagens da conferência na China (qualidade antes do envio ao
+                  Brasil).
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {warehousePhotoPaths(order.warehousePhotosJson).map((src) => (
+                    <a
+                      key={src}
+                      href={publicUploadUrl(src)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-lg border border-border overflow-hidden bg-muted aspect-square"
+                    >
+                      <img
+                        src={publicUploadUrl(src)}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {order.shipment?.trackingCode && (
               <div className="rounded-2xl border border-green-200 bg-green-50/50 dark:bg-green-950/20 dark:border-green-800 p-4 space-y-2">

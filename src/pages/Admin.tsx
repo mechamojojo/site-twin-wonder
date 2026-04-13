@@ -1185,6 +1185,12 @@ const Admin = () => {
               >
                 Cliente + pedido
               </Link>
+              <Link
+                to="/admin/conversas"
+                className="text-xs font-semibold text-china-red hover:underline mr-1"
+              >
+                Conversas
+              </Link>
               <button
                 type="button"
                 onClick={handleResyncCatalogPrices}

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, publicUploadUrl } from "@/lib/api";
 import { SITE_URL } from "@/data/siteConfig";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,9 @@ import {
   Package,
   ShoppingBag,
   XCircle,
+  Camera,
+  Trash2,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -84,6 +87,8 @@ type Order = {
   orderItemsJson?: unknown;
   cssbuyOrderId: string | null;
   internalNotes: string | null;
+  warehousePhotosJson?: unknown;
+  user?: { email: string | null; name: string | null } | null;
   quote?: { totalBrl: string };
   shipment?: { trackingCode: string | null; carrier: string | null };
 };
@@ -99,6 +104,16 @@ type CartSnap = {
 function parseCartSnap(raw: unknown): CartSnap[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((x) => x && typeof x === "object") as CartSnap[];
+}
+
+function parseWarehousePhotos(raw: unknown): string[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw.filter(
+    (x): x is string =>
+      typeof x === "string" &&
+      x.startsWith("/uploads/order-warehouse/") &&
+      !x.includes(".."),
+  );
 }
 
 function formatCpf(v: string | null): string {
@@ -318,8 +333,7 @@ const AdminPedido = () => {
       setOrder({
         ...order,
         ...updated,
-        shipment:
-          shipJson ??
+        shipment: shipJson ??
           updated.shipment ??
           order.shipment ?? {
             trackingCode: form.trackingCode.trim() || null,
@@ -343,6 +357,10 @@ const AdminPedido = () => {
   };
 
   const [processingCssBuy, setProcessingCssBuy] = useState(false);
+  const [uploadingWarehousePhotos, setUploadingWarehousePhotos] =
+    useState(false);
+  const [sendingWarehouseEmail, setSendingWarehouseEmail] = useState(false);
+  const [warehouseEmailNote, setWarehouseEmailNote] = useState("");
 
   const handleProcessarCompra = async () => {
     if (!order?.id || !token) return;
@@ -370,6 +388,105 @@ const AdminPedido = () => {
       toast.error("Erro ao obter link CSSBuy");
     } finally {
       setProcessingCssBuy(false);
+    }
+  };
+
+  const handleWarehousePhotosInput = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = e.target.files;
+    e.target.value = "";
+    if (!token || !order || !files?.length) return;
+    setUploadingWarehousePhotos(true);
+    try {
+      const fd = new FormData();
+      for (let i = 0; i < files.length; i++) fd.append("photos", files[i]);
+      const res = await fetch(
+        apiUrl(`/api/admin/orders/${order.id}/warehouse-photos`),
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          (data as { error?: string }).error || "Erro ao enviar fotos",
+        );
+        return;
+      }
+      setOrder(data as Order);
+      toast.success("Fotos do armazém adicionadas.");
+    } catch {
+      toast.error("Erro de conexão");
+    } finally {
+      setUploadingWarehousePhotos(false);
+    }
+  };
+
+  const removeWarehousePhoto = async (photoPath: string) => {
+    if (!token || !order) return;
+    if (!window.confirm("Remover esta foto do pedido?")) return;
+    setUploadingWarehousePhotos(true);
+    try {
+      const res = await fetch(
+        apiUrl(`/api/admin/orders/${order.id}/warehouse-photos/remove`),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ path: photoPath }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          (data as { error?: string }).error || "Erro ao remover foto",
+        );
+        return;
+      }
+      setOrder(data as Order);
+      toast.success("Foto removida.");
+    } catch {
+      toast.error("Erro de conexão");
+    } finally {
+      setUploadingWarehousePhotos(false);
+    }
+  };
+
+  const handleSendWarehousePhotosEmail = async () => {
+    if (!token || !order) return;
+    setSendingWarehouseEmail(true);
+    try {
+      const res = await fetch(
+        apiUrl(`/api/admin/orders/${order.id}/email-warehouse-photos`),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            message: warehouseEmailNote.trim() || undefined,
+          }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          (data as { error?: string }).error || "Erro ao enviar e-mail",
+        );
+        return;
+      }
+      toast.success("E-mail com as fotos enviado ao cliente.");
+      setWarehouseEmailNote("");
+    } catch {
+      toast.error("Erro de conexão");
+    } finally {
+      setSendingWarehouseEmail(false);
     }
   };
 
@@ -475,51 +592,51 @@ const AdminPedido = () => {
             {parseCartSnap(order.orderItemsJson).length > 0 &&
               (order.checkoutGroupId ||
                 parseCartSnap(order.orderItemsJson).length > 1) && (
-              <div className="mb-5 rounded-lg border border-border bg-muted/40 p-4">
-                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-china-red" />
-                  {order.checkoutGroupId
-                    ? "Carrinho completo (mesmo checkout)"
-                    : "Itens no checkout"}
-                </h3>
-                <ul className="space-y-3 text-sm">
-                  {parseCartSnap(order.orderItemsJson).map((row, idx) => (
-                    <li
-                      key={idx}
-                      className="flex flex-col gap-1 border-b border-border/60 pb-3 last:border-0 last:pb-0"
-                    >
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="font-medium text-foreground">
-                          {row.titlePt || row.title || "Produto"}
-                        </span>
-                        <span className="text-muted-foreground text-xs">
-                          ×{row.quantity ?? 1}
-                          {row.lineProductBrl != null && (
-                            <span className="text-china-red font-semibold ml-2">
-                              R$ {Number(row.lineProductBrl).toFixed(2)}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      {row.url && (
-                        <a
-                          href={row.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:underline truncate"
-                        >
-                          {row.url}
-                        </a>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-[10px] text-muted-foreground mt-3">
-                  Este card é o produto deste pedido; use a lista acima para ver
-                  tudo que o cliente enviou no mesmo checkout.
-                </p>
-              </div>
-            )}
+                <div className="mb-5 rounded-lg border border-border bg-muted/40 p-4">
+                  <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+                    <ShoppingBag className="w-4 h-4 text-china-red" />
+                    {order.checkoutGroupId
+                      ? "Carrinho completo (mesmo checkout)"
+                      : "Itens no checkout"}
+                  </h3>
+                  <ul className="space-y-3 text-sm">
+                    {parseCartSnap(order.orderItemsJson).map((row, idx) => (
+                      <li
+                        key={idx}
+                        className="flex flex-col gap-1 border-b border-border/60 pb-3 last:border-0 last:pb-0"
+                      >
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span className="font-medium text-foreground">
+                            {row.titlePt || row.title || "Produto"}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            ×{row.quantity ?? 1}
+                            {row.lineProductBrl != null && (
+                              <span className="text-china-red font-semibold ml-2">
+                                R$ {Number(row.lineProductBrl).toFixed(2)}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        {row.url && (
+                          <a
+                            href={row.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline truncate"
+                          >
+                            {row.url}
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[10px] text-muted-foreground mt-3">
+                    Este card é o produto deste pedido; use a lista acima para
+                    ver tudo que o cliente enviou no mesmo checkout.
+                  </p>
+                </div>
+              )}
             <div className="flex gap-4 flex-wrap">
               {order.productImage && (
                 <div className="shrink-0 w-24 h-24 rounded-lg border border-border bg-muted overflow-hidden">
@@ -614,6 +731,111 @@ const AdminPedido = () => {
                   Qtd: {order.quantity}
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Fotos recebidas no armazém (QC) */}
+          <div className="p-6 border-b border-border bg-sky-50/50 dark:bg-sky-950/20">
+            <h3 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
+              <Camera className="w-4 h-4 text-sky-600" />
+              Fotos no armazém (conferência)
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Envie imagens do produto recebido na China. O cliente vê na página
+              do pedido e você pode enviar por e-mail quando quiser.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <label className="inline-flex">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  className="sr-only"
+                  disabled={uploadingWarehousePhotos}
+                  onChange={handleWarehousePhotosInput}
+                />
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border bg-background hover:bg-muted cursor-pointer disabled:opacity-50">
+                  {uploadingWarehousePhotos ? "Enviando…" : "+ Adicionar fotos"}
+                </span>
+              </label>
+              <span className="text-[11px] text-muted-foreground">
+                JPG, PNG, WebP ou GIF · até 8 MB cada · máx. 24 fotos no pedido
+              </span>
+            </div>
+            {parseWarehousePhotos(order.warehousePhotosJson).length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-4">
+                {parseWarehousePhotos(order.warehousePhotosJson).map((src) => (
+                  <div
+                    key={src}
+                    className="relative group rounded-lg border border-border overflow-hidden bg-muted aspect-square"
+                  >
+                    <a
+                      href={publicUploadUrl(src)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full h-full"
+                    >
+                      <img
+                        src={publicUploadUrl(src)}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => removeWarehousePhoto(src)}
+                      disabled={uploadingWarehousePhotos}
+                      className="absolute top-1 right-1 p-1.5 rounded-md bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 disabled:opacity-50"
+                      aria-label="Remover foto"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground mb-4">
+                Nenhuma foto ainda. Use o botão acima após receber o produto no
+                armazém.
+              </p>
+            )}
+            <div className="rounded-lg border border-border bg-background/80 p-3 space-y-2">
+              <label className="text-xs font-medium text-foreground block">
+                Mensagem opcional no e-mail
+              </label>
+              <textarea
+                value={warehouseEmailNote}
+                onChange={(e) => setWarehouseEmailNote(e.target.value)}
+                placeholder="Ex.: Segue conferência antes do envio ao Brasil."
+                rows={2}
+                className="w-full text-sm rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-china-red/30 resize-y"
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1.5 bg-sky-600 hover:bg-sky-700"
+                disabled={
+                  sendingWarehouseEmail ||
+                  parseWarehousePhotos(order.warehousePhotosJson).length === 0 ||
+                  !(
+                    order.customerEmail?.trim() || order.user?.email?.trim()
+                  )
+                }
+                onClick={handleSendWarehousePhotosEmail}
+              >
+                <Mail className="w-3.5 h-3.5" />
+                {sendingWarehouseEmail
+                  ? "Enviando…"
+                  : "Enviar fotos por e-mail ao cliente"}
+              </Button>
+              {!(
+                order.customerEmail?.trim() || order.user?.email?.trim()
+              ) && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Sem e-mail no pedido nem na conta: use o WhatsApp ou cadastre o
+                  e-mail do cliente para enviar automaticamente.
+                </p>
+              )}
             </div>
           </div>
 
@@ -782,11 +1004,10 @@ const AdminPedido = () => {
                   placeholder="Nome legível do produto"
                 />
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Aparece na faixa &quot;Clientes já estão comprando&quot; da home
-                  (antes do
-                  catálogo). O mesmo link em vários pedidos vira um card só: vale
-                  o pedido alterado por último. Limpe e salve para priorizar o
-                  catálogo.
+                  Aparece na faixa &quot;Clientes já estão comprando&quot; da
+                  home (antes do catálogo). O mesmo link em vários pedidos vira
+                  um card só: vale o pedido alterado por último. Limpe e salve
+                  para priorizar o catálogo.
                 </p>
               </div>
               <div>
