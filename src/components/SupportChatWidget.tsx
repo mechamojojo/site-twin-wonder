@@ -11,8 +11,7 @@ import {
 } from "lucide-react";
 
 /**
- * Botão flutuante + painel de conversa (mesma API que /fale-conosco).
- * Oculto em /admin/* e na própria página /fale-conosco (evita dois hooks useSupportChat).
+ * Botão flutuante + painel (estilo leve, inspirado em widgets tipo Intercom/Crisp).
  */
 const SupportChatWidget = () => {
   const { pathname } = useLocation();
@@ -72,56 +71,66 @@ function SupportChatWidgetOpen() {
     >
       {open && (
         <div
-          className="flex w-[min(calc(100vw-2rem),380px)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
-          style={{ maxHeight: "min(520px, calc(100vh - 5.5rem))" }}
+          className="flex w-[min(calc(100vw-2rem),384px)] flex-col overflow-hidden rounded-[1.25rem] border border-border/80 bg-background shadow-[0_12px_48px_-8px_rgba(0,0,0,0.18),0_4px_16px_-4px_rgba(0,0,0,0.08)]"
+          style={{ maxHeight: "min(540px, calc(100vh - 5.5rem))" }}
         >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-gradient-to-r from-china-red to-china-red/85 px-3 py-2.5 text-white">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-heading font-bold">
-                Fale com a equipe
-              </p>
-              <p className="truncate text-[11px] text-white/85">
-                Suporte em português — respondemos por aqui
-              </p>
+          {/* Cabeçalho claro (evita faixa vermelha “pesada”) */}
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 bg-muted/25 px-4 py-3.5">
+            <div className="flex min-w-0 gap-3">
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-china-red/10 text-sm font-heading font-bold text-china-red"
+                aria-hidden
+              >
+                CC
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <p className="truncate font-heading text-[15px] font-semibold leading-tight text-foreground">
+                  ComprasChina
+                </p>
+                <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+                  Suporte em português. Respondemos em poucas horas em dias
+                  úteis.
+                </p>
+              </div>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="shrink-0 rounded-full p-1.5 hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/40"
+              className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25"
               aria-label="Fechar chat"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" strokeWidth={1.75} />
             </button>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
             {authLoading ? (
               <div className="flex flex-1 items-center justify-center py-16">
-                <Loader2 className="h-7 w-7 animate-spin text-china-red" />
+                <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <>
                 {user && (
-                  <div className="flex shrink-0 gap-2 border-b border-border bg-muted/30 px-2 py-2">
+                  <div className="flex shrink-0 border-b border-border/60 bg-muted/15 px-3 py-2">
                     <Button
                       type="button"
-                      variant={showNewForm ? "secondary" : "default"}
+                      variant="outline"
                       size="sm"
-                      className="h-8 flex-1 gap-1 text-xs"
+                      className="h-8 flex-1 gap-1.5 border-border/80 bg-background text-xs font-medium text-foreground shadow-none hover:bg-muted/50"
                       onClick={() => {
                         setShowNewForm((v) => !v);
                         if (!showNewForm) setSelectedId(null);
                       }}
                     >
                       <MessageSquarePlus className="h-3.5 w-3.5" />
-                      {showNewForm ? "Conversas" : "Nova"}
+                      {showNewForm ? "Minhas conversas" : "Nova conversa"}
                     </Button>
                   </div>
                 )}
 
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   {user && !showNewForm && list.length > 0 && (
-                    <ul className="divide-y divide-border border-b border-border">
+                    <ul className="divide-y divide-border/60">
                       {list.map((c) => (
                         <li key={c.id}>
                           <button
@@ -130,15 +139,23 @@ function SupportChatWidgetOpen() {
                               setSelectedId(c.id);
                               setShowNewForm(false);
                             }}
-                            className={`w-full px-3 py-2 text-left text-xs transition-colors hover:bg-muted/60 ${
-                              selectedId === c.id ? "bg-muted/80" : ""
+                            className={`w-full px-4 py-3 text-left text-sm transition-colors hover:bg-muted/40 ${
+                              selectedId === c.id ? "bg-muted/50" : ""
                             }`}
                           >
-                            <span className="line-clamp-2 font-medium text-foreground">
-                              {c.lastPreview || "(sem texto)"}
+                            <span className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground">
+                              {c.lastPreview || "Sem prévia ainda"}
                             </span>
-                            <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                              {new Date(c.lastMessageAt).toLocaleString("pt-BR")}
+                            <span className="mt-1 block text-[11px] text-muted-foreground">
+                              {new Date(c.lastMessageAt).toLocaleString(
+                                "pt-BR",
+                                {
+                                  day: "2-digit",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
                             </span>
                           </button>
                         </li>
@@ -149,29 +166,34 @@ function SupportChatWidgetOpen() {
                   {user && showNewForm && (
                     <form
                       onSubmit={startUserConversation}
-                      className="space-y-2 p-3"
+                      className="space-y-3 p-4"
                     >
+                      <p className="text-[12px] leading-relaxed text-muted-foreground">
+                        Escreva sua dúvida ou pedido. Você recebe a resposta
+                        aqui mesmo e pode acompanhar depois em “Minhas
+                        conversas”.
+                      </p>
                       <textarea
                         required
                         rows={4}
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
-                        className="w-full resize-none rounded-xl border border-border bg-background px-2.5 py-2 text-xs outline-none focus:ring-2 focus:ring-china-red/30"
-                        placeholder="Sua mensagem…"
+                        className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-[13px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
+                        placeholder="Ex.: Quero cotar um produto do link que vou colar abaixo…"
                         disabled={sending}
                       />
                       <Button
                         type="submit"
                         size="sm"
                         disabled={sending}
-                        className="h-8 w-full gap-1 text-xs"
+                        className="h-9 w-full text-xs font-semibold shadow-sm"
                       >
                         {sending ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
                           <Send className="h-3.5 w-3.5" />
                         )}
-                        Enviar
+                        Enviar mensagem
                       </Button>
                     </form>
                   )}
@@ -179,15 +201,20 @@ function SupportChatWidgetOpen() {
                   {!user && !guestThread && (
                     <form
                       onSubmit={startGuestConversation}
-                      className="space-y-2 p-3"
+                      className="space-y-3 p-4"
                     >
+                      <p className="text-[12px] leading-relaxed text-muted-foreground">
+                        Olá! Preencha os campos abaixo. Nossa equipe lê tudo em
+                        português e responde por aqui — sem precisar instalar
+                        nada.
+                      </p>
                       <input
                         required
                         type="text"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
-                        placeholder="Nome"
-                        className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-china-red/30"
+                        placeholder="Seu nome"
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-[13px] outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
                         disabled={sending}
                       />
                       <input
@@ -195,8 +222,8 @@ function SupportChatWidgetOpen() {
                         type="email"
                         value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
-                        placeholder="E-mail"
-                        className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-china-red/30"
+                        placeholder="Seu melhor e-mail"
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-[13px] outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
                         disabled={sending}
                       />
                       <textarea
@@ -204,48 +231,48 @@ function SupportChatWidgetOpen() {
                         rows={3}
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Como podemos ajudar?"
-                        className="w-full resize-none rounded-xl border border-border bg-background px-2.5 py-2 text-xs outline-none focus:ring-2 focus:ring-china-red/30"
+                        placeholder="Em uma ou duas frases: no que podemos ajudar?"
+                        className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-[13px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
                         disabled={sending}
                       />
                       <Button
                         type="submit"
                         size="sm"
                         disabled={sending}
-                        className="h-8 w-full gap-1 text-xs"
+                        className="h-9 w-full text-xs font-semibold shadow-sm"
                       >
                         {sending ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
                           <Send className="h-3.5 w-3.5" />
                         )}
-                        Enviar
+                        Enviar para a equipe
                       </Button>
                     </form>
                   )}
 
                   {(showGuestComposer || showUserComposer) && (
-                    <div className="flex min-h-[200px] flex-col border-t border-border">
-                      <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/20 px-2 py-1.5">
-                        <span className="text-[10px] font-medium text-muted-foreground">
+                    <div className="flex min-h-[200px] flex-col border-t border-border/60">
+                      <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/10 px-3 py-2">
+                        <span className="text-[11px] font-medium text-muted-foreground">
                           {thread?.status === "CLOSED"
-                            ? "Encerrada — envie para reabrir"
-                            : "Conversa"}
+                            ? "Conversa encerrada — envie uma mensagem para reabrir"
+                            : "Sua conversa"}
                         </span>
                         {!user && guestThread && (
                           <button
                             type="button"
                             onClick={clearGuestThread}
-                            className="text-[10px] text-china-red hover:underline"
+                            className="text-[11px] font-medium text-china-red/90 hover:underline"
                           >
-                            Novo assunto
+                            Outro assunto
                           </button>
                         )}
                       </div>
-                      <div className="max-h-[200px] min-h-[120px] space-y-2 overflow-y-auto p-2">
+                      <div className="max-h-[220px] min-h-[128px] space-y-2.5 overflow-y-auto bg-muted/5 p-3">
                         {loadingThread && !thread?.messages?.length ? (
-                          <div className="flex justify-center py-8">
-                            <Loader2 className="h-5 w-5 animate-spin text-china-red" />
+                          <div className="flex justify-center py-10">
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                           </div>
                         ) : (
                           thread?.messages.map((m) => (
@@ -254,10 +281,10 @@ function SupportChatWidgetOpen() {
                               className={`flex ${m.sender === "USER" ? "justify-end" : "justify-start"}`}
                             >
                               <div
-                                className={`max-w-[90%] rounded-2xl px-2.5 py-1.5 text-[11px] leading-snug ${
+                                className={`max-w-[88%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed shadow-sm ${
                                   m.sender === "USER"
-                                    ? "rounded-br-sm bg-china-red text-white"
-                                    : "rounded-bl-sm bg-muted text-foreground"
+                                    ? "rounded-br-md border border-china-red/15 bg-china-red/[0.08] text-foreground"
+                                    : "rounded-bl-md border border-border/80 bg-card text-foreground"
                                 }`}
                               >
                                 <p className="whitespace-pre-wrap break-words">
@@ -270,14 +297,14 @@ function SupportChatWidgetOpen() {
                       </div>
                       <form
                         onSubmit={sendReply}
-                        className="flex gap-1.5 border-t border-border p-2"
+                        className="flex gap-2 border-t border-border/60 bg-muted/10 p-3"
                       >
                         <textarea
                           rows={2}
                           value={replyText}
                           onChange={(e) => setReplyText(e.target.value)}
-                          className="min-h-0 flex-1 resize-none rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-china-red/30"
-                          placeholder="Mensagem…"
+                          className="min-h-[44px] flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-[13px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
+                          placeholder="Digite sua mensagem…"
                           disabled={sending || loadingThread}
                         />
                         <Button
@@ -286,7 +313,8 @@ function SupportChatWidgetOpen() {
                           disabled={
                             sending || !replyText.trim() || loadingThread
                           }
-                          className="h-auto shrink-0 self-end px-2.5"
+                          className="h-10 w-10 shrink-0 rounded-full p-0 shadow-sm"
+                          aria-label="Enviar mensagem"
                         >
                           {sending ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -302,20 +330,23 @@ function SupportChatWidgetOpen() {
                     !showNewForm &&
                     list.length === 0 &&
                     !loadingList && (
-                      <p className="p-3 text-center text-[11px] text-muted-foreground">
-                        Nenhuma conversa ainda. Toque em{" "}
-                        <strong className="text-foreground">Nova</strong>.
+                      <p className="px-4 py-6 text-center text-[12px] leading-relaxed text-muted-foreground">
+                        Você ainda não tem conversas. Use{" "}
+                        <strong className="font-medium text-foreground">
+                          Nova conversa
+                        </strong>{" "}
+                        acima para falar com a gente.
                       </p>
                     )}
                 </div>
 
-                <div className="shrink-0 border-t border-border bg-muted/20 px-2 py-1.5 text-center">
+                <div className="shrink-0 border-t border-border/60 bg-muted/10 px-3 py-2 text-center">
                   <Link
                     to="/fale-conosco"
                     onClick={() => setOpen(false)}
-                    className="text-[10px] font-medium text-china-red hover:underline"
+                    className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-china-red"
                   >
-                    Abrir em página completa
+                    Abrir em tela cheia
                   </Link>
                 </div>
               </>
@@ -324,17 +355,18 @@ function SupportChatWidgetOpen() {
         </div>
       )}
 
+      {/* FAB estilo “widget” comum: fundo claro + ícone da marca */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-china-red text-white shadow-lg transition-transform hover:scale-105 hover:bg-china-red/90 focus:outline-none focus:ring-4 focus:ring-china-red/35"
+        className="flex h-[3.25rem] w-[3.25rem] items-center justify-center rounded-full border border-border/90 bg-background text-china-red shadow-[0_4px_20px_-2px_rgba(0,0,0,0.18)] transition-all hover:scale-[1.03] hover:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.22)] focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25 focus-visible:ring-offset-2"
         aria-label={open ? "Fechar atendimento" : "Abrir atendimento"}
         aria-expanded={open}
       >
         {open ? (
-          <X className="h-7 w-7" />
+          <X className="h-6 w-6 text-muted-foreground" strokeWidth={1.75} />
         ) : (
-          <MessagesSquare className="h-7 w-7" />
+          <MessagesSquare className="h-6 w-6" strokeWidth={1.75} />
         )}
       </button>
     </div>

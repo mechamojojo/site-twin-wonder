@@ -95,6 +95,9 @@ const Index = () => {
       {/* 5. Como funciona */}
       <HowItWorks />
 
+      {/* Atendimento (chat + e-mail) — logo após “4 passos” */}
+      <MobileAppSection />
+
       {/* 6. Serviços */}
       <ServicesSection />
 
@@ -111,13 +114,10 @@ const Index = () => {
       {/* 8. Sobre / diferenciais */}
       <AboutSection />
 
-      {/* 9. Atendimento */}
-      <MobileAppSection />
-
-      {/* 10. CTA final */}
+      {/* 9. CTA final */}
       <CTASection />
 
-      {/* 11. FAQ */}
+      {/* 10. FAQ */}
       <FAQSection />
 
       <Footer />

@@ -21,7 +21,7 @@ const services = [
     title: "Fale com o Vendedor",
     description: "Quer tirar uma dúvida antes de comprar? Entramos em contato direto com o vendedor e trazemos a resposta em português.",
     accent: "from-gold to-china-red",
-    href: "/#contact",
+    href: "/#contato",
   },
 ];
 
@@ -29,16 +29,6 @@ const ServicesSection = () => {
   return (
     <section id="services" className="py-20 bg-section-alt">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-14">
-          <span className="text-xs font-bold text-gold uppercase tracking-widest">O que oferecemos</span>
-          <h2 className="text-3xl md:text-4xl font-heading font-bold text-foreground mt-2 mb-3">
-            Tudo que você precisa para comprar da China
-          </h2>
-          <p className="text-muted-foreground text-lg max-w-lg mx-auto">
-            Do produto escolhido à entrega na sua porta — a gente cuida de cada detalhe.
-          </p>
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {services.map((service, index) => (
             <div
