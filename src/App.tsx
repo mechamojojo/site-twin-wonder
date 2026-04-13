@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { SavedProductsProvider } from "@/context/SavedProductsContext";
+import SupportChatWidget from "@/components/SupportChatWidget";
 
 const Index = lazy(() => import("./pages/Index"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -48,6 +49,7 @@ const App = () => (
       <AuthProvider>
         <SavedProductsProvider>
           <CartProvider>
+            <SupportChatWidget />
             <Suspense fallback={<PageFallback />}>
               <Routes>
                 <Route path="/" element={<Index />} />
