@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
-import { Mail, MessageCircle } from "lucide-react";
+import { Mail, MessageCircle, Send } from "lucide-react";
 import {
   CONTACT_EMAIL,
   CNPJ,
+  TELEGRAM_URL,
+  TELEGRAM_DISPLAY,
   whatsAppUrl,
   WHATSAPP_DEFAULT_MESSAGE,
   WHATSAPP_DISPLAY,
@@ -37,6 +39,15 @@ const Footer = () => {
               >
                 <MessageCircle className="w-4 h-4" />
                 WhatsApp {WHATSAPP_DISPLAY}
+              </a>
+              <a
+                href={TELEGRAM_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-background/70 hover:text-gold transition-colors"
+              >
+                <Send className="w-4 h-4" />
+                Telegram {TELEGRAM_DISPLAY}
               </a>
               {CNPJ ? (
                 <p className="text-sm text-background/50 pt-1">CNPJ {CNPJ}</p>

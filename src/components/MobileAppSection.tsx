@@ -1,5 +1,5 @@
-import { Mail, Clock, Users, MessagesSquare } from "lucide-react";
-import { CONTACT_EMAIL } from "@/data/siteConfig";
+import { Mail, Clock, Users, MessagesSquare, Send } from "lucide-react";
+import { CONTACT_EMAIL, TELEGRAM_URL, TELEGRAM_DISPLAY } from "@/data/siteConfig";
 
 function openSupportChat() {
   window.dispatchEvent(new CustomEvent("compraschina:open-support-chat"));
@@ -18,11 +18,11 @@ const MobileAppSection = () => (
           </h2>
           <p className="text-muted-foreground text-lg max-w-lg mx-auto">
             Suporte 100% em português — antes, durante e depois da compra. Use o
-            chat no canto da tela ou fale com nossa equipe por aqui mesmo.
+            chat no canto da tela, o Telegram ou o e-mail.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 max-w-5xl mx-auto">
           <div className="bg-background rounded-2xl border border-border shadow-card p-7 flex flex-col hover:shadow-card-hover transition-shadow">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center mb-4 shadow-md">
               <MessagesSquare className="w-6 h-6 text-white" />
@@ -62,6 +62,27 @@ const MobileAppSection = () => (
               className="inline-block mt-5 bg-foreground text-background text-sm font-bold px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity text-center"
             >
               Enviar e-mail →
+            </a>
+          </div>
+
+          <div className="bg-background rounded-2xl border border-border shadow-card p-7 flex flex-col hover:shadow-card-hover transition-shadow sm:col-span-2 lg:col-span-1">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0088cc] to-[#229ED9] flex items-center justify-center mb-4 shadow-md">
+              <Send className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="font-heading font-bold text-foreground text-lg mb-2">
+              Telegram
+            </h3>
+            <p className="text-sm text-muted-foreground leading-relaxed flex-1">
+              Entre no nosso canal no Telegram: novidades, dicas e contato com a
+              comunidade.
+            </p>
+            <a
+              href={TELEGRAM_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block mt-5 bg-foreground text-background text-sm font-bold px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity text-center"
+            >
+              Abrir {TELEGRAM_DISPLAY} →
             </a>
           </div>
         </div>

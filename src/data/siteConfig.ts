@@ -28,6 +28,10 @@ export function whatsAppUrl(message?: string): string {
 /** E-mail de contato */
 export const CONTACT_EMAIL = "contato@compraschina.com.br";
 
+/** Canal oficial no Telegram */
+export const TELEGRAM_URL = "https://t.me/compraschinacombr";
+export const TELEGRAM_DISPLAY = "@compraschinacombr";
+
 /**
  * CNPJ da empresa — exibido no rodapé.
  * Preencha com o CNPJ real no formato "XX.XXX.XXX/0001-XX".
