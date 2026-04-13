@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSupportChat } from "@/hooks/useSupportChat";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,10 @@ import {
   Send,
   X,
 } from "lucide-react";
+
+/** Tempo na página antes do convite (uma vez por sessão). */
+const WELCOME_NUDGE_DELAY_MS = 32_000;
+const WELCOME_NUDGE_SESSION_KEY = "compraschina-support-welcome-nudge-dismissed";
 
 /**
  * Botão flutuante + painel (estilo leve, inspirado em widgets tipo Intercom/Crisp).
@@ -23,6 +27,9 @@ const SupportChatWidget = () => {
 
 function SupportChatWidgetOpen() {
   const [open, setOpen] = useState(false);
+  const [showWelcomeNudge, setShowWelcomeNudge] = useState(false);
+  const openRef = useRef(open);
+  openRef.current = open;
   const chat = useSupportChat();
 
   useEffect(() => {
@@ -34,6 +41,51 @@ function SupportChatWidgetOpen() {
         openChat,
       );
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      setShowWelcomeNudge(false);
+      try {
+        sessionStorage.setItem(WELCOME_NUDGE_SESSION_KEY, "1");
+      } catch {
+        /* private mode */
+      }
+    }
+  }, [open]);
+
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      if (sessionStorage.getItem(WELCOME_NUDGE_SESSION_KEY) === "1") {
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    const t = window.setTimeout(() => {
+      if (cancelled) return;
+      if (openRef.current) return;
+      try {
+        if (sessionStorage.getItem(WELCOME_NUDGE_SESSION_KEY) === "1") return;
+      } catch {
+        /* ignore */
+      }
+      setShowWelcomeNudge(true);
+    }, WELCOME_NUDGE_DELAY_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, []);
+
+  const dismissWelcomeNudge = () => {
+    setShowWelcomeNudge(false);
+    try {
+      sessionStorage.setItem(WELCOME_NUDGE_SESSION_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  };
 
   const {
     authLoading,
@@ -66,40 +118,40 @@ function SupportChatWidgetOpen() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[100] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6"
+      className="fixed bottom-4 right-4 z-[100] flex flex-col items-end gap-4 sm:bottom-6 sm:right-6"
       aria-live="polite"
     >
       {open && (
         <div
-          className="flex w-[min(calc(100vw-2rem),384px)] flex-col overflow-hidden rounded-[1.25rem] border border-border/80 bg-background shadow-[0_12px_48px_-8px_rgba(0,0,0,0.18),0_4px_16px_-4px_rgba(0,0,0,0.08)]"
-          style={{ maxHeight: "min(540px, calc(100vh - 5.5rem))" }}
+          className="flex w-[min(calc(100vw-2rem),428px)] flex-col overflow-hidden rounded-[1.35rem] border border-border/80 bg-background shadow-[0_12px_48px_-8px_rgba(0,0,0,0.18),0_4px_16px_-4px_rgba(0,0,0,0.08)]"
+          style={{ maxHeight: "min(620px, calc(100vh - 5rem))" }}
         >
           {/* Cabeçalho claro (evita faixa vermelha “pesada”) */}
-          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 bg-muted/25 px-4 py-3.5">
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/60 bg-muted/25 px-4 py-4">
             <div className="flex min-w-0 gap-3">
               <div
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-china-red/10 text-sm font-heading font-bold text-china-red"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-china-red/10 text-sm font-heading font-bold text-china-red"
                 aria-hidden
               >
                 CC
               </div>
               <div className="min-w-0 pt-0.5">
-                <p className="truncate font-heading text-[15px] font-semibold leading-tight text-foreground">
+                <p className="truncate font-heading text-base font-semibold leading-tight text-foreground">
                   ComprasChina
                 </p>
-                <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
-                  Suporte em português. Respondemos em poucas horas em dias
-                  úteis.
+                <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
+                  Fale com nosso time e tire dúvidas sobre produtos, fornecedores
+                  e importação.
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25"
+              className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25"
               aria-label="Fechar chat"
             >
-              <X className="h-5 w-5" strokeWidth={1.75} />
+              <X className="h-6 w-6" strokeWidth={1.75} />
             </button>
           </div>
 
@@ -116,7 +168,7 @@ function SupportChatWidgetOpen() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 flex-1 gap-1.5 border-border/80 bg-background text-xs font-medium text-foreground shadow-none hover:bg-muted/50"
+                      className="h-9 flex-1 gap-2 border-border/80 bg-background text-[13px] font-medium text-foreground shadow-none hover:bg-muted/50"
                       onClick={() => {
                         setShowNewForm((v) => !v);
                         if (!showNewForm) setSelectedId(null);
@@ -143,7 +195,7 @@ function SupportChatWidgetOpen() {
                               selectedId === c.id ? "bg-muted/50" : ""
                             }`}
                           >
-                            <span className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground">
+                            <span className="line-clamp-2 text-[14px] font-medium leading-snug text-foreground">
                               {c.lastPreview || "Sem prévia ainda"}
                             </span>
                             <span className="mt-1 block text-[11px] text-muted-foreground">
@@ -168,7 +220,7 @@ function SupportChatWidgetOpen() {
                       onSubmit={startUserConversation}
                       className="space-y-3 p-4"
                     >
-                      <p className="text-[12px] leading-relaxed text-muted-foreground">
+                      <p className="text-[13px] leading-relaxed text-muted-foreground">
                         Escreva sua dúvida ou pedido. Você recebe a resposta
                         aqui mesmo e pode acompanhar depois em “Minhas
                         conversas”.
@@ -178,7 +230,7 @@ function SupportChatWidgetOpen() {
                         rows={4}
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
-                        className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-[13px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
+                        className="w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-[14px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
                         placeholder="Ex.: Quero cotar um produto do link que vou colar abaixo…"
                         disabled={sending}
                       />
@@ -186,12 +238,12 @@ function SupportChatWidgetOpen() {
                         type="submit"
                         size="sm"
                         disabled={sending}
-                        className="h-9 w-full text-xs font-semibold shadow-sm"
+                        className="h-10 w-full text-[13px] font-semibold shadow-sm"
                       >
                         {sending ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Send className="h-3.5 w-3.5" />
+                          <Send className="h-4 w-4" />
                         )}
                         Enviar mensagem
                       </Button>
@@ -203,7 +255,7 @@ function SupportChatWidgetOpen() {
                       onSubmit={startGuestConversation}
                       className="space-y-3 p-4"
                     >
-                      <p className="text-[12px] leading-relaxed text-muted-foreground">
+                      <p className="text-[13px] leading-relaxed text-muted-foreground">
                         Olá! Preencha os campos abaixo. Nossa equipe lê tudo em
                         português e responde por aqui — sem precisar instalar
                         nada.
@@ -214,7 +266,7 @@ function SupportChatWidgetOpen() {
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
                         placeholder="Seu nome"
-                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-[13px] outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[14px] outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
                         disabled={sending}
                       />
                       <input
@@ -223,7 +275,7 @@ function SupportChatWidgetOpen() {
                         value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
                         placeholder="Seu melhor e-mail"
-                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-[13px] outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[14px] outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
                         disabled={sending}
                       />
                       <textarea
@@ -232,19 +284,19 @@ function SupportChatWidgetOpen() {
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         placeholder="Em uma ou duas frases: no que podemos ajudar?"
-                        className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-[13px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
+                        className="w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-[14px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
                         disabled={sending}
                       />
                       <Button
                         type="submit"
                         size="sm"
                         disabled={sending}
-                        className="h-9 w-full text-xs font-semibold shadow-sm"
+                        className="h-10 w-full text-[13px] font-semibold shadow-sm"
                       >
                         {sending ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Send className="h-3.5 w-3.5" />
+                          <Send className="h-4 w-4" />
                         )}
                         Enviar para a equipe
                       </Button>
@@ -252,7 +304,7 @@ function SupportChatWidgetOpen() {
                   )}
 
                   {(showGuestComposer || showUserComposer) && (
-                    <div className="flex min-h-[200px] flex-col border-t border-border/60">
+                    <div className="flex min-h-[220px] flex-col border-t border-border/60">
                       <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/10 px-3 py-2">
                         <span className="text-[11px] font-medium text-muted-foreground">
                           {thread?.status === "CLOSED"
@@ -269,7 +321,7 @@ function SupportChatWidgetOpen() {
                           </button>
                         )}
                       </div>
-                      <div className="max-h-[220px] min-h-[128px] space-y-2.5 overflow-y-auto bg-muted/5 p-3">
+                      <div className="max-h-[280px] min-h-[140px] space-y-2.5 overflow-y-auto bg-muted/5 p-3">
                         {loadingThread && !thread?.messages?.length ? (
                           <div className="flex justify-center py-10">
                             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -281,7 +333,7 @@ function SupportChatWidgetOpen() {
                               className={`flex ${m.sender === "USER" ? "justify-end" : "justify-start"}`}
                             >
                               <div
-                                className={`max-w-[88%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed shadow-sm ${
+                                className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed shadow-sm ${
                                   m.sender === "USER"
                                     ? "rounded-br-md border border-china-red/15 bg-china-red/[0.08] text-foreground"
                                     : "rounded-bl-md border border-border/80 bg-card text-foreground"
@@ -303,7 +355,7 @@ function SupportChatWidgetOpen() {
                           rows={2}
                           value={replyText}
                           onChange={(e) => setReplyText(e.target.value)}
-                          className="min-h-[44px] flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-[13px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
+                          className="min-h-[48px] flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-[14px] leading-snug outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-china-red/30 focus:ring-2 focus:ring-china-red/15"
                           placeholder="Digite sua mensagem…"
                           disabled={sending || loadingThread}
                         />
@@ -313,13 +365,13 @@ function SupportChatWidgetOpen() {
                           disabled={
                             sending || !replyText.trim() || loadingThread
                           }
-                          className="h-10 w-10 shrink-0 rounded-full p-0 shadow-sm"
+                          className="h-12 w-12 shrink-0 rounded-full p-0 shadow-sm"
                           aria-label="Enviar mensagem"
                         >
                           {sending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-5 w-5 animate-spin" />
                           ) : (
-                            <Send className="h-4 w-4" />
+                            <Send className="h-5 w-5" />
                           )}
                         </Button>
                       </form>
@@ -330,7 +382,7 @@ function SupportChatWidgetOpen() {
                     !showNewForm &&
                     list.length === 0 &&
                     !loadingList && (
-                      <p className="px-4 py-6 text-center text-[12px] leading-relaxed text-muted-foreground">
+                      <p className="px-4 py-6 text-center text-[13px] leading-relaxed text-muted-foreground">
                         Você ainda não tem conversas. Use{" "}
                         <strong className="font-medium text-foreground">
                           Nova conversa
@@ -355,18 +407,75 @@ function SupportChatWidgetOpen() {
         </div>
       )}
 
+      {showWelcomeNudge && !open && (
+        <div
+          role="dialog"
+          aria-labelledby="support-welcome-nudge-label"
+          className="relative w-[min(calc(100vw-2rem),336px)] origin-bottom-right animate-in fade-in-0 zoom-in-95 duration-300"
+        >
+          <span id="support-welcome-nudge-label" className="sr-only">
+            Nova mensagem da equipe ComprasChina
+          </span>
+          <button
+            type="button"
+            onClick={dismissWelcomeNudge}
+            className="absolute -right-1 -top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-background text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25"
+            aria-label="Dispensar mensagem"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+
+          <div className="flex gap-2.5 pr-5 pt-1">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-china-red/10 text-sm font-heading font-bold text-china-red"
+              aria-hidden
+            >
+              CC
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="text-[13px] font-semibold text-foreground">
+                  ComprasChina
+                </span>
+                <span className="text-[11px] text-muted-foreground">agora</span>
+              </div>
+              <div className="rounded-2xl rounded-bl-md border border-border/70 bg-muted/40 px-3.5 py-3 text-[14px] leading-relaxed text-foreground shadow-sm">
+                <p>Oi! Seja bem-vindo.</p>
+                <p className="mt-2 text-foreground/90">
+                  Se tiver alguma dúvida, clique no chat no canto da tela e fale
+                  com nossa equipe.
+                </p>
+                <p className="mt-2 text-foreground/90">
+                  Tem um produto em mente, mas não o encontrou no site? Envie
+                  para nós e montamos o link para você.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="mt-2.5 h-9 w-full border border-border/80 bg-background text-[13px] font-medium shadow-sm hover:bg-muted/60"
+                onClick={() => setOpen(true)}
+              >
+                Abrir chat e responder
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FAB estilo “widget” comum: fundo claro + ícone da marca */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-[3.25rem] w-[3.25rem] items-center justify-center rounded-full border border-border/90 bg-background text-china-red shadow-[0_4px_20px_-2px_rgba(0,0,0,0.18)] transition-all hover:scale-[1.03] hover:shadow-[0_8px_28px_-4px_rgba(0,0,0,0.22)] focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25 focus-visible:ring-offset-2"
+        className="flex h-16 w-16 items-center justify-center rounded-full border border-border/90 bg-background text-china-red shadow-[0_6px_24px_-2px_rgba(0,0,0,0.2)] transition-all hover:scale-[1.03] hover:shadow-[0_10px_32px_-4px_rgba(0,0,0,0.24)] focus:outline-none focus-visible:ring-2 focus-visible:ring-china-red/25 focus-visible:ring-offset-2"
         aria-label={open ? "Fechar atendimento" : "Abrir atendimento"}
         aria-expanded={open}
       >
         {open ? (
-          <X className="h-6 w-6 text-muted-foreground" strokeWidth={1.75} />
+          <X className="h-7 w-7 text-muted-foreground" strokeWidth={1.75} />
         ) : (
-          <MessagesSquare className="h-6 w-6" strokeWidth={1.75} />
+          <MessagesSquare className="h-7 w-7" strokeWidth={1.75} />
         )}
       </button>
     </div>
