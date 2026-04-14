@@ -1172,6 +1172,11 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
           ? body.barDisplayTitle.trim().slice(0, 300)
           : null;
     }
+    if (Object.prototype.hasOwnProperty.call(body, "hideFromRecentPurchasesBar")) {
+      updates.hideFromRecentPurchasesBar = Boolean(
+        body.hideFromRecentPurchasesBar,
+      );
+    }
 
     if (Object.keys(updates).length === 0) {
       return res
@@ -2694,6 +2699,7 @@ app.get("/api/recent-purchases", async (_req, res) => {
   try {
     const orders = await prisma.order.findMany({
       where: {
+        hideFromRecentPurchasesBar: false,
         status: {
           in: [
             OrderStatus.PAGO,

@@ -609,12 +609,12 @@ const Order = () => {
           {productPreviewLoading && (
             <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
               <span className="font-medium text-foreground/90">
-                Em links pela primeira vez, isso pode levar até cerca de 30
-                segundos.
+                Na primeira vez que abrimos este produto pelo link, a página pode
+                levar até cerca de 30 segundos para ficar pronta.
               </span>{" "}
-              Estamos montando a pré-visualização com fotos, opções e preço —
-              aguarde um instante e, em seguida, você verá tudo o que precisa
-              para concluir o pedido.
+              Estamos carregando fotos, opções (cor, tamanho etc.) e preço —
+              aguarde um instante; em seguida você poderá revisar tudo e concluir
+              o pedido.
             </p>
           )}
         </div>

@@ -136,6 +136,8 @@ model Order {
   productTitle       String?       // Título do produto (para barra "O que estão comprando")
   /** Se preenchido, substitui catálogo/título só na faixa "O que estão comprando" na home */
   barDisplayTitle    String?
+  /** Se true, este pedido não entra na faixa "Clientes já estão comprando" (dedup por URL) */
+  hideFromRecentPurchasesBar Boolean @default(false)
   productImage       String?       // URL da imagem (para barra "O que estão comprando")
   productColor       String?       // Cor selecionada (para CSSBuy)
   productSize        String?       // Tamanho selecionado (para CSSBuy)

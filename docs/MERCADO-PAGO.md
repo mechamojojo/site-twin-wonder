@@ -71,6 +71,27 @@ A chave pública é usada para tokenizar os dados do cartão de forma segura no 
 
 O `token` é gerado pelo Cardform do Mercado Pago no frontend. A página `/pagar/:id` já inclui o Cardform integrado — basta configurar `VITE_MP_PUBLIC_KEY` no `.env`.
 
+## Parcelas no cartão — de onde vêm? E “sem juros”?
+
+### O que o site faz
+
+- O **select de parcelas** (e banco emissor) é montado pelo **SDK do Mercado Pago** (`cardForm` / iframes no checkout e em `/pagar/:id`).
+- O valor do pedido é passado como `amount` para o formulário; o MP calcula **quais parcelas são possíveis** para aquele valor, bandeira e conta.
+- No **backend**, só repassamos para a API de pagamentos o que o formulário envia: `installments` (número de parcelas) e `issuer_id` quando existir (`backend/src/mercadopago.ts`). **Não há lista fixa de parcelas no código** do ComprasChina.
+
+### Parcelamento sem juros
+
+- As condições de **juros ou parcelas sem juros** dependem das **regras da sua conta Mercado Pago** (taxas, promoções, custo absorvido pela loja etc.), não de um flag no nosso repositório.
+- Configure no **painel do Mercado Pago** (conta de vendedor): busque por **parcelas**, **taxas** ou **parcelamento sem juros** nas configurações do negócio / meios de pagamento. O MP explica como ativar ofertas de parcelas sem juros para o comprador (pode haver custo para o vendedor conforme o produto MP).
+- Depois de ajustar na conta, o **mesmo** CardForm passa a exibir as opções atualizadas (ex.: “3x sem juros” quando aplicável).
+
+### Resumo
+
+| O quê                         | Onde |
+|------------------------------|------|
+| Opções exibidas no select    | Mercado Pago (SDK + conta) |
+| `installments` no pagamento  | Enviado pelo MP CardForm → nosso `create-payment` |
+
 ## Documentação oficial
 
 - [Checkout Transparente](https://www.mercadopago.com.br/developers/pt/docs/checkout-api/landing)

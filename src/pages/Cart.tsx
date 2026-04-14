@@ -6,7 +6,6 @@ import { useCart } from "@/context/CartContext";
 import { ShoppingCart, Trash2, Package, Truck } from "lucide-react";
 import {
   applyFreightPromo,
-  FRETE_PROMO_COUPON_CODE,
   calcCartShipping,
   detectCategory,
   categorySupportsKeepBox,
@@ -14,6 +13,7 @@ import {
 } from "@/lib/shipping";
 import { FreightPromoRulesLink } from "@/components/FreightPromoRules";
 import { FreightCouponField } from "@/components/FreightCouponField";
+import { FreightPromoSummaryCard } from "@/components/FreightPromoSummaryCard";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
@@ -244,29 +244,13 @@ const Cart = () => {
                   </span>
                 </div>
               ) : (
-                <div className="border-t border-border pt-2 space-y-1 text-sm">
-                  <div className="flex justify-between font-medium text-muted-foreground">
-                    <span>Total frete estimado</span>
-                    <span className="tabular-nums">
-                      <span className="line-through decoration-foreground/50 text-muted-foreground">
-                        R$ {freightPromo.rawFreightBrl.toFixed(2)}
-                      </span>
+                <div className="border-t border-border pt-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-foreground">
+                      Opção de envio
                     </span>
                   </div>
-                  {freightPromo.freightDiscountBrl > 0 && (
-                    <div className="flex justify-between font-semibold text-green-700 dark:text-green-400">
-                      <span>Desconto (cupom {FRETE_PROMO_COUPON_CODE})</span>
-                      <span className="tabular-nums">
-                        −R$ {freightPromo.freightDiscountBrl.toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-semibold text-foreground pt-0.5">
-                    <span>Frete a pagar</span>
-                    <span className="tabular-nums text-china-red">
-                      R$ {freightPromo.freightAfterPromoBrl.toFixed(2)}
-                    </span>
-                  </div>
+                  <FreightPromoSummaryCard freightPromo={freightPromo} />
                 </div>
               )}
               <div className="pt-2">

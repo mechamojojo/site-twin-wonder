@@ -6,7 +6,6 @@ import { useCart, type CartItem } from "@/context/CartContext";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import {
   applyFreightPromo,
-  FRETE_PROMO_COUPON_CODE,
   calcCartShipping,
   detectCategory,
   itemWeightG,
@@ -14,6 +13,7 @@ import {
 } from "@/lib/shipping";
 import { FreightPromoRulesLink } from "@/components/FreightPromoRules";
 import { FreightCouponField } from "@/components/FreightCouponField";
+import { FreightPromoSummaryCard } from "@/components/FreightPromoSummaryCard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -315,30 +315,19 @@ function OrderSummaryPanel({
             </span>
           </div>
         ) : (
-          <>
-            <div className="flex justify-between gap-2">
-              <span>Total frete estimado</span>
-              <span className="tabular-nums">
-                <span className="line-through decoration-foreground/50 text-muted-foreground">
-                  R$ {freightPromo.rawFreightBrl.toFixed(2)}
-                </span>
-              </span>
-            </div>
-            {freightPromo.freightDiscountBrl > 0 && (
-              <div className="flex justify-between gap-2 text-green-700 dark:text-green-400 font-medium">
-                <span>Desconto (cupom {FRETE_PROMO_COUPON_CODE})</span>
-                <span className="tabular-nums">
-                  −R$ {freightPromo.freightDiscountBrl.toFixed(2)}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between gap-2 text-foreground font-semibold pt-0.5 border-t border-border/50 border-dashed">
-              <span>Frete a pagar</span>
-              <span className="tabular-nums text-china-red">
-                R$ {freightPromo.freightAfterPromoBrl.toFixed(2)}
-              </span>
-            </div>
-          </>
+          <div className="space-y-2">
+            <p
+              className={`font-semibold text-foreground ${
+                dense ? "text-[10px]" : "text-xs"
+              }`}
+            >
+              Opção de envio
+            </p>
+            <FreightPromoSummaryCard
+              freightPromo={freightPromo}
+              dense={dense}
+            />
+          </div>
         )}
         <details className="group">
           <summary className="cursor-pointer list-none text-china-red hover:underline font-medium">
@@ -1433,7 +1422,7 @@ const Checkout = () => {
                             <Label>Número do cartão</Label>
                             <div
                               id="checkout-mp__cardNumber"
-                              className="mt-1.5 min-h-[44px] w-full rounded-lg border border-input bg-background px-3 py-2 [&>iframe]:min-h-[44px]"
+                              className="mt-1.5 flex h-10 w-full items-center overflow-hidden rounded-lg border border-input bg-background px-3 [&>iframe]:block [&>iframe]:h-10 [&>iframe]:max-h-10 [&>iframe]:min-h-0 [&>iframe]:w-full"
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-3">
@@ -1441,14 +1430,14 @@ const Checkout = () => {
                               <Label>Validade</Label>
                               <div
                                 id="checkout-mp__expirationDate"
-                                className="mt-1.5 min-h-[44px] rounded-lg border border-input bg-background [&>iframe]:min-h-[44px]"
+                                className="mt-1.5 flex h-10 items-center overflow-hidden rounded-lg border border-input bg-background px-2 [&>iframe]:block [&>iframe]:h-10 [&>iframe]:max-h-10 [&>iframe]:min-h-0 [&>iframe]:w-full"
                               />
                             </div>
                             <div>
                               <Label>CVV</Label>
                               <div
                                 id="checkout-mp__securityCode"
-                                className="mt-1.5 min-h-[44px] rounded-lg border border-input bg-background [&>iframe]:min-h-[44px]"
+                                className="mt-1.5 flex h-10 items-center overflow-hidden rounded-lg border border-input bg-background px-2 [&>iframe]:block [&>iframe]:h-10 [&>iframe]:max-h-10 [&>iframe]:min-h-0 [&>iframe]:w-full"
                               />
                             </div>
                           </div>

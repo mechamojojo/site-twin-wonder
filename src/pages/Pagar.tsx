@@ -402,16 +402,16 @@ const Pagar = () => {
                       <form id="form-checkout" className="space-y-4">
                         <div>
                           <Label>Número do cartão</Label>
-                          <div id="form-checkout__cardNumber" className="mt-1.5 min-h-[44px] w-full rounded-lg border border-input bg-background px-3 py-2 [&>iframe]:min-h-[44px]" />
+                          <div id="form-checkout__cardNumber" className="mt-1.5 flex h-10 w-full items-center overflow-hidden rounded-lg border border-input bg-background px-3 [&>iframe]:block [&>iframe]:h-10 [&>iframe]:max-h-10 [&>iframe]:min-h-0 [&>iframe]:w-full" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <Label>Validade</Label>
-                            <div id="form-checkout__expirationDate" className="mt-1.5 min-h-[44px] rounded-lg border border-input bg-background [&>iframe]:min-h-[44px]" />
+                            <div id="form-checkout__expirationDate" className="mt-1.5 flex h-10 items-center overflow-hidden rounded-lg border border-input bg-background px-2 [&>iframe]:block [&>iframe]:h-10 [&>iframe]:max-h-10 [&>iframe]:min-h-0 [&>iframe]:w-full" />
                           </div>
                           <div>
                             <Label>CVV</Label>
-                            <div id="form-checkout__securityCode" className="mt-1.5 min-h-[44px] rounded-lg border border-input bg-background [&>iframe]:min-h-[44px]" />
+                            <div id="form-checkout__securityCode" className="mt-1.5 flex h-10 items-center overflow-hidden rounded-lg border border-input bg-background px-2 [&>iframe]:block [&>iframe]:h-10 [&>iframe]:max-h-10 [&>iframe]:min-h-0 [&>iframe]:w-full" />
                           </div>
                         </div>
                         <div>

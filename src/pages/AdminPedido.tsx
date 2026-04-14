@@ -65,6 +65,7 @@ type Order = {
   productTitle: string | null;
   /** Título só na faixa "O que estão comprando" (opcional) */
   barDisplayTitle?: string | null;
+  hideFromRecentPurchasesBar?: boolean;
   productImage: string | null;
   productColor: string | null;
   productSize: string | null;
@@ -197,6 +198,7 @@ const AdminPedido = () => {
     carrier: "",
     productTitle: "",
     barDisplayTitle: "",
+    hideFromRecentPurchasesBar: false,
   });
 
   useEffect(() => {
@@ -229,6 +231,7 @@ const AdminPedido = () => {
             carrier: data.shipment?.carrier ?? "",
             productTitle: data.productTitle ?? "",
             barDisplayTitle: data.barDisplayTitle ?? "",
+            hideFromRecentPurchasesBar: Boolean(data.hideFromRecentPurchasesBar),
           });
         } else {
           setError(
@@ -296,6 +299,7 @@ const AdminPedido = () => {
             internalNotes: form.internalNotes.trim() || null,
             productTitle: form.productTitle.trim() || null,
             barDisplayTitle: form.barDisplayTitle.trim() || null,
+            hideFromRecentPurchasesBar: form.hideFromRecentPurchasesBar,
           }),
         }),
         fetch(apiUrl(`/api/admin/orders/${order.id}/shipment`), {
@@ -347,6 +351,9 @@ const AdminPedido = () => {
         internalNotes: updated.internalNotes ?? "",
         productTitle: updated.productTitle ?? "",
         barDisplayTitle: updated.barDisplayTitle ?? "",
+        hideFromRecentPurchasesBar: Boolean(
+          (updated as Order).hideFromRecentPurchasesBar,
+        ),
       }));
       toast.success("Salvo!");
     } catch {
@@ -1027,6 +1034,29 @@ const AdminPedido = () => {
                   até o título do produto acima (útil para um nome mais curto).
                 </p>
               </div>
+              <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-border bg-background px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={form.hideFromRecentPurchasesBar}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      hideFromRecentPurchasesBar: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 rounded border-border w-4 h-4 accent-china-red"
+                />
+                <span className="text-sm leading-snug">
+                  <span className="font-medium text-foreground">
+                    Ocultar da faixa &quot;Clientes já estão comprando&quot;
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground mt-0.5">
+                    O pedido deixa de ser considerado na lista da home. Se
+                    existir outro pedido pago com o mesmo link e sem esta opção,
+                    o produto pode continuar aparecendo.
+                  </span>
+                </span>
+              </label>
             </div>
             <div className="grid gap-3">
               <div>
