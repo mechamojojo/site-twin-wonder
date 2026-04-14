@@ -77,7 +77,8 @@ O `token` é gerado pelo Cardform do Mercado Pago no frontend. A página `/pagar
 
 - O **select de parcelas** (e banco emissor) é montado pelo **SDK do Mercado Pago** (`cardForm` / iframes no checkout e em `/pagar/:id`).
 - O valor do pedido é passado como `amount` para o formulário; o MP calcula **quais parcelas são possíveis** para aquele valor, bandeira e conta.
-- No **backend**, só repassamos para a API de pagamentos o que o formulário envia: `installments` (número de parcelas) e `issuer_id` quando existir (`backend/src/mercadopago.ts`). **Não há lista fixa de parcelas no código** do ComprasChina.
+- No **backend**, repassamos para a API de pagamentos o que o formulário envia: `installments` e `issuer_id` quando existir (`backend/src/mercadopago.ts`).
+- **Teto de parcelas na loja:** aceitamos no máximo **10x** no cartão (`MP_MAX_INSTALLMENTS_CARD` no backend; `MP_MAX_INSTALLMENTS` e `attachInstallmentsMaxClamp` no frontend em `src/lib/mercadopagoInstallments.ts`). O select do CardForm é **podado** no cliente para não exibir opções acima de 10x; o servidor **rejeita** `installments` fora de 1–10. Alinhe isso às regras da conta MP (tarifa do vendedor nas parcelas etc.).
 
 ### Parcelamento sem juros
 
@@ -89,8 +90,8 @@ O `token` é gerado pelo Cardform do Mercado Pago no frontend. A página `/pagar
 
 | O quê                         | Onde |
 |------------------------------|------|
-| Opções exibidas no select    | Mercado Pago (SDK + conta) |
-| `installments` no pagamento  | Enviado pelo MP CardForm → nosso `create-payment` |
+| Opções exibidas no select    | Mercado Pago (SDK + conta), limitadas a **até 10x** no front |
+| `installments` no pagamento  | Enviado pelo MP CardForm → nosso `create-payment` (validado 1–10) |
 
 ## Documentação oficial
 

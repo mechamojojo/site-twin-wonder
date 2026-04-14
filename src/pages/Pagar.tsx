@@ -5,6 +5,10 @@ import {
   hasRenderablePixPayload,
   pixDataFromCreatePaymentResponse,
 } from "@/lib/pixResponse";
+import {
+  attachInstallmentsMaxClamp,
+  MP_MAX_INSTALLMENTS,
+} from "@/lib/mercadopagoInstallments";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Input } from "@/components/ui/input";
@@ -181,6 +185,11 @@ const Pagar = () => {
 
     return () => setCardFormReady(false);
   }, [paymentMethod, order?.quote, submitCardPayment]);
+
+  useEffect(() => {
+    if (paymentMethod !== "card" || !cardFormReady) return;
+    return attachInstallmentsMaxClamp("form-checkout__installments");
+  }, [paymentMethod, cardFormReady]);
 
   const handlePixSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -445,7 +454,12 @@ const Pagar = () => {
                             <select id="form-checkout__issuer" className="mt-1.5 h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
                           </div>
                           <div>
-                            <Label htmlFor="form-checkout__installments">Parcelas</Label>
+                            <Label htmlFor="form-checkout__installments">
+                              Parcelas{" "}
+                              <span className="text-muted-foreground font-normal">
+                                (até {MP_MAX_INSTALLMENTS}x)
+                              </span>
+                            </Label>
                             <select id="form-checkout__installments" className="mt-1.5 h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
                           </div>
                         </div>

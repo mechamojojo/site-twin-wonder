@@ -44,6 +44,7 @@ import {
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
 import { resyncCatalogPrices } from "./resyncCatalogPrices";
 import { MAX_ORDER_LINE_QUANTITY } from "./quantityLimits";
+import { MP_MAX_INSTALLMENTS_CARD } from "./mercadopago";
 
 const prisma = new PrismaClient();
 const app = express();
@@ -3187,6 +3188,21 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
       });
     }
 
+    let installmentsForCard = 1;
+    if (!isPix) {
+      installmentsForCard = Number(installments);
+      if (
+        !Number.isFinite(installmentsForCard) ||
+        !Number.isInteger(installmentsForCard) ||
+        installmentsForCard < 1 ||
+        installmentsForCard > MP_MAX_INSTALLMENTS_CARD
+      ) {
+        return res.status(400).json({
+          error: `Escolha de 1 a ${MP_MAX_INSTALLMENTS_CARD} parcelas.`,
+        });
+      }
+    }
+
     const { createPayment, extractPixTransactionData } = await import(
       "./mercadopago"
     );
@@ -3200,7 +3216,7 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
       payerEmail,
       payerName: payer_name || order.customerName || undefined,
       description: `ComprasChina - Pedido ${order.id}`,
-      installments: isPix ? 1 : Number(installments),
+      installments: isPix ? 1 : installmentsForCard,
       issuerId: issuer_id,
       identificationType: identification_type,
       identificationNumber: identification_number,

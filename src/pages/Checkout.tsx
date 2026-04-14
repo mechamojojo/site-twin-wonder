@@ -23,6 +23,10 @@ import {
   hasRenderablePixPayload,
   pixDataFromCreatePaymentResponse,
 } from "@/lib/pixResponse";
+import {
+  attachInstallmentsMaxClamp,
+  MP_MAX_INSTALLMENTS,
+} from "@/lib/mercadopagoInstallments";
 import { ensureHttpsImage } from "@/lib/utils";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import {
@@ -911,6 +915,11 @@ const Checkout = () => {
     };
   }, [step, paymentMethod, firstLineAmountStr, checkoutComputation]);
 
+  useEffect(() => {
+    if (step !== 2 || paymentMethod !== "card" || !cardFormReady) return;
+    return attachInstallmentsMaxClamp("checkout-mp__installments");
+  }, [step, paymentMethod, cardFormReady]);
+
   const copyPixCode = () => {
     if (!pixData?.qr_code) return;
     navigator.clipboard.writeText(pixData.qr_code);
@@ -1497,7 +1506,10 @@ const Checkout = () => {
                             </div>
                             <div>
                               <Label htmlFor="checkout-mp__installments">
-                                Parcelas
+                                Parcelas{" "}
+                                <span className="text-muted-foreground font-normal">
+                                  (até {MP_MAX_INSTALLMENTS}x)
+                                </span>
                               </Label>
                               <select
                                 id="checkout-mp__installments"

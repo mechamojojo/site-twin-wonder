@@ -5,6 +5,9 @@
 
 const MP_API = "https://api.mercadopago.com/v1/payments";
 
+/** Limite de parcelas no cartão (política da loja; tarifa absorvida pelo vendedor no MP). */
+export const MP_MAX_INSTALLMENTS_CARD = 10;
+
 export async function createPayment(params: {
   accessToken: string;
   idempotencyKey: string;
@@ -58,8 +61,19 @@ export async function createPayment(params: {
   };
 
   if (isCard) {
+    const n = Number(installments);
+    if (
+      !Number.isFinite(n) ||
+      n < 1 ||
+      n > MP_MAX_INSTALLMENTS_CARD ||
+      !Number.isInteger(n)
+    ) {
+      throw new Error(
+        `Parcelas inválidas. Utilize de 1 a ${MP_MAX_INSTALLMENTS_CARD} parcelas.`,
+      );
+    }
     body.token = token;
-    body.installments = installments;
+    body.installments = n;
     if (issuerId) body.issuer_id = issuerId;
   }
 
