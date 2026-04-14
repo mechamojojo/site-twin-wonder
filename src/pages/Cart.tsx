@@ -6,18 +6,21 @@ import { useCart } from "@/context/CartContext";
 import { ShoppingCart, Trash2, Package, Truck } from "lucide-react";
 import {
   applyFreightPromo,
+  FRETE_PROMO_COUPON_CODE,
   calcCartShipping,
   detectCategory,
   categorySupportsKeepBox,
   itemWeightG,
 } from "@/lib/shipping";
 import { FreightPromoRulesLink } from "@/components/FreightPromoRules";
+import { FreightCouponField } from "@/components/FreightCouponField";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 
 const Cart = () => {
-  const { items, removeItem, updateQuantity, updateKeepBox } = useCart();
+  const { items, removeItem, updateQuantity, updateKeepBox, freightCouponCode } =
+    useCart();
 
   const totalBrl = items.reduce(
     (acc, i) =>
@@ -37,8 +40,8 @@ const Cart = () => {
   });
   const shipping = calcCartShipping(shippingItems);
   const freightPromo = useMemo(
-    () => applyFreightPromo(totalBrl, shipping.totalBrl),
-    [totalBrl, shipping.totalBrl],
+    () => applyFreightPromo(totalBrl, shipping.totalBrl, freightCouponCode),
+    [totalBrl, shipping.totalBrl, freightCouponCode],
   );
   const grandTotal =
     totalBrl > 0
@@ -183,6 +186,8 @@ const Cart = () => {
               );
             })}
 
+            <FreightCouponField productSubtotalBrl={totalBrl} className="rounded-xl border border-border bg-card p-4" />
+
             {/* Shipping breakdown card */}
             <div className="rounded-xl border border-border bg-card p-4 space-y-2">
               <div className="flex items-center gap-2 mb-1">
@@ -191,6 +196,12 @@ const Cart = () => {
                   Frete
                 </p>
               </div>
+              {freightPromo.couponWaitsMinSubtotal && (
+                <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 rounded-lg px-2 py-1.5 border border-amber-200/60 dark:border-amber-800/50">
+                  Cupom ativo: ao passar de R$ 1.000 em produtos, o frete estimado
+                  entra na promoção (até R$ 200 de desconto).
+                </p>
+              )}
               <div className="text-xs text-muted-foreground space-y-1">
                 <div className="flex justify-between">
                   <span>Peso total</span>
@@ -226,13 +237,15 @@ const Cart = () => {
                 <div className="border-t border-border pt-2 space-y-1 text-sm">
                   <div className="flex justify-between font-medium text-muted-foreground">
                     <span>Total frete estimado</span>
-                    <span className="text-foreground tabular-nums">
-                      R$ {freightPromo.rawFreightBrl.toFixed(2)}
+                    <span className="tabular-nums">
+                      <span className="line-through decoration-foreground/50 text-muted-foreground">
+                        R$ {freightPromo.rawFreightBrl.toFixed(2)}
+                      </span>
                     </span>
                   </div>
                   {freightPromo.freightDiscountBrl > 0 && (
                     <div className="flex justify-between font-semibold text-green-700 dark:text-green-400">
-                      <span>Desconto (pedido ≥ R$ 1.000)</span>
+                      <span>Desconto (cupom {FRETE_PROMO_COUPON_CODE})</span>
                       <span className="tabular-nums">
                         −R$ {freightPromo.freightDiscountBrl.toFixed(2)}
                       </span>

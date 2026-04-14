@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
+import FreightCouponBanner from "@/components/FreightCouponBanner";
 import HeroSection from "@/components/HeroSection";
 import MarketplaceBanner from "@/components/MarketplaceBanner";
 import RecentPurchasesBar from "@/components/RecentPurchasesBar";
@@ -70,6 +71,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      <FreightCouponBanner />
 
       {/* 1. Hero — proposta + busca */}
       <HeroSection />

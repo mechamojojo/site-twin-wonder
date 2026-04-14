@@ -196,24 +196,53 @@ export function calcCartShipping(items: CartShippingItem[]): CartShippingResult 
 export const FRETE_PROMO_SUBTOTAL_MIN_BRL = 1000;
 /** Máximo de desconto aplicado sobre o frete estimado (em R$) */
 export const FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL = 200;
+/** Cupom que ativa o benefício de frete (comparado após normalização) */
+export const FRETE_PROMO_COUPON_CODE = "COMPRASCHINA";
+
+export function normalizeFreightCouponCode(raw: string | null | undefined): string {
+  return (raw ?? "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
+export function isFreightPromoCouponCode(
+  raw: string | null | undefined,
+): boolean {
+  return normalizeFreightCouponCode(raw) === FRETE_PROMO_COUPON_CODE;
+}
 
 export type FreightPromoResult = {
   qualifies: boolean;
   rawFreightBrl: number;
   freightDiscountBrl: number;
   freightAfterPromoBrl: number;
+  /** Cupom certo, mas subtotal de produtos ainda abaixo do mínimo */
+  couponWaitsMinSubtotal?: boolean;
 };
 
 /**
- * Aplica desconto no frete quando o subtotal de produtos atinge o mínimo.
- * O desconto é no máximo `FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL` e nunca excede o próprio frete.
+ * Aplica desconto no frete quando o cupom COMPRASCHINA está ativo e o subtotal
+ * de produtos atinge o mínimo. O desconto é no máximo
+ * `FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL` e nunca excede o próprio frete.
  */
 export function applyFreightPromo(
   productSubtotalBrl: number,
   rawFreightBrl: number,
+  couponCode?: string | null,
 ): FreightPromoResult {
   const raw = Math.round(rawFreightBrl * 100) / 100;
+  const couponOk = isFreightPromoCouponCode(couponCode);
+
+  if (couponOk && productSubtotalBrl > 0 && productSubtotalBrl < FRETE_PROMO_SUBTOTAL_MIN_BRL) {
+    return {
+      qualifies: false,
+      rawFreightBrl: raw,
+      freightDiscountBrl: 0,
+      freightAfterPromoBrl: raw,
+      couponWaitsMinSubtotal: true,
+    };
+  }
+
   if (
+    !couponOk ||
     productSubtotalBrl < FRETE_PROMO_SUBTOTAL_MIN_BRL ||
     productSubtotalBrl <= 0 ||
     raw <= 0
@@ -225,6 +254,7 @@ export function applyFreightPromo(
       freightAfterPromoBrl: raw,
     };
   }
+
   const freightDiscountBrl = Math.min(
     raw,
     FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL,

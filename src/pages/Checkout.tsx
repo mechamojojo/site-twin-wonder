@@ -6,12 +6,14 @@ import { useCart, type CartItem } from "@/context/CartContext";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import {
   applyFreightPromo,
+  FRETE_PROMO_COUPON_CODE,
   calcCartShipping,
   detectCategory,
   itemWeightG,
   type FreightPromoResult,
 } from "@/lib/shipping";
 import { FreightPromoRulesLink } from "@/components/FreightPromoRules";
+import { FreightCouponField } from "@/components/FreightCouponField";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -289,6 +291,19 @@ function OrderSummaryPanel({
           </span>
         </div>
       )}
+      <FreightCouponField
+        productSubtotalBrl={totalProductBrl}
+        compact={dense}
+        className="pt-2"
+      />
+      {freightPromo.couponWaitsMinSubtotal && (
+        <p
+          className={`text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 rounded-lg px-2 py-1.5 border border-amber-200/60 dark:border-amber-800/50 ${dense ? "text-[10px]" : "text-[11px]"}`}
+        >
+          Cupom ativo: ao passar de R$ 1.000 em produtos, o frete estimado
+          entra na promoção (até R$ 200 de desconto).
+        </p>
+      )}
       <div
         className={`space-y-1.5 text-muted-foreground ${dense ? "text-[11px]" : "text-xs"}`}
       >
@@ -303,13 +318,15 @@ function OrderSummaryPanel({
           <>
             <div className="flex justify-between gap-2">
               <span>Total frete estimado</span>
-              <span className="text-foreground tabular-nums">
-                R$ {freightPromo.rawFreightBrl.toFixed(2)}
+              <span className="tabular-nums">
+                <span className="line-through decoration-foreground/50 text-muted-foreground">
+                  R$ {freightPromo.rawFreightBrl.toFixed(2)}
+                </span>
               </span>
             </div>
             {freightPromo.freightDiscountBrl > 0 && (
               <div className="flex justify-between gap-2 text-green-700 dark:text-green-400 font-medium">
-                <span>Desconto (pedido ≥ R$ 1.000)</span>
+                <span>Desconto (cupom {FRETE_PROMO_COUPON_CODE})</span>
                 <span className="tabular-nums">
                   −R$ {freightPromo.freightDiscountBrl.toFixed(2)}
                 </span>
@@ -386,7 +403,7 @@ function OrderSummaryPanel({
 }
 
 const Checkout = () => {
-  const { items, clearCart } = useCart();
+  const { items, clearCart, freightCouponCode } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [cepLoading, setCepLoading] = useState(false);
@@ -481,8 +498,9 @@ const Checkout = () => {
   );
 
   const freightPromo = useMemo(
-    () => applyFreightPromo(totalProductBrl, shipping.totalBrl),
-    [totalProductBrl, shipping.totalBrl],
+    () =>
+      applyFreightPromo(totalProductBrl, shipping.totalBrl, freightCouponCode),
+    [totalProductBrl, shipping.totalBrl, freightCouponCode],
   );
 
   const grandTotal = useMemo(

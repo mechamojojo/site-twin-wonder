@@ -1,8 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ProductCategory } from "@/lib/shipping";
+import { normalizeFreightCouponCode } from "@/lib/shipping";
 import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 
 const CART_STORAGE_KEY = "compraschina-cart";
+const FREIGHT_COUPON_STORAGE_KEY = "compraschina-freight-coupon";
 
 function clampCartQuantity(n: unknown): number {
   const q = Math.floor(Number(n));
@@ -34,6 +36,10 @@ export type CartItem = {
 type CartContextValue = {
   items: CartItem[];
   totalItems: number;
+  /** Cupom de frete normalizado (ex.: COMPRASCHINA) ou string vazia */
+  freightCouponCode: string;
+  setFreightCouponCode: (code: string) => void;
+  clearFreightCoupon: () => void;
   addItem: (item: Omit<CartItem, "id">) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
@@ -66,12 +72,45 @@ function saveToStorage(items: CartItem[]) {
   }
 }
 
+function loadFreightCoupon(): string {
+  try {
+    const raw = localStorage.getItem(FREIGHT_COUPON_STORAGE_KEY);
+    return raw ? normalizeFreightCouponCode(raw) : "";
+  } catch {
+    return "";
+  }
+}
+
+function saveFreightCoupon(code: string) {
+  try {
+    if (code) localStorage.setItem(FREIGHT_COUPON_STORAGE_KEY, code);
+    else localStorage.removeItem(FREIGHT_COUPON_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => loadFromStorage());
+  const [freightCouponCode, setFreightCouponState] = useState<string>(
+    () => loadFreightCoupon(),
+  );
 
   useEffect(() => {
     saveToStorage(items);
   }, [items]);
+
+  useEffect(() => {
+    saveFreightCoupon(freightCouponCode);
+  }, [freightCouponCode]);
+
+  const setFreightCouponCode = useCallback((code: string) => {
+    setFreightCouponState(normalizeFreightCouponCode(code));
+  }, []);
+
+  const clearFreightCoupon = useCallback(() => {
+    setFreightCouponState("");
+  }, []);
 
   const addItem = useCallback((item: Omit<CartItem, "id">) => {
     const id = crypto.randomUUID?.() ?? `cart-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -104,8 +143,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<CartContextValue>(
-    () => ({ items, totalItems, addItem, removeItem, updateQuantity, updateKeepBox, clearCart }),
-    [items, totalItems, addItem, removeItem, updateQuantity, updateKeepBox, clearCart]
+    () => ({
+      items,
+      totalItems,
+      freightCouponCode,
+      setFreightCouponCode,
+      clearFreightCoupon,
+      addItem,
+      removeItem,
+      updateQuantity,
+      updateKeepBox,
+      clearCart,
+    }),
+    [
+      items,
+      totalItems,
+      freightCouponCode,
+      setFreightCouponCode,
+      clearFreightCoupon,
+      addItem,
+      removeItem,
+      updateQuantity,
+      updateKeepBox,
+      clearCart,
+    ],
   );
 
   return (
