@@ -9,6 +9,7 @@ import {
   calcCartShipping,
   detectCategory,
   itemWeightG,
+  splitRedditTenPercentProductLines,
   type FreightPromoResult,
 } from "@/lib/shipping";
 import { FreightPromoRulesLink } from "@/components/FreightPromoRules";
@@ -164,7 +165,9 @@ type ShippingComputed = ReturnType<typeof calcCartShipping>;
 type CheckoutSummaryLock = {
   itemsSnapshot: CartItem[];
   shipping: ShippingComputed;
-  totalProductBrl: number;
+  /** Subtotal bruto de produtos (antes do desconto secreto) */
+  productGrossBrl: number;
+  redditProductDiscountBrl: number;
   grandTotal: number;
   freightPromo: FreightPromoResult;
 };
@@ -242,14 +245,16 @@ function CheckoutStepper({
 function OrderSummaryPanel({
   items,
   shipping,
-  totalProductBrl,
+  productGrossBrl,
+  redditProductDiscountBrl,
   grandTotal,
   freightPromo,
   variant = "default",
 }: {
   items: CartItem[];
   shipping: ShippingComputed;
-  totalProductBrl: number;
+  productGrossBrl: number;
+  redditProductDiscountBrl: number;
   grandTotal: number;
   freightPromo: FreightPromoResult;
   variant?: "default" | "compact";
@@ -307,16 +312,24 @@ function OrderSummaryPanel({
           );
         })}
       </ul>
-      {totalProductBrl > 0 && (
+      {productGrossBrl > 0 && (
         <div className="flex justify-between gap-2 text-sm text-foreground pt-1 border-t border-border/60">
           <span>Subtotal produtos</span>
           <span className="font-medium tabular-nums">
-            R$ {totalProductBrl.toFixed(2)}
+            R$ {productGrossBrl.toFixed(2)}
+          </span>
+        </div>
+      )}
+      {redditProductDiscountBrl > 0 && (
+        <div className="flex justify-between gap-2 text-xs text-green-700 dark:text-green-400 pt-0.5">
+          <span>Desconto produtos (10%)</span>
+          <span className="font-medium tabular-nums">
+            − R$ {redditProductDiscountBrl.toFixed(2)}
           </span>
         </div>
       )}
       <FreightCouponField
-        productSubtotalBrl={totalProductBrl}
+        productSubtotalBrl={productGrossBrl}
         compact={dense}
         className="pt-2"
       />
@@ -394,10 +407,10 @@ function OrderSummaryPanel({
           Total estimado
         </span>
         <span className="text-xl font-bold text-china-red tabular-nums">
-          {totalProductBrl > 0 ? `R$ ${grandTotal.toFixed(2)}` : "—"}
+          {productGrossBrl > 0 ? `R$ ${grandTotal.toFixed(2)}` : "—"}
         </span>
       </div>
-      {totalProductBrl === 0 && (
+      {productGrossBrl === 0 && (
         <p className="text-[11px] text-muted-foreground">
           Valor em R$ confirmado na cotação, como no carrinho.
         </p>
@@ -416,7 +429,8 @@ function OrderSummaryPanel({
 }
 
 const Checkout = () => {
-  const { items, clearCart, freightCouponCode } = useCart();
+  const { items, clearCart, freightCouponCode, redditProductPromo10 } =
+    useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [cepLoading, setCepLoading] = useState(false);
@@ -514,6 +528,17 @@ const Checkout = () => {
     [items],
   );
 
+  const redditLineSplit = useMemo(() => {
+    const lineGrossBrls = items.map((i) => {
+      const unit = getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0;
+      return Math.round(unit * i.quantity * 100) / 100;
+    });
+    return splitRedditTenPercentProductLines(lineGrossBrls, redditProductPromo10);
+  }, [items, redditProductPromo10]);
+
+  const redditProductDiscountBrl = redditLineSplit.discountBrl;
+  const netProductSubtotalBrl = redditLineSplit.netTotalBrl;
+
   const freightPromo = useMemo(
     () =>
       applyFreightPromo(totalProductBrl, shipping.totalBrl, freightCouponCode),
@@ -522,12 +547,12 @@ const Checkout = () => {
 
   const grandTotal = useMemo(
     () =>
-      totalProductBrl > 0
+      netProductSubtotalBrl > 0
         ? Math.round(
-            (totalProductBrl + freightPromo.freightAfterPromoBrl) * 100,
+            (netProductSubtotalBrl + freightPromo.freightAfterPromoBrl) * 100,
           ) / 100
         : 0,
-    [totalProductBrl, freightPromo.freightAfterPromoBrl],
+    [netProductSubtotalBrl, freightPromo.freightAfterPromoBrl],
   );
 
   const checkoutComputation = useMemo(() => {
@@ -536,7 +561,16 @@ const Checkout = () => {
     const totalWeightG = shipping.totalWeightG;
     const checkoutGroupId = items.length > 1 ? crypto.randomUUID() : null;
 
-    const orderItemsJson = items.map((i) => {
+    const lineGrossBrls = items.map((i) => {
+      const unit = getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0;
+      return Math.round(unit * i.quantity * 100) / 100;
+    });
+    const { lineNetBrls } = splitRedditTenPercentProductLines(
+      lineGrossBrls,
+      redditProductPromo10,
+    );
+
+    const orderItemsJson = items.map((i, idx) => {
       const unit = getDisplayPriceBrl(i.priceCny, i.priceBrl) ?? 0;
       return {
         url: i.url,
@@ -549,14 +583,14 @@ const Checkout = () => {
         variation: i.variation ?? null,
         notes: i.notes ?? null,
         unitBrl: unit,
-        lineProductBrl: Math.round(unit * i.quantity * 100) / 100,
+        lineProductBrl: lineNetBrls[idx] ?? 0,
       };
     });
 
     const lineEstimates: number[] = [];
-    for (const item of items) {
-      const unitBrl = getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0;
-      const productTotal = Math.round(unitBrl * item.quantity * 100) / 100;
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx]!;
+      const productTotal = lineNetBrls[idx] ?? 0;
       const itemCat =
         item.category ?? detectCategory(item.titlePt ?? item.title);
       const lineWeightG =
@@ -572,7 +606,7 @@ const Checkout = () => {
     const sumLineEstimates =
       Math.round(lineEstimates.reduce((a, b) => a + b, 0) * 100) / 100;
     const expectedCheckoutTotal =
-      Math.round((totalProductBrl + totalFreightBrl) * 100) / 100;
+      Math.round((netProductSubtotalBrl + totalFreightBrl) * 100) / 100;
 
     return {
       checkoutGroupId,
@@ -582,14 +616,24 @@ const Checkout = () => {
       expectedCheckoutTotal,
       firstLineTotalBrl: lineEstimates[0] ?? 0,
     };
-  }, [items, shipping, totalProductBrl, freightPromo]);
+  }, [
+    items,
+    shipping,
+    freightPromo,
+    redditProductPromo10,
+    netProductSubtotalBrl,
+  ]);
 
   const displayItems =
     items.length > 0 ? items : summaryLock?.itemsSnapshot ?? [];
   const displayShipping =
     items.length > 0 ? shipping : summaryLock?.shipping ?? shipping;
-  const displayTotalProductBrl =
-    items.length > 0 ? totalProductBrl : summaryLock?.totalProductBrl ?? 0;
+  const displayProductGrossBrl =
+    items.length > 0 ? totalProductBrl : summaryLock?.productGrossBrl ?? 0;
+  const displayRedditProductDiscountBrl =
+    items.length > 0
+      ? redditProductDiscountBrl
+      : summaryLock?.redditProductDiscountBrl ?? 0;
   const displayGrandTotal =
     items.length > 0 ? grandTotal : summaryLock?.grandTotal ?? 0;
   const displayFreightPromo =
@@ -720,6 +764,7 @@ const Checkout = () => {
           checkoutGroupId,
           orderItemsJson,
           silentOrderCreation: true,
+          redditProductDiscount10: redditProductPromo10,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -731,7 +776,7 @@ const Checkout = () => {
     checkoutSessionRef.current = sid;
     setCheckoutSession(sid);
     return firstOrderId;
-  }, [items, checkoutComputation, form, deliveryInBrazil]);
+  }, [items, checkoutComputation, form, deliveryInBrazil, redditProductPromo10]);
 
   const createPixPayment = async (orderId: string) => {
     const res = await fetch(apiUrl(`/api/orders/${orderId}/create-payment`), {
@@ -762,7 +807,8 @@ const Checkout = () => {
     setSummaryLock({
       itemsSnapshot: items.map((i) => ({ ...i })),
       shipping: { ...shipping },
-      totalProductBrl,
+      productGrossBrl: totalProductBrl,
+      redditProductDiscountBrl,
       grandTotal,
       freightPromo: { ...freightPromo },
     });
@@ -966,7 +1012,8 @@ const Checkout = () => {
   const summaryProps = {
     items: displayItems,
     shipping: displayShipping,
-    totalProductBrl: displayTotalProductBrl,
+    productGrossBrl: displayProductGrossBrl,
+    redditProductDiscountBrl: displayRedditProductDiscountBrl,
     grandTotal: displayGrandTotal,
     freightPromo: displayFreightPromo,
   };
@@ -1060,7 +1107,7 @@ const Checkout = () => {
                     <span className="truncate">
                       Pedido ({items.length}{" "}
                       {items.length === 1 ? "item" : "itens"}) ·{" "}
-                      {displayTotalProductBrl > 0
+                      {displayProductGrossBrl > 0
                         ? `R$ ${displayGrandTotal.toFixed(2)}`
                         : "Total a confirmar"}
                     </span>
@@ -1695,7 +1742,7 @@ const Checkout = () => {
                   Total estimado
                 </p>
                 <p className="text-xl font-bold text-china-red tabular-nums truncate">
-                  {displayTotalProductBrl > 0
+                  {displayProductGrossBrl > 0
                     ? `R$ ${displayGrandTotal.toFixed(2)}`
                     : "—"}
                 </p>

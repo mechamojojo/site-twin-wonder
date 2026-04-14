@@ -7,6 +7,7 @@ import { ShoppingCart, Trash2, Package, Truck } from "lucide-react";
 import {
   applyFreightPromo,
   calcCartShipping,
+  computeRedditProductDiscountFromGross,
   detectCategory,
   categorySupportsKeepBox,
   itemWeightG,
@@ -26,6 +27,7 @@ const Cart = () => {
     updateQuantity,
     updateKeepBox,
     freightCouponCode,
+    redditProductPromo10,
   } = useCart();
 
   useEffect(() => {
@@ -58,9 +60,15 @@ const Cart = () => {
     () => applyFreightPromo(totalBrl, shipping.totalBrl, freightCouponCode),
     [totalBrl, shipping.totalBrl, freightCouponCode],
   );
+  const { discountBrl: redditProductDiscountBrl, netProductBrl } = useMemo(
+    () => computeRedditProductDiscountFromGross(totalBrl, redditProductPromo10),
+    [totalBrl, redditProductPromo10],
+  );
   const grandTotal =
-    totalBrl > 0
-      ? Math.round((totalBrl + freightPromo.freightAfterPromoBrl) * 100) / 100
+    netProductBrl > 0
+      ? Math.round(
+          (netProductBrl + freightPromo.freightAfterPromoBrl) * 100,
+        ) / 100
       : 0;
 
   return (
@@ -262,6 +270,14 @@ const Cart = () => {
               <div className="pt-2">
                 <FreightPromoRulesLink id="regras-frete" size="sm" />
               </div>
+              {redditProductDiscountBrl > 0 && (
+                <div className="flex justify-between text-xs text-green-700 dark:text-green-400 pt-1">
+                  <span>Desconto produtos (10%)</span>
+                  <span className="tabular-nums">
+                    − R$ {redditProductDiscountBrl.toFixed(2)}
+                  </span>
+                </div>
+              )}
               {totalBrl > 0 && (
                 <div className="flex justify-between text-sm font-bold text-china-red pt-1 border-t border-border">
                   <span>

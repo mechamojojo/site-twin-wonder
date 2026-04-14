@@ -2650,15 +2650,29 @@ app.post("/api/orders", optionalUser, async (req, res) => {
 
     const totalBrlIncoming = Number(estimatedTotalBrl) || 0;
     if (orderItemsJson && orderItemsJson.length > 0) {
-      let sumLineProducts = 0;
+      const urlStr = String(originalUrl ?? "").trim();
+      let lineProductForThisOrder = 0;
       for (const row of orderItemsJson) {
         if (row && typeof row === "object") {
-          const v = (row as Record<string, unknown>).lineProductBrl;
-          if (typeof v === "number" && Number.isFinite(v) && v >= 0)
-            sumLineProducts += v;
+          const rowUrl = (row as Record<string, unknown>).url;
+          if (typeof rowUrl === "string" && rowUrl.trim() === urlStr) {
+            const v = (row as Record<string, unknown>).lineProductBrl;
+            if (typeof v === "number" && Number.isFinite(v) && v >= 0)
+              lineProductForThisOrder = v;
+            break;
+          }
         }
       }
-      if (sumLineProducts > 0 && totalBrlIncoming + 0.02 < sumLineProducts) {
+      if (lineProductForThisOrder <= 0 && orderItemsJson.length === 1) {
+        const row0 = orderItemsJson[0] as Record<string, unknown>;
+        const v = row0.lineProductBrl;
+        if (typeof v === "number" && Number.isFinite(v) && v >= 0)
+          lineProductForThisOrder = v;
+      }
+      if (
+        lineProductForThisOrder > 0 &&
+        totalBrlIncoming + 0.02 < lineProductForThisOrder
+      ) {
         return res.status(400).json({
           error:
             "Total menor que a soma dos produtos (dados inválidos). Atualize o site e tente novamente.",

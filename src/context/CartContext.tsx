@@ -12,6 +12,7 @@ import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 
 const CART_STORAGE_KEY = "compraschina-cart";
 const FREIGHT_COUPON_STORAGE_KEY = "compraschina-freight-coupon";
+const PRODUCT_LINE_DISCOUNT_10_STORAGE_KEY = "compraschina-line-discount-10";
 
 function clampCartQuantity(n: unknown): number {
   const q = Math.floor(Number(n));
@@ -47,6 +48,10 @@ type CartContextValue = {
   freightCouponCode: string;
   setFreightCouponCode: (code: string) => void;
   clearFreightCoupon: () => void;
+  /** -10% no subtotal de produtos quando o cupom secreto está ativo (persistido) */
+  redditProductPromo10: boolean;
+  setRedditProductPromo10: (active: boolean) => void;
+  clearRedditProductPromo: () => void;
   addItem: (item: Omit<CartItem, "id">) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
@@ -97,10 +102,30 @@ function saveFreightCoupon(code: string) {
   }
 }
 
+function loadRedditProductPromo(): boolean {
+  try {
+    return localStorage.getItem(PRODUCT_LINE_DISCOUNT_10_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveRedditProductPromo(active: boolean) {
+  try {
+    if (active) localStorage.setItem(PRODUCT_LINE_DISCOUNT_10_STORAGE_KEY, "1");
+    else localStorage.removeItem(PRODUCT_LINE_DISCOUNT_10_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => loadFromStorage());
   const [freightCouponCode, setFreightCouponState] = useState<string>(() =>
     loadFreightCoupon(),
+  );
+  const [redditProductPromo10, setRedditProductPromo10State] = useState(
+    () => loadRedditProductPromo(),
   );
 
   useEffect(() => {
@@ -111,12 +136,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     saveFreightCoupon(freightCouponCode);
   }, [freightCouponCode]);
 
+  useEffect(() => {
+    saveRedditProductPromo(redditProductPromo10);
+  }, [redditProductPromo10]);
+
   const setFreightCouponCode = useCallback((code: string) => {
     setFreightCouponState(normalizeFreightCouponCode(code));
   }, []);
 
   const clearFreightCoupon = useCallback(() => {
     setFreightCouponState("");
+  }, []);
+
+  const setRedditProductPromo10 = useCallback((active: boolean) => {
+    setRedditProductPromo10State(active);
+  }, []);
+
+  const clearRedditProductPromo = useCallback(() => {
+    setRedditProductPromo10State(false);
   }, []);
 
   const addItem = useCallback((item: Omit<CartItem, "id">) => {
@@ -156,6 +193,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       freightCouponCode,
       setFreightCouponCode,
       clearFreightCoupon,
+      redditProductPromo10,
+      setRedditProductPromo10,
+      clearRedditProductPromo,
       addItem,
       removeItem,
       updateQuantity,
@@ -168,6 +208,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       freightCouponCode,
       setFreightCouponCode,
       clearFreightCoupon,
+      redditProductPromo10,
+      setRedditProductPromo10,
+      clearRedditProductPromo,
       addItem,
       removeItem,
       updateQuantity,

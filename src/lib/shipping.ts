@@ -268,3 +268,75 @@ export function applyFreightPromo(
     freightAfterPromoBrl: Math.max(0, freightAfterPromoBrl),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Cupom “secreto” de 10% sobre o subtotal de produtos (não altera frete)
+// ---------------------------------------------------------------------------
+
+/** Código exato (após trim; comparação case-insensitive). */
+export const REDDIT_PRODUCT_PROMO_COUPON_CODE = "r/AliExpressBR";
+
+export function roundMoneyBrl(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function isRedditProductPromoCouponCode(
+  raw: string | null | undefined,
+): boolean {
+  const s = (raw ?? "").trim();
+  if (!s) return false;
+  return s.toLowerCase() === REDDIT_PRODUCT_PROMO_COUPON_CODE.toLowerCase();
+}
+
+/**
+ * Desconto de 10% sobre o subtotal bruto de produtos (um valor agregado).
+ */
+export function computeRedditProductDiscountFromGross(
+  grossProductBrl: number,
+  active: boolean,
+): { discountBrl: number; netProductBrl: number } {
+  const gross = roundMoneyBrl(grossProductBrl);
+  if (!active || gross <= 0) {
+    return { discountBrl: 0, netProductBrl: gross };
+  }
+  const netProductBrl = roundMoneyBrl(gross * 0.9);
+  return {
+    discountBrl: roundMoneyBrl(gross - netProductBrl),
+    netProductBrl,
+  };
+}
+
+/**
+ * Distribui o -10% por linha (centavos) para bater com pedido/checkout e API.
+ */
+export function splitRedditTenPercentProductLines(
+  lineGrossBrls: number[],
+  active: boolean,
+): { lineNetBrls: number[]; discountBrl: number; netTotalBrl: number } {
+  if (!active || lineGrossBrls.length === 0) {
+    const lineNetBrls = lineGrossBrls.map((g) => roundMoneyBrl(g));
+    const netTotalBrl = roundMoneyBrl(
+      lineNetBrls.reduce((a, b) => a + b, 0),
+    );
+    return { lineNetBrls, discountBrl: 0, netTotalBrl };
+  }
+  const gross = roundMoneyBrl(lineGrossBrls.reduce((a, b) => a + b, 0));
+  if (gross <= 0) {
+    return {
+      lineNetBrls: lineGrossBrls.map(() => 0),
+      discountBrl: 0,
+      netTotalBrl: 0,
+    };
+  }
+  const targetNet = roundMoneyBrl(gross * 0.9);
+  const discountBrl = roundMoneyBrl(gross - targetNet);
+  const lineNetBrls = lineGrossBrls.map((g) => roundMoneyBrl(g * 0.9));
+  const sumNet = roundMoneyBrl(lineNetBrls.reduce((a, b) => a + b, 0));
+  const drift = roundMoneyBrl(targetNet - sumNet);
+  if (Math.abs(drift) >= 0.001 && lineNetBrls.length > 0) {
+    lineNetBrls[lineNetBrls.length - 1] = roundMoneyBrl(
+      lineNetBrls[lineNetBrls.length - 1] + drift,
+    );
+  }
+  return { lineNetBrls, discountBrl, netTotalBrl: targetNet };
+}
