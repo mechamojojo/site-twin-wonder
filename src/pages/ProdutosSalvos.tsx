@@ -55,7 +55,9 @@ const ProdutosSalvos = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <h1 className="text-xl font-heading font-bold text-foreground mb-1">Produtos salvos</h1>
+        <h1 className="text-xl font-heading font-bold text-foreground mb-1">
+          Produtos salvos
+        </h1>
         <p className="text-sm text-muted-foreground mb-6">
           Itens que você salvou para ver depois. Clique no coração para remover.
         </p>
@@ -65,9 +67,12 @@ const ProdutosSalvos = () => {
         ) : products.length === 0 ? (
           <div className="rounded-xl border border-border bg-muted/30 p-8 text-center">
             <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-60" />
-            <p className="text-foreground font-medium mb-1">Nenhum produto salvo</p>
+            <p className="text-foreground font-medium mb-1">
+              Nenhum produto salvo
+            </p>
             <p className="text-sm text-muted-foreground mb-4">
-              Ao navegar pelo catálogo, clique no coração para salvar e encontrar aqui depois.
+              Ao navegar pelo catálogo, clique no coração para salvar e
+              encontrar aqui depois.
             </p>
             <Link
               to="/explorar"
@@ -80,11 +85,12 @@ const ProdutosSalvos = () => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {products.map((p) => {
-              const priceStr =
-                (() => {
+              const priceStr = (() => {
                 const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
-                return displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
-              })()
+                return displayBrl != null
+                  ? `R$ ${displayBrl.toFixed(2)}`
+                  : "Consultar";
+              })();
               return (
                 <div
                   key={p.id}
@@ -99,15 +105,21 @@ const ProdutosSalvos = () => {
                         src={p.image ? ensureHttpsImage(p.image) : PLACEHOLDER}
                         alt=""
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        referrerPolicy={referrerPolicyForImage(p.image ?? PLACEHOLDER)}
+                        referrerPolicy={referrerPolicyForImage(
+                          p.image ?? PLACEHOLDER,
+                        )}
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = PLACEHOLDER;
                         }}
                       />
                     </div>
                     <div className="p-3 flex-1 flex flex-col">
-                      <h3 className="text-sm font-medium text-foreground line-clamp-2">{p.titlePt || p.title}</h3>
-                      <p className="mt-1 text-sm font-bold text-china-red">{priceStr}</p>
+                      <h3 className="text-sm font-medium text-foreground line-clamp-2">
+                        {p.titlePt || p.title}
+                      </h3>
+                      <p className="mt-1 text-sm font-bold text-china-red">
+                        {priceStr}
+                      </p>
                     </div>
                   </Link>
                   <div className="p-2 border-t border-border flex justify-end">
@@ -116,7 +128,9 @@ const ProdutosSalvos = () => {
                       onClick={async (e) => {
                         e.preventDefault();
                         await toggle(p.slug);
-                        setProducts((prev) => prev.filter((x) => x.slug !== p.slug));
+                        setProducts((prev) =>
+                          prev.filter((x) => x.slug !== p.slug),
+                        );
                       }}
                       className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-china-red transition-colors"
                     >
@@ -130,7 +144,10 @@ const ProdutosSalvos = () => {
           </div>
         )}
 
-        <Link to="/explorar" className="inline-block mt-6 text-sm text-china-red hover:underline">
+        <Link
+          to="/explorar"
+          className="inline-block mt-6 text-sm text-china-red hover:underline"
+        >
           ← Voltar ao Explorar
         </Link>
       </main>

@@ -23,6 +23,7 @@ import {
   sendPasswordResetEmail,
   sendOrderStatusEmail,
   sendWarehousePhotosEmail,
+  sendSupportStaffReplyEmail,
 } from "./email";
 import { verifyTurnstile } from "./turnstile";
 import {
@@ -2523,13 +2524,101 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       orderItemsJson: bodyOrderItemsJson,
       /** Checkout: não avisar admin até o PIX ser gerado ou o pagamento aprovado. */
       silentOrderCreation,
+      deliveryInBrazil: bodyDeliveryInBrazil,
+      internationalAddressLines: bodyInternationalAddressLines,
     } = req.body ?? {};
 
-    if (!originalUrl || !productDescription || !quantity || !cep) {
+    const deliveryInBrazil = bodyDeliveryInBrazil === false ? false : true;
+    const intlRaw =
+      typeof bodyInternationalAddressLines === "string"
+        ? bodyInternationalAddressLines.trim()
+        : "";
+
+    if (!originalUrl || !productDescription || !quantity) {
       return res.status(400).json({
-        error:
-          "Campos obrigatórios: originalUrl, productDescription, quantity, cep",
+        error: "Campos obrigatórios: originalUrl, productDescription, quantity",
       });
+    }
+
+    if (!String(customerName ?? "").trim() || !String(customerEmail ?? "").trim()) {
+      return res.status(400).json({ error: "Nome e e-mail do cliente são obrigatórios." });
+    }
+
+    const waDigits =
+      typeof customerWhatsapp === "string"
+        ? customerWhatsapp.replace(/\D/g, "")
+        : "";
+    if (waDigits.length < 8) {
+      return res.status(400).json({
+        error: "Informe um WhatsApp válido (inclua DDI se estiver fora do +55).",
+      });
+    }
+
+    let cepFinal: string;
+    let cpfFinal: string | null;
+    let street: string | null;
+    let num: string | null;
+    let comp: string | null;
+    let bairro: string | null;
+    let city: string | null;
+    let stateUf: string | null;
+    let intlStored: string | null = null;
+
+    if (deliveryInBrazil) {
+      const cepClean = typeof cep === "string" ? cep.replace(/\D/g, "") : "";
+      if (cepClean.length !== 8) {
+        return res.status(400).json({ error: "CEP inválido. Use 8 dígitos." });
+      }
+      const cpfClean =
+        typeof customerCpf === "string" ? customerCpf.replace(/\D/g, "") : "";
+      if (cpfClean.length !== 11) {
+        return res.status(400).json({
+          error: "CPF inválido. São necessários 11 dígitos para envio ao Brasil.",
+        });
+      }
+      if (!String(addressStreet ?? "").trim()) {
+        return res.status(400).json({ error: "Informe o logradouro (rua/avenida)." });
+      }
+      if (!String(addressNumber ?? "").trim()) {
+        return res.status(400).json({ error: "Informe o número do endereço." });
+      }
+      if (!String(addressNeighborhood ?? "").trim()) {
+        return res.status(400).json({ error: "Informe o bairro." });
+      }
+      if (!String(addressCity ?? "").trim()) {
+        return res.status(400).json({ error: "Informe a cidade." });
+      }
+      if (!String(addressState ?? "").trim()) {
+        return res.status(400).json({ error: "Informe o estado (UF)." });
+      }
+      cepFinal = cepClean;
+      cpfFinal = cpfClean;
+      street = String(addressStreet).trim().slice(0, 200);
+      num = String(addressNumber).trim().slice(0, 20);
+      comp = addressComplement?.trim()
+        ? String(addressComplement).trim().slice(0, 120)
+        : null;
+      bairro = String(addressNeighborhood).trim().slice(0, 120);
+      city = String(addressCity).trim().slice(0, 120);
+      stateUf = String(addressState).trim().slice(0, 4);
+    } else {
+      if (intlRaw.length < 15) {
+        return res.status(400).json({
+          error:
+            "Descreva o endereço completo no exterior (mínimo 15 caracteres): país, cidade, código postal e linhas de endereço — como no CSSBuy / envio internacional.",
+        });
+      }
+      cepFinal = "00000000";
+      intlStored = intlRaw.slice(0, 4000);
+      const cpfClean =
+        typeof customerCpf === "string" ? customerCpf.replace(/\D/g, "") : "";
+      cpfFinal = cpfClean.length === 11 ? cpfClean : null;
+      street = null;
+      num = null;
+      comp = null;
+      bairro = null;
+      city = null;
+      stateUf = null;
     }
 
     const orderQty = Number(quantity);
@@ -2587,21 +2676,23 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         productSize: productSize ?? null,
         productVariation: productVariation ?? null,
         quantity: orderQty,
-        cep,
+        cep: cepFinal,
+        deliveryInBrazil,
+        internationalAddressLines: intlStored,
         // Sempre expresso padrão (mesma base da estimativa no front). EMS/marítimo só pelo admin.
         shippingMethod: ShippingMethod.FJ_BR_EXP,
         notes: notes ?? null,
         userId: authUserId ?? null,
-        customerName: customerName ?? null,
-        customerEmail: customerEmail ?? null,
-        customerWhatsapp: customerWhatsapp ?? null,
-        customerCpf: customerCpf ?? null,
-        addressStreet: addressStreet ?? null,
-        addressNumber: addressNumber ?? null,
-        addressComplement: addressComplement ?? null,
-        addressNeighborhood: addressNeighborhood ?? null,
-        addressCity: addressCity ?? null,
-        addressState: addressState ?? null,
+        customerName: String(customerName).trim(),
+        customerEmail: String(customerEmail).trim(),
+        customerWhatsapp: waDigits,
+        customerCpf: cpfFinal,
+        addressStreet: street,
+        addressNumber: num,
+        addressComplement: comp,
+        addressNeighborhood: bairro,
+        addressCity: city,
+        addressState: stateUf,
         checkoutGroupId,
         ...(orderItemsJson !== undefined ? { orderItemsJson } : {}),
       },
@@ -3695,6 +3786,7 @@ app.post(
       }
       const conv = await prisma.supportConversation.findUnique({
         where: { id },
+        include: { user: { select: { email: true, name: true } } },
       });
       if (!conv) {
         return res.status(404).json({ error: "Conversa não encontrada." });
@@ -3714,6 +3806,20 @@ app.post(
           data: { lastMessageAt: now },
         }),
       ]);
+
+      const notifyEmail =
+        conv.user?.email?.trim() || conv.guestEmail?.trim() || "";
+      const notifyName =
+        conv.user?.name?.trim() || conv.guestName?.trim() || "Cliente";
+      if (notifyEmail && isSimpleEmail(notifyEmail)) {
+        sendSupportStaffReplyEmail(
+          notifyEmail,
+          notifyName,
+          id,
+          text,
+        ).catch((e) => console.warn("[support reply email]", e));
+      }
+
       res.json({ ok: true });
     } catch (err) {
       console.error("[admin support reply]", err);

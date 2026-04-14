@@ -254,10 +254,7 @@ const Order = () => {
         const sizeGroupDetected = optionGroups.find((g) =>
           isSizeGroup(g.name, g.values),
         );
-        if (
-          sizeGroupDetected?.values?.length &&
-          !variants.size?.length
-        ) {
+        if (sizeGroupDetected?.values?.length && !variants.size?.length) {
           variants = {
             ...variants,
             size: [...sizeGroupDetected.values],
@@ -295,28 +292,30 @@ const Order = () => {
       return;
     }
     let cancelled = false;
-    fetch(
-      apiUrl(`/api/products/match-url?url=${encodeURIComponent(url)}`),
-    )
+    fetch(apiUrl(`/api/products/match-url?url=${encodeURIComponent(url)}`))
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { product?: { priceCny?: unknown; priceBrl?: unknown } } | null) => {
-        if (cancelled) return;
-        const p = data?.product;
-        if (!p) {
-          setCatalogMatch(null);
-          return;
-        }
-        setCatalogMatch({
-          priceCny:
-            p.priceCny != null && Number(p.priceCny) > 0
-              ? Number(p.priceCny)
-              : null,
-          priceBrl:
-            p.priceBrl != null && Number(p.priceBrl) >= 0
-              ? Number(p.priceBrl)
-              : null,
-        });
-      })
+      .then(
+        (
+          data: { product?: { priceCny?: unknown; priceBrl?: unknown } } | null,
+        ) => {
+          if (cancelled) return;
+          const p = data?.product;
+          if (!p) {
+            setCatalogMatch(null);
+            return;
+          }
+          setCatalogMatch({
+            priceCny:
+              p.priceCny != null && Number(p.priceCny) > 0
+                ? Number(p.priceCny)
+                : null,
+            priceBrl:
+              p.priceBrl != null && Number(p.priceBrl) >= 0
+                ? Number(p.priceBrl)
+                : null,
+          });
+        },
+      )
       .catch(() => {
         if (!cancelled) setCatalogMatch(null);
       });
@@ -425,12 +424,7 @@ const Order = () => {
     return () => {
       cancelled = true;
     };
-  }, [
-    url,
-    effectivePriceCny,
-    baselineCnyForPriceApi,
-    productPreviewLoading,
-  ]);
+  }, [url, effectivePriceCny, baselineCnyForPriceApi, productPreviewLoading]);
 
   /** Preço em R$ alinhado ao Explorar: API /price/preview, senão catálogo, senão CNY efetivo. */
   const displayProductBrl = useMemo(() => {
@@ -449,11 +443,7 @@ const Order = () => {
       return priceCnyToBrl(effectivePriceCny);
     }
     return null;
-  }, [
-    preview?.totalProductBrl,
-    catalogMatch,
-    effectivePriceCny,
-  ]);
+  }, [preview?.totalProductBrl, catalogMatch, effectivePriceCny]);
 
   const displayBrlLabel =
     displayProductBrl != null
@@ -609,12 +599,12 @@ const Order = () => {
           {productPreviewLoading && (
             <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
               <span className="font-medium text-foreground/90">
-                Na primeira vez que abrimos este produto pelo link, a página pode
-                levar até cerca de 30 segundos para ficar pronta.
+                Na primeira vez que abrimos este produto pelo link, a página
+                pode levar até cerca de 30 segundos para ficar pronta.
               </span>{" "}
               Estamos carregando fotos, opções (cor, tamanho etc.) e preço —
-              aguarde um instante; em seguida você poderá revisar tudo e concluir
-              o pedido.
+              aguarde um instante; em seguida você poderá revisar tudo e
+              concluir o pedido.
             </p>
           )}
         </div>
@@ -1031,8 +1021,8 @@ const Order = () => {
                                     group.inventoryByValue?.[value];
                                   const maxQty =
                                     stock != null
-                                    ? Math.min(MAX_LINE_QUANTITY, stock)
-                                    : MAX_LINE_QUANTITY;
+                                      ? Math.min(MAX_LINE_QUANTITY, stock)
+                                      : MAX_LINE_QUANTITY;
                                   return (
                                     <li
                                       key={value}
@@ -1546,7 +1536,8 @@ const Order = () => {
                             toast.error("Selecione pelo menos 1 unidade.");
                             return;
                           }
-                          const weightOverrideG = getProductWeightOverrideG(url);
+                          const weightOverrideG =
+                            getProductWeightOverrideG(url);
                           addItem({
                             url,
                             quantity: effectiveQuantity,
@@ -1620,7 +1611,8 @@ const Order = () => {
                                   );
                                   return;
                                 }
-                                const weightGAdd = getProductWeightOverrideG(url);
+                                const weightGAdd =
+                                  getProductWeightOverrideG(url);
                                 addItem({
                                   url,
                                   quantity: effectiveQuantity,

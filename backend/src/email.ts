@@ -168,6 +168,48 @@ export async function sendWarehousePhotosEmail(
   });
 }
 
+/** Aviso ao cliente quando a equipe responde no chat (Fale conosco). */
+export async function sendSupportStaffReplyEmail(
+  email: string,
+  recipientName: string,
+  conversationId: string,
+  replyPreview: string,
+): Promise<boolean> {
+  const base = SITE_URL.replace(/\/$/, "");
+  const chatLink = `${base}/fale-conosco?open=${encodeURIComponent(conversationId)}`;
+  const rawPreview = replyPreview.trim();
+  const preview = rawPreview.slice(0, 220);
+  const safeName = recipientName.trim() || "Olá";
+  const html = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111">
+      <h2 style="color:#b22222;margin-bottom:4px">ComprasChina</h2>
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0 20px">
+      <p>Olá, ${escapeHtml(safeName)}!</p>
+      <p><strong>Você tem uma nova resposta</strong> da nossa equipe no atendimento do site.</p>
+      ${
+        preview
+          ? `<p style="background:#f7f7f7;border-left:4px solid #b22222;padding:12px 16px;border-radius:4px;margin:16px 0;font-size:14px;line-height:1.5">${escapeHtml(preview)}${rawPreview.length > 220 ? "…" : ""}</p>`
+          : ""
+      }
+      <p style="margin-top:24px">
+        <a href="${escapeHtml(chatLink)}" style="background:#b22222;color:#fff;padding:10px 20px;border-radius:20px;text-decoration:none;font-weight:bold;font-size:14px;display:inline-block">
+          Abrir conversa em compraschina.com.br →
+        </a>
+      </p>
+      <p style="font-size:13px;color:#555;margin-top:20px;line-height:1.5">
+        Se você iniciou o chat <strong>sem estar logado</strong>, abra o link acima no <strong>mesmo aparelho e navegador</strong> em que começou a conversa — ou faça login com o mesmo e-mail para ver todas as mensagens.
+      </p>
+      <hr style="border:none;border-top:1px solid #eee;margin:28px 0 12px">
+      <p style="font-size:12px;color:#888">ComprasChina — Atendimento</p>
+    </div>
+  `;
+  return sendEmail({
+    to: email,
+    subject: "Você tem uma resposta — ComprasChina",
+    html,
+  });
+}
+
 export async function sendPasswordResetEmail(
   email: string,
   name: string,

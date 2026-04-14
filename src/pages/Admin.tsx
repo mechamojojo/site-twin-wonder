@@ -56,6 +56,8 @@ type OrderWithDetails = {
   addressNeighborhood: string | null;
   addressCity: string | null;
   addressState: string | null;
+  deliveryInBrazil?: boolean;
+  internationalAddressLines?: string | null;
   notes: string | null;
   checkoutGroupId?: string | null;
   orderItemsJson?: unknown;
@@ -101,6 +103,9 @@ function formatCpf(v: string | null): string {
 }
 
 function formatAddress(o: OrderWithDetails): string {
+  if (o.deliveryInBrazil === false && o.internationalAddressLines?.trim()) {
+    return o.internationalAddressLines.trim();
+  }
   const parts = [o.addressStreet, o.addressNumber, o.addressComplement].filter(
     Boolean,
   );
@@ -108,7 +113,9 @@ function formatAddress(o: OrderWithDetails): string {
   const line2 = [o.addressNeighborhood, o.addressCity, o.addressState]
     .filter(Boolean)
     .join(", ");
-  return [line1, line2, `CEP ${o.cep}`].filter(Boolean).join("\n");
+  const cepLine =
+    o.cep && o.cep !== "00000000" ? `CEP ${o.cep}` : "";
+  return [line1, line2, cepLine].filter(Boolean).join("\n");
 }
 
 function buildCssBuyCopyText(o: OrderWithDetails): string {
@@ -124,6 +131,16 @@ function buildCssBuyCopyText(o: OrderWithDetails): string {
   if (o.notes) parts.push(o.notes);
   const nota = parts.length ? parts.join(" | ") : o.productDescription;
 
+  const isExterior = o.deliveryInBrazil === false;
+  const destBlock = isExterior
+    ? "Destinatário (fora do Brasil / CSSBuy):"
+    : "Destinatário Brasil:";
+  const cpfLine = isExterior
+    ? o.customerCpf
+      ? `CPF/Documento: ${formatCpf(o.customerCpf)}`
+      : "CPF/Documento: (não informado — conferir com cliente)"
+    : `CPF: ${formatCpf(o.customerCpf)}`;
+
   return [
     "--- COMPRASCHINA → CSSBuy ---",
     `Link: ${o.originalUrl}`,
@@ -131,9 +148,9 @@ function buildCssBuyCopyText(o: OrderWithDetails): string {
     `Nota (cor/tamanho/variante): ${nota}`,
     `Quantidade: ${o.quantity}`,
     "",
-    "Destinatário Brasil:",
+    destBlock,
     `Nome: ${o.customerName || "-"}`,
-    `CPF: ${formatCpf(o.customerCpf)}`,
+    cpfLine,
     `Endereço:\n${formatAddress(o)}`,
     `WhatsApp: ${o.customerWhatsapp || "-"}`,
     `E-mail: ${o.customerEmail || "-"}`,
@@ -1268,8 +1285,8 @@ const Admin = () => {
                 Cole o link de um produto (Taobao, 1688, Weidian, TMALL, etc.)
                 ou use a caixa abaixo para várias URLs de uma vez — cada link é
                 processado em sequência (um após o outro). A categoria e
-                &quot;Em destaque&quot; valem para todos. Use &quot;Excluir&quot;
-                na lista para remover itens.
+                &quot;Em destaque&quot; valem para todos. Use
+                &quot;Excluir&quot; na lista para remover itens.
               </p>
               <form onSubmit={handleAddProduct} className="space-y-4">
                 <div>
@@ -1570,15 +1587,13 @@ const Admin = () => {
                           <textarea
                             id={`catalog-title-${p.id}`}
                             ref={(el) => {
-                              if (el)
-                                catalogTitleRefs.current.set(p.id, el);
+                              if (el) catalogTitleRefs.current.set(p.id, el);
                               else catalogTitleRefs.current.delete(p.id);
                             }}
                             rows={2}
                             className="w-full text-sm font-medium text-foreground bg-background border border-border rounded-md px-2 py-1.5 resize-y min-h-[2.75rem] leading-snug focus:outline-none focus:ring-2 focus:ring-china-red/30 disabled:opacity-60"
                             value={
-                              inlineTitleDrafts[p.id] ??
-                              (p.titlePt || p.title)
+                              inlineTitleDrafts[p.id] ?? (p.titlePt || p.title)
                             }
                             onChange={(e) =>
                               setInlineTitleDrafts((d) => ({
@@ -1800,7 +1815,9 @@ const Admin = () => {
                             size="sm"
                             className="gap-2 mt-2"
                             disabled={catalogImageUploading}
-                            onClick={() => catalogImageInputRef.current?.click()}
+                            onClick={() =>
+                              catalogImageInputRef.current?.click()
+                            }
                           >
                             <Upload className="w-4 h-4" />
                             {catalogImageUploading

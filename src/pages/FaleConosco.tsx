@@ -1,20 +1,22 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useSupportChat } from "@/hooks/useSupportChat";
+import { useEffect } from "react";
 import { Loader2, MessageSquarePlus, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const FaleConosco = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const chat = useSupportChat();
   const {
     authLoading,
     user,
     list,
+    loadingList,
     selectedId,
     setSelectedId,
     thread,
-    loadingList,
     loadingThread,
     sending,
     newName,
@@ -35,6 +37,46 @@ const FaleConosco = () => {
     showUserComposer,
     guestThread,
   } = chat;
+
+  const openFromEmail = searchParams.get("open");
+
+  useEffect(() => {
+    if (!openFromEmail) return;
+    const clearOpen = () =>
+      setSearchParams(
+        (p) => {
+          const n = new URLSearchParams(p);
+          n.delete("open");
+          return n;
+        },
+        { replace: true },
+      );
+
+    if (user) {
+      if (loadingList) return;
+      if (list.some((c) => c.id === openFromEmail)) {
+        setSelectedId(openFromEmail);
+        setShowNewForm(false);
+        clearOpen();
+      } else {
+        clearOpen();
+      }
+      return;
+    }
+
+    if (guestThread?.conversationId === openFromEmail) {
+      clearOpen();
+    }
+  }, [
+    openFromEmail,
+    user,
+    list,
+    loadingList,
+    guestThread?.conversationId,
+    setSearchParams,
+    setSelectedId,
+    setShowNewForm,
+  ]);
 
   if (authLoading) {
     return (

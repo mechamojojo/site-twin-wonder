@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { ProductCategory } from "@/lib/shipping";
 import { normalizeFreightCouponCode } from "@/lib/shipping";
 import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
@@ -92,8 +99,8 @@ function saveFreightCoupon(code: string) {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => loadFromStorage());
-  const [freightCouponCode, setFreightCouponState] = useState<string>(
-    () => loadFreightCoupon(),
+  const [freightCouponCode, setFreightCouponState] = useState<string>(() =>
+    loadFreightCoupon(),
   );
 
   useEffect(() => {
@@ -113,7 +120,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addItem = useCallback((item: Omit<CartItem, "id">) => {
-    const id = crypto.randomUUID?.() ?? `cart-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const id =
+      crypto.randomUUID?.() ??
+      `cart-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const quantity = clampCartQuantity(item.quantity);
     setItems((prev) => [...prev, { ...item, id, quantity }]);
   }, []);
@@ -125,21 +134,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const updateQuantity = useCallback((id: string, quantity: number) => {
     const qty = clampCartQuantity(quantity);
     setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, quantity: qty } : i))
+      prev.map((i) => (i.id === id ? { ...i, quantity: qty } : i)),
     );
   }, []);
 
   const updateKeepBox = useCallback((id: string, keepBox: boolean) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, keepBox } : i))
-    );
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, keepBox } : i)));
   }, []);
 
   const clearCart = useCallback(() => setItems([]), []);
 
   const totalItems = useMemo(
     () => items.reduce((acc, i) => acc + i.quantity, 0),
-    [items]
+    [items],
   );
 
   const value = useMemo<CartContextValue>(
@@ -169,11 +176,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
-  return (
-    <CartContext.Provider value={value}>
-      {children}
-    </CartContext.Provider>
-  );
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
 export function useCart() {

@@ -154,6 +154,10 @@ model Order {
   addressNeighborhood String?     // Bairro
   addressCity        String?      // Cidade
   addressState       String?      // Estado (UF)
+  /** true = entrega no Brasil (CEP + endereço estruturado); false = texto livre em internationalAddressLines */
+  deliveryInBrazil          Boolean  @default(true)
+  /** Endereço completo fora do Brasil (para envio final / CSSBuy); preenchido quando deliveryInBrazil é false */
+  internationalAddressLines String?  @db.Text
   notes              String?
   /** Mesmo UUID em todos os pedidos criados num único checkout com vários itens */
   checkoutGroupId    String?

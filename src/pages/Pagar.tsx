@@ -17,6 +17,7 @@ import { MP_PUBLIC_KEY } from "@/data/siteConfig";
 import { toast } from "sonner";
 import { Copy, CreditCard, QrCode, ChevronLeft } from "lucide-react";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
+import { InstallmentPromoBanner } from "@/components/InstallmentPromoBanner";
 
 type CardFormData = {
   paymentMethodId: string;
@@ -284,6 +285,7 @@ const Pagar = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-6 md:py-10 max-w-4xl">
+        <InstallmentPromoBanner />
         <Link
           to={`/pedido-confirmado/${id}`}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"

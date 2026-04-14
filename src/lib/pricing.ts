@@ -25,7 +25,9 @@ function toFiniteNonNegative(v: unknown): number | null {
  * Same formula as backend so listing and order page show the same value.
  * Aceita string (ex.: JSON do Prisma Decimal).
  */
-export function priceCnyToBrl(priceCny: number | string | null | undefined): number {
+export function priceCnyToBrl(
+  priceCny: number | string | null | undefined,
+): number {
   const n = toFinitePositive(priceCny);
   if (n == null) return 0;
   const costBrl = n * RATE_CNY_TO_BRL;

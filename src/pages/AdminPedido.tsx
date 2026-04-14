@@ -83,6 +83,8 @@ type Order = {
   addressNeighborhood: string | null;
   addressCity: string | null;
   addressState: string | null;
+  deliveryInBrazil?: boolean;
+  internationalAddressLines?: string | null;
   notes: string | null;
   checkoutGroupId?: string | null;
   orderItemsJson?: unknown;
@@ -125,6 +127,9 @@ function formatCpf(v: string | null): string {
 }
 
 function formatAddress(o: Order): string {
+  if (o.deliveryInBrazil === false && o.internationalAddressLines?.trim()) {
+    return o.internationalAddressLines.trim();
+  }
   const parts = [o.addressStreet, o.addressNumber, o.addressComplement].filter(
     Boolean,
   );
@@ -132,7 +137,9 @@ function formatAddress(o: Order): string {
   const line2 = [o.addressNeighborhood, o.addressCity, o.addressState]
     .filter(Boolean)
     .join(", ");
-  return [line1, line2, `CEP ${o.cep}`].filter(Boolean).join("\n");
+  const cepLine =
+    o.cep && o.cep !== "00000000" ? `CEP ${o.cep}` : "";
+  return [line1, line2, cepLine].filter(Boolean).join("\n");
 }
 
 function buildCssBuyCopyText(o: Order): string {
@@ -144,6 +151,16 @@ function buildCssBuyCopyText(o: Order): string {
   const noteParts = [...variantParts];
   if (o.notes) noteParts.push(o.notes);
   const nota = noteParts.length ? noteParts.join(" | ") : o.productDescription;
+  const isExterior = o.deliveryInBrazil === false;
+  const destBlock = isExterior
+    ? "Destinatário (fora do Brasil / CSSBuy):"
+    : "Destinatário Brasil:";
+  const cpfLine = isExterior
+    ? o.customerCpf
+      ? `CPF/Documento: ${formatCpf(o.customerCpf)}`
+      : "CPF/Documento: (não informado — conferir com cliente)"
+    : `CPF: ${formatCpf(o.customerCpf)}`;
+
   return [
     "--- COMPRASCHINA → CSSBuy ---",
     `Link: ${o.originalUrl}`,
@@ -151,9 +168,9 @@ function buildCssBuyCopyText(o: Order): string {
     `Nota (cor/tamanho/variante): ${nota}`,
     `Quantidade: ${o.quantity}`,
     "",
-    "Destinatário Brasil:",
+    destBlock,
     `Nome: ${o.customerName || "-"}`,
-    `CPF: ${formatCpf(o.customerCpf)}`,
+    cpfLine,
     `Endereço:\n${formatAddress(o)}`,
     `WhatsApp: ${o.customerWhatsapp || "-"}`,
     `E-mail: ${o.customerEmail || "-"}`,
@@ -164,12 +181,14 @@ function buildCssBuyCopyText(o: Order): string {
 function whatsAppUrl(phone: string | null, message?: string): string {
   if (!phone) return "#";
   const digits = phone.replace(/\D/g, "").replace(/^0/, "");
-  const num =
-    digits.length === 11
-      ? "55" + digits
-      : digits.startsWith("55")
-        ? digits
-        : "55" + digits;
+  let num: string;
+  if (digits.length > 11 || (digits.startsWith("55") && digits.length >= 12)) {
+    num = digits;
+  } else if (digits.length === 11) {
+    num = "55" + digits;
+  } else {
+    num = digits;
+  }
   const base = `https://wa.me/${num}`;
   if (message) return base + "?text=" + encodeURIComponent(message);
   return base;

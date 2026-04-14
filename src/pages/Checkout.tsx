@@ -29,6 +29,7 @@ import {
 } from "@/lib/mercadopagoInstallments";
 import { ensureHttpsImage } from "@/lib/utils";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
+import { InstallmentPromoBanner } from "@/components/InstallmentPromoBanner";
 import {
   Copy,
   CreditCard,
@@ -41,6 +42,7 @@ import {
   MapPin,
   User,
   Check,
+  Globe2,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getAuthToken } from "@/context/AuthContext";
@@ -122,19 +124,37 @@ type CheckoutForm = {
   customerEmail: string;
   customerWhatsapp: string;
   notes: string;
+  /** Texto livre quando o cliente não recebe no Brasil (CSSBuy / exterior) */
+  internationalAddressLines: string;
 };
 
-function validateShippingForm(form: CheckoutForm): string | null {
-  const cep = form.cep.replace(/\D/g, "");
-  if (cep.length !== 8) return "CEP inválido. Use 8 dígitos.";
-  const cpf = form.customerCpf.replace(/\D/g, "");
-  if (cpf.length !== 11)
-    return "CPF inválido. Use 11 dígitos (obrigatório para envio internacional).";
-  if (!form.addressStreet.trim()) return "Informe o endereço.";
-  if (!form.addressNumber.trim()) return "Informe o número.";
+function validateShippingForm(
+  form: CheckoutForm,
+  deliveryInBrazil: boolean,
+): string | null {
+  const wa = form.customerWhatsapp.replace(/\D/g, "");
+  if (wa.length < 8)
+    return "Informe um WhatsApp válido (com DDI se estiver fora do +55).";
   if (!form.customerName.trim()) return "Informe seu nome.";
   if (!form.customerEmail.trim()) return "Informe seu e-mail.";
-  if (!form.customerWhatsapp.trim()) return "Informe seu WhatsApp.";
+
+  if (deliveryInBrazil) {
+    const cep = form.cep.replace(/\D/g, "");
+    if (cep.length !== 8) return "CEP inválido. Use 8 dígitos.";
+    const cpf = form.customerCpf.replace(/\D/g, "");
+    if (cpf.length !== 11)
+      return "CPF inválido. Use 11 dígitos (obrigatório para envio ao Brasil).";
+    if (!form.addressStreet.trim()) return "Informe o endereço.";
+    if (!form.addressNumber.trim()) return "Informe o número.";
+    if (!form.addressNeighborhood.trim()) return "Informe o bairro.";
+    if (!form.addressCity.trim()) return "Informe a cidade.";
+    if (!form.addressState.trim()) return "Informe o estado (UF).";
+    return null;
+  }
+
+  if (form.internationalAddressLines.trim().length < 15) {
+    return "Descreva o endereço completo no exterior (mínimo 15 caracteres): país, cidade, CEP/código postal e linhas de endereço.";
+  }
   return null;
 }
 
@@ -400,6 +420,8 @@ const Checkout = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [cepLoading, setCepLoading] = useState(false);
+  /** false = endereço fora do BR (texto livre para CSSBuy / envio internacional) */
+  const [deliveryInBrazil, setDeliveryInBrazil] = useState(true);
   const [step, setStep] = useState<1 | 2>(1);
   const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix");
   const [pixData, setPixData] = useState<{
@@ -435,6 +457,7 @@ const Checkout = () => {
     customerEmail: "",
     customerWhatsapp: "",
     notes: "",
+    internationalAddressLines: "",
   });
 
   const fetchCep = useCallback(async (cep: string) => {
@@ -462,9 +485,10 @@ const Checkout = () => {
   }, []);
 
   useEffect(() => {
+    if (!deliveryInBrazil) return;
     const cep = form.cep.replace(/\D/g, "");
     if (cep.length === 8) fetchCep(cep);
-  }, [form.cep, fetchCep]);
+  }, [form.cep, fetchCep, deliveryInBrazil]);
 
   const shippingItems = useMemo(
     () =>
@@ -604,7 +628,7 @@ const Checkout = () => {
       toast.error("Carrinho vazio");
       return;
     }
-    const err = validateShippingForm(form);
+    const err = validateShippingForm(form, deliveryInBrazil);
     if (err) {
       toast.error(err);
       return;
@@ -670,19 +694,28 @@ const Checkout = () => {
           productSize: item.size || null,
           productVariation: item.variation || null,
           quantity: item.quantity,
-          cep,
+          cep: deliveryInBrazil ? cep : "00000000",
+          deliveryInBrazil,
+          internationalAddressLines: deliveryInBrazil
+            ? undefined
+            : form.internationalAddressLines.trim(),
           shippingMethod: CHECKOUT_SHIPPING_METHOD,
           notes: form.notes || item.notes || null,
           customerName: form.customerName.trim(),
           customerEmail: form.customerEmail.trim(),
           customerWhatsapp: form.customerWhatsapp.replace(/\D/g, ""),
-          customerCpf: cpf,
-          addressStreet: form.addressStreet.trim(),
-          addressNumber: form.addressNumber.trim(),
-          addressComplement: form.addressComplement.trim() || null,
-          addressNeighborhood: form.addressNeighborhood.trim(),
-          addressCity: form.addressCity.trim(),
-          addressState: form.addressState.trim(),
+          customerCpf:
+            deliveryInBrazil ? cpf : cpf.length === 11 ? cpf : null,
+          addressStreet: deliveryInBrazil ? form.addressStreet.trim() : null,
+          addressNumber: deliveryInBrazil ? form.addressNumber.trim() : null,
+          addressComplement: deliveryInBrazil
+            ? form.addressComplement.trim() || null
+            : null,
+          addressNeighborhood: deliveryInBrazil
+            ? form.addressNeighborhood.trim()
+            : null,
+          addressCity: deliveryInBrazil ? form.addressCity.trim() : null,
+          addressState: deliveryInBrazil ? form.addressState.trim() : null,
           estimatedTotalBrl,
           checkoutGroupId,
           orderItemsJson,
@@ -698,7 +731,7 @@ const Checkout = () => {
     checkoutSessionRef.current = sid;
     setCheckoutSession(sid);
     return firstOrderId;
-  }, [items, checkoutComputation, form]);
+  }, [items, checkoutComputation, form, deliveryInBrazil]);
 
   const createPixPayment = async (orderId: string) => {
     const res = await fetch(apiUrl(`/api/orders/${orderId}/create-payment`), {
@@ -988,6 +1021,7 @@ const Checkout = () => {
       <Navbar />
       <main className="pb-28 lg:pb-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+          <InstallmentPromoBanner />
           <Link
             to="/carrinho"
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-china-red transition-colors mb-6"
@@ -1055,106 +1089,160 @@ const Checkout = () => {
                 </span>
                 Endereço de entrega
               </div>
-            <div className="space-y-2">
-              <Label htmlFor="cep">CEP *</Label>
-              <Input
-                id="cep"
-                name="cep"
-                placeholder="00000-000"
-                value={form.cep}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    cep: e.target.value.replace(/\D/g, "").slice(0, 8),
-                  }))
-                }
-                maxLength={8}
-                required
-              />
-              {cepLoading && (
-                <p className="text-xs text-muted-foreground">
-                  Buscando endereço...
-                </p>
-              )}
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="sm:col-span-2">
-                <Label htmlFor="addressStreet">Rua *</Label>
-                <Input
-                  id="addressStreet"
-                  name="addressStreet"
-                  placeholder="Rua, avenida..."
-                  value={form.addressStreet}
-                  onChange={handleChange}
-                  required
-                />
+              <div className="flex rounded-xl bg-muted/50 p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setDeliveryInBrazil(true)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg text-sm font-medium transition-colors ${
+                    deliveryInBrazil
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <MapPin className="h-4 w-4 shrink-0" aria-hidden />
+                  Brasil (CEP)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeliveryInBrazil(false)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-2 rounded-lg text-sm font-medium transition-colors ${
+                    !deliveryInBrazil
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Globe2 className="h-4 w-4 shrink-0" aria-hidden />
+                  Fora do Brasil
+                </button>
               </div>
-              <div>
-                <Label htmlFor="addressNumber">Número *</Label>
-                <Input
-                  id="addressNumber"
-                  name="addressNumber"
-                  placeholder="123"
-                  value={form.addressNumber}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="addressComplement">Complemento (opcional)</Label>
-                <Input
-                  id="addressComplement"
-                  name="addressComplement"
-                  placeholder="Apt, bloco..."
-                  value={form.addressComplement}
-                  onChange={handleChange}
-                />
-              </div>
-              <div>
-                <Label htmlFor="addressNeighborhood">Bairro *</Label>
-                <Input
-                  id="addressNeighborhood"
-                  name="addressNeighborhood"
-                  placeholder="Bairro"
-                  value={form.addressNeighborhood}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="addressCity">Cidade *</Label>
-                <Input
-                  id="addressCity"
-                  name="addressCity"
-                  placeholder="Cidade"
-                  value={form.addressCity}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="addressState">Estado (UF) *</Label>
-                <Input
-                  id="addressState"
-                  name="addressState"
-                  placeholder="SP"
-                  value={form.addressState}
-                  onChange={(e) =>
-                    setForm((p) => ({
-                      ...p,
-                      addressState: e.target.value.toUpperCase().slice(0, 2),
-                    }))
-                  }
-                  maxLength={2}
-                  required
-                />
-              </div>
-            </div>
+
+              {deliveryInBrazil ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="cep">CEP *</Label>
+                    <Input
+                      id="cep"
+                      name="cep"
+                      placeholder="00000-000"
+                      value={form.cep}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          cep: e.target.value.replace(/\D/g, "").slice(0, 8),
+                        }))
+                      }
+                      maxLength={8}
+                      required
+                    />
+                    {cepLoading && (
+                      <p className="text-xs text-muted-foreground">
+                        Buscando endereço...
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="addressStreet">Rua *</Label>
+                      <Input
+                        id="addressStreet"
+                        name="addressStreet"
+                        placeholder="Rua, avenida..."
+                        value={form.addressStreet}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="addressNumber">Número *</Label>
+                      <Input
+                        id="addressNumber"
+                        name="addressNumber"
+                        placeholder="123"
+                        value={form.addressNumber}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="addressComplement">Complemento (opcional)</Label>
+                      <Input
+                        id="addressComplement"
+                        name="addressComplement"
+                        placeholder="Apt, bloco..."
+                        value={form.addressComplement}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="addressNeighborhood">Bairro *</Label>
+                      <Input
+                        id="addressNeighborhood"
+                        name="addressNeighborhood"
+                        placeholder="Bairro"
+                        value={form.addressNeighborhood}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="addressCity">Cidade *</Label>
+                      <Input
+                        id="addressCity"
+                        name="addressCity"
+                        placeholder="Cidade"
+                        value={form.addressCity}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="addressState">Estado (UF) *</Label>
+                      <Input
+                        id="addressState"
+                        name="addressState"
+                        placeholder="SP"
+                        value={form.addressState}
+                        onChange={(e) =>
+                          setForm((p) => ({
+                            ...p,
+                            addressState: e.target.value.toUpperCase().slice(0, 2),
+                          }))
+                        }
+                        maxLength={2}
+                        required
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="internationalAddressLines">
+                    Endereço completo no exterior *
+                  </Label>
+                  <Textarea
+                    id="internationalAddressLines"
+                    name="internationalAddressLines"
+                    rows={6}
+                    placeholder={`País, cidade, código postal (ZIP/postal code), rua, número, complemento — no formato que você usaria no CSSBuy ou na transportadora.\n\nEx.: United States, 10001 New York, NY, 123 Main St Apt 4`}
+                    value={form.internationalAddressLines}
+                    onChange={handleChange}
+                    className="min-h-[140px] resize-y"
+                    required={!deliveryInBrazil}
+                  />
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Esse texto entra no pedido e no bloco para copiar no CSSBuy. O frete
+                    exibido no resumo continua sendo a estimativa padrão (base Brasil); o
+                    envio final ao seu país combinamos após o pagamento, como de costume
+                    no sourcing internacional.
+                  </p>
+                </div>
+              )}
             </section>
 
             <section className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-sm space-y-4">
@@ -1166,7 +1254,9 @@ const Checkout = () => {
               </div>
 
             <div>
-              <Label htmlFor="customerCpf">CPF *</Label>
+              <Label htmlFor="customerCpf">
+                CPF {deliveryInBrazil ? "*" : "(opcional)"}
+              </Label>
               <Input
                 id="customerCpf"
                 name="customerCpf"
@@ -1179,10 +1269,12 @@ const Checkout = () => {
                   }))
                 }
                 maxLength={14}
-                required
+                required={deliveryInBrazil}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Obrigatório para envios internacionais (alfândega brasileira)
+                {deliveryInBrazil
+                  ? "Obrigatório para envio ao Brasil (alfândega)."
+                  : "Se não tiver CPF brasileiro, deixe em branco ou informe outro documento nas observações."}
               </p>
             </div>
 
@@ -1214,18 +1306,27 @@ const Checkout = () => {
               <Input
                 id="customerWhatsapp"
                 name="customerWhatsapp"
-                placeholder="(11) 99999-9999"
+                placeholder={
+                  deliveryInBrazil
+                    ? "(11) 99999-9999"
+                    : "DDI + número (ex.: 351… ou 1…)"
+                }
                 value={form.customerWhatsapp}
                 onChange={(e) =>
                   setForm((p) => ({
                     ...p,
                     customerWhatsapp: e.target.value
                       .replace(/\D/g, "")
-                      .slice(0, 15),
+                      .slice(0, 18),
                   }))
                 }
                 required
               />
+              {!deliveryInBrazil && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Inclua o código do país (DDI) para falarmos com você no WhatsApp.
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="notes">Observações (opcional)</Label>

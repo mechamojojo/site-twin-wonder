@@ -126,7 +126,21 @@ export function useSupportChat() {
           status: string;
           messages: ThreadMsg[];
         };
-        setThread(data);
+        setThread((prev) => {
+          if (prev && prev.id === data.id) {
+            const prevIds = new Set(prev.messages.map((m) => m.id));
+            const newStaff = data.messages.filter(
+              (m) => m.sender === "STAFF" && !prevIds.has(m.id),
+            );
+            if (newStaff.length > 0) {
+              toast.success(
+                "Você tem uma resposta da equipe — confira abaixo.",
+                { duration: 6500 },
+              );
+            }
+          }
+          return data;
+        });
       } catch {
         if (!isGuest) toast.error("Não foi possível carregar a conversa.");
       } finally {
