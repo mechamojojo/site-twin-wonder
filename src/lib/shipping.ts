@@ -186,3 +186,55 @@ export function calcCartShipping(items: CartShippingItem[]): CartShippingResult 
     totalBrl: Math.round((cFreightBrl + dBrl + keepBoxSurchargeBrl) * 100) / 100,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Promoção de frete: pedido ≥ R$ X → até R$ Y de desconto no frete estimado
+// (divulgação: “frete grátis” com teto; acima do teto aplica-se desconto parcial)
+// ---------------------------------------------------------------------------
+
+/** Subtotal de produtos (sem frete) mínimo para ativar a promoção */
+export const FRETE_PROMO_SUBTOTAL_MIN_BRL = 1000;
+/** Máximo de desconto aplicado sobre o frete estimado (em R$) */
+export const FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL = 200;
+
+export type FreightPromoResult = {
+  qualifies: boolean;
+  rawFreightBrl: number;
+  freightDiscountBrl: number;
+  freightAfterPromoBrl: number;
+};
+
+/**
+ * Aplica desconto no frete quando o subtotal de produtos atinge o mínimo.
+ * O desconto é no máximo `FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL` e nunca excede o próprio frete.
+ */
+export function applyFreightPromo(
+  productSubtotalBrl: number,
+  rawFreightBrl: number,
+): FreightPromoResult {
+  const raw = Math.round(rawFreightBrl * 100) / 100;
+  if (
+    productSubtotalBrl < FRETE_PROMO_SUBTOTAL_MIN_BRL ||
+    productSubtotalBrl <= 0 ||
+    raw <= 0
+  ) {
+    return {
+      qualifies: false,
+      rawFreightBrl: raw,
+      freightDiscountBrl: 0,
+      freightAfterPromoBrl: raw,
+    };
+  }
+  const freightDiscountBrl = Math.min(
+    raw,
+    FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL,
+  );
+  const freightAfterPromoBrl =
+    Math.round((raw - freightDiscountBrl) * 100) / 100;
+  return {
+    qualifies: true,
+    rawFreightBrl: raw,
+    freightDiscountBrl,
+    freightAfterPromoBrl: Math.max(0, freightAfterPromoBrl),
+  };
+}

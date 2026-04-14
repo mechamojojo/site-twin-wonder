@@ -2515,6 +2515,8 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       estimatedTotalBrl,
       checkoutGroupId: bodyCheckoutGroupId,
       orderItemsJson: bodyOrderItemsJson,
+      /** Checkout: não avisar admin até o PIX ser gerado ou o pagamento aprovado. */
+      silentOrderCreation,
     } = req.body ?? {};
 
     if (!originalUrl || !productDescription || !quantity || !cep) {
@@ -2636,35 +2638,37 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       status = OrderStatus.AGUARDANDO_PAGAMENTO;
     }
 
-    // Aviso ao admin: novo pedido
-    const siteUrl = (
-      process.env.SITE_URL || "https://compraschina.com.br"
-    ).replace(/\/$/, "");
-    const orderUrl = `${siteUrl}/admin/pedido/${order.id}`;
-    const produto = (
-      order.productTitle ||
-      order.productDescription ||
-      "Produto"
-    ).slice(0, 50);
-    sendTelegram(
-      "Novo pedido\n" +
-        "Pedido " +
-        order.id.slice(-8) +
-        "\n" +
-        "Produto: " +
-        produto +
-        "\n" +
-        "Cliente: " +
-        (order.customerName || order.customerEmail || "—") +
-        "\n" +
-        "Status: " +
-        (status === OrderStatus.AGUARDANDO_PAGAMENTO
-          ? "Aguardando pagamento"
-          : "Aguardando cotação") +
-        "\n\n" +
-        "Gerenciar: " +
-        orderUrl,
-    ).catch(() => {});
+    // Aviso ao admin: novo pedido (checkout imediato pode adiar até PIX/cartão)
+    if (!silentOrderCreation) {
+      const siteUrl = (
+        process.env.SITE_URL || "https://compraschina.com.br"
+      ).replace(/\/$/, "");
+      const orderUrl = `${siteUrl}/admin/pedido/${order.id}`;
+      const produto = (
+        order.productTitle ||
+        order.productDescription ||
+        "Produto"
+      ).slice(0, 50);
+      sendTelegram(
+        "Novo pedido\n" +
+          "Pedido " +
+          order.id.slice(-8) +
+          "\n" +
+          "Produto: " +
+          produto +
+          "\n" +
+          "Cliente: " +
+          (order.customerName || order.customerEmail || "—") +
+          "\n" +
+          "Status: " +
+          (status === OrderStatus.AGUARDANDO_PAGAMENTO
+            ? "Aguardando pagamento"
+            : "Aguardando cotação") +
+          "\n\n" +
+          "Gerenciar: " +
+          orderUrl,
+      ).catch(() => {});
+    }
 
     res.status(201).json({ id: order.id, status });
   } catch (err) {
@@ -3177,7 +3181,9 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
       });
     }
 
-    const { createPayment } = await import("./mercadopago");
+    const { createPayment, extractPixTransactionData } = await import(
+      "./mercadopago"
+    );
     const idempotencyKey = `${order.id}-${crypto.randomUUID()}`;
     const result = await createPayment({
       accessToken,
@@ -3267,9 +3273,59 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
           };
         }
       | undefined;
+    const pixPayload = extractPixTransactionData(result.point_of_interaction);
+
+    if (isPix && result.status === "pending" && !pixPayload) {
+      console.error(
+        "[MP] PIX pending sem QR/ticket",
+        JSON.stringify(result.point_of_interaction),
+      );
+      return res.status(502).json({
+        error:
+          "O Mercado Pago não retornou o QR Code do PIX. Tente novamente em instantes.",
+        paymentId: result.id,
+        status: result.status,
+      });
+    }
+
+    if (
+      isPix &&
+      result.status === "pending" &&
+      pixPayload &&
+      paymentStatus === "PENDENTE"
+    ) {
+      const siteUrl = (
+        process.env.SITE_URL || "https://compraschina.com.br"
+      ).replace(/\/$/, "");
+      const orderUrl = `${siteUrl}/admin/pedido/${order.id}`;
+      const produto = (
+        order.productTitle ||
+        order.productDescription ||
+        "Produto"
+      ).slice(0, 50);
+      sendTelegram(
+        "PIX gerado — aguardando pagamento\n" +
+          "Pedido " +
+          order.id.slice(-8) +
+          "\n" +
+          "Produto: " +
+          produto.slice(0, 50) +
+          "\n" +
+          "Cliente: " +
+          (order.customerName || order.customerEmail || "—") +
+          "\n" +
+          "💰 R$ " +
+          totalBrl.toFixed(2) +
+          "\n\n" +
+          "Gerenciar: " +
+          orderUrl,
+      ).catch(() => {});
+    }
+
     res.json({
       paymentId: result.id,
       status: result.status,
+      pix: pixPayload,
       point_of_interaction: poi?.transaction_data
         ? { transaction_data: poi.transaction_data }
         : result.point_of_interaction,

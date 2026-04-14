@@ -585,25 +585,38 @@ const Order = () => {
       <Navbar />
 
       <main className="container mx-auto px-4 py-10 pb-[max(5rem,env(safe-area-inset-bottom))] max-w-6xl">
-        <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Continuar comprando
-          </Link>
-          <span aria-hidden>·</span>
-          <span className="text-foreground/80">
-            {productPreviewLoading ? (
-              <span className="inline-flex items-center gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
-                Buscando informações do produto...
-              </span>
-            ) : (
-              "Produto"
-            )}
-          </span>
+        <div className="mb-4 space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Continuar comprando
+            </Link>
+            <span aria-hidden>·</span>
+            <span className="text-foreground/80">
+              {productPreviewLoading ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                  Gerando a página do produto…
+                </span>
+              ) : (
+                "Produto"
+              )}
+            </span>
+          </div>
+          {productPreviewLoading && (
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
+              <span className="font-medium text-foreground/90">
+                Em links pela primeira vez, isso pode levar até cerca de 30
+                segundos.
+              </span>{" "}
+              Estamos montando a pré-visualização com fotos, opções e preço —
+              aguarde um instante e, em seguida, você verá tudo o que precisa
+              para concluir o pedido.
+            </p>
+          )}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-10 items-start">
           {/* Coluna esquerda: galeria do produto */}

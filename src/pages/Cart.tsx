@@ -1,14 +1,17 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart, Trash2, Package, Truck } from "lucide-react";
 import {
+  applyFreightPromo,
   calcCartShipping,
   detectCategory,
   categorySupportsKeepBox,
   itemWeightG,
 } from "@/lib/shipping";
+import { FreightPromoRulesLink } from "@/components/FreightPromoRules";
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
@@ -33,7 +36,16 @@ const Cart = () => {
     };
   });
   const shipping = calcCartShipping(shippingItems);
-  const grandTotal = totalBrl > 0 ? totalBrl + shipping.totalBrl : 0;
+  const freightPromo = useMemo(
+    () => applyFreightPromo(totalBrl, shipping.totalBrl),
+    [totalBrl, shipping.totalBrl],
+  );
+  const grandTotal =
+    totalBrl > 0
+      ? Math.round(
+          (totalBrl + freightPromo.freightAfterPromoBrl) * 100,
+        ) / 100
+      : 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -203,11 +215,39 @@ const Cart = () => {
                   </div>
                 )}
               </div>
-              <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold">
-                <span>Frete</span>
-                <span className="text-foreground">
-                  R$ {shipping.totalBrl.toFixed(2)}
-                </span>
+              {!freightPromo.qualifies ? (
+                <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold">
+                  <span>Frete</span>
+                  <span className="text-foreground tabular-nums">
+                    R$ {shipping.totalBrl.toFixed(2)}
+                  </span>
+                </div>
+              ) : (
+                <div className="border-t border-border pt-2 space-y-1 text-sm">
+                  <div className="flex justify-between font-medium text-muted-foreground">
+                    <span>Total frete estimado</span>
+                    <span className="text-foreground tabular-nums">
+                      R$ {freightPromo.rawFreightBrl.toFixed(2)}
+                    </span>
+                  </div>
+                  {freightPromo.freightDiscountBrl > 0 && (
+                    <div className="flex justify-between font-semibold text-green-700 dark:text-green-400">
+                      <span>Desconto (pedido ≥ R$ 1.000)</span>
+                      <span className="tabular-nums">
+                        −R$ {freightPromo.freightDiscountBrl.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold text-foreground pt-0.5">
+                    <span>Frete a pagar</span>
+                    <span className="tabular-nums text-china-red">
+                      R$ {freightPromo.freightAfterPromoBrl.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="pt-2">
+                <FreightPromoRulesLink size="sm" />
               </div>
               {totalBrl > 0 && (
                 <div className="flex justify-between text-sm font-bold text-china-red pt-1 border-t border-border">

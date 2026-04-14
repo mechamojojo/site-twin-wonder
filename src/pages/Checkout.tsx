@@ -4,12 +4,23 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart, type CartItem } from "@/context/CartContext";
 import { getDisplayPriceBrl } from "@/lib/pricing";
-import { calcCartShipping, detectCategory, itemWeightG } from "@/lib/shipping";
+import {
+  applyFreightPromo,
+  calcCartShipping,
+  detectCategory,
+  itemWeightG,
+  type FreightPromoResult,
+} from "@/lib/shipping";
+import { FreightPromoRulesLink } from "@/components/FreightPromoRules";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { apiUrl } from "@/lib/api";
+import {
+  hasRenderablePixPayload,
+  pixDataFromCreatePaymentResponse,
+} from "@/lib/pixResponse";
 import { ensureHttpsImage } from "@/lib/utils";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import {
@@ -123,6 +134,15 @@ function validateShippingForm(form: CheckoutForm): string | null {
 
 type ShippingComputed = ReturnType<typeof calcCartShipping>;
 
+/** Snapshot do carrinho após criar pedido + PIX (carrinho é limpo, mas o resumo precisa continuar visível). */
+type CheckoutSummaryLock = {
+  itemsSnapshot: CartItem[];
+  shipping: ShippingComputed;
+  totalProductBrl: number;
+  grandTotal: number;
+  freightPromo: FreightPromoResult;
+};
+
 function CheckoutStepper({
   step,
   onGoToDelivery,
@@ -198,12 +218,14 @@ function OrderSummaryPanel({
   shipping,
   totalProductBrl,
   grandTotal,
+  freightPromo,
   variant = "default",
 }: {
   items: CartItem[];
   shipping: ShippingComputed;
   totalProductBrl: number;
   grandTotal: number;
+  freightPromo: FreightPromoResult;
   variant?: "default" | "compact";
 }) {
   const dense = variant === "compact";
@@ -270,12 +292,37 @@ function OrderSummaryPanel({
       <div
         className={`space-y-1.5 text-muted-foreground ${dense ? "text-[11px]" : "text-xs"}`}
       >
-        <div className="flex justify-between gap-2">
-          <span>Frete estimado (China → você)</span>
-          <span className="text-foreground tabular-nums">
-            R$ {shipping.totalBrl.toFixed(2)}
-          </span>
-        </div>
+        {!freightPromo.qualifies ? (
+          <div className="flex justify-between gap-2">
+            <span>Frete estimado</span>
+            <span className="text-foreground tabular-nums">
+              R$ {freightPromo.rawFreightBrl.toFixed(2)}
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-between gap-2">
+              <span>Total frete estimado</span>
+              <span className="text-foreground tabular-nums">
+                R$ {freightPromo.rawFreightBrl.toFixed(2)}
+              </span>
+            </div>
+            {freightPromo.freightDiscountBrl > 0 && (
+              <div className="flex justify-between gap-2 text-green-700 dark:text-green-400 font-medium">
+                <span>Desconto (pedido ≥ R$ 1.000)</span>
+                <span className="tabular-nums">
+                  −R$ {freightPromo.freightDiscountBrl.toFixed(2)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between gap-2 text-foreground font-semibold pt-0.5 border-t border-border/50 border-dashed">
+              <span>Frete a pagar</span>
+              <span className="tabular-nums text-china-red">
+                R$ {freightPromo.freightAfterPromoBrl.toFixed(2)}
+              </span>
+            </div>
+          </>
+        )}
         <details className="group">
           <summary className="cursor-pointer list-none text-china-red hover:underline font-medium">
             Ver detalhes do frete
@@ -357,6 +404,9 @@ const Checkout = () => {
     firstOrderId: string;
   } | null>(null);
   const checkoutSessionRef = useRef<{ firstOrderId: string } | null>(null);
+  const [summaryLock, setSummaryLock] = useState<CheckoutSummaryLock | null>(
+    null,
+  );
   const mpRef = useRef<InstanceType<
     NonNullable<typeof window.MercadoPago>
   > | null>(null);
@@ -429,14 +479,25 @@ const Checkout = () => {
       ),
     [items],
   );
-  const grandTotal = useMemo(
-    () => (totalProductBrl > 0 ? totalProductBrl + shipping.totalBrl : 0),
+
+  const freightPromo = useMemo(
+    () => applyFreightPromo(totalProductBrl, shipping.totalBrl),
     [totalProductBrl, shipping.totalBrl],
+  );
+
+  const grandTotal = useMemo(
+    () =>
+      totalProductBrl > 0
+        ? Math.round(
+            (totalProductBrl + freightPromo.freightAfterPromoBrl) * 100,
+          ) / 100
+        : 0,
+    [totalProductBrl, freightPromo.freightAfterPromoBrl],
   );
 
   const checkoutComputation = useMemo(() => {
     if (items.length === 0) return null;
-    const totalFreightBrl = shipping.totalBrl;
+    const totalFreightBrl = freightPromo.freightAfterPromoBrl;
     const totalWeightG = shipping.totalWeightG;
     const checkoutGroupId = items.length > 1 ? crypto.randomUUID() : null;
 
@@ -486,7 +547,18 @@ const Checkout = () => {
       expectedCheckoutTotal,
       firstLineTotalBrl: lineEstimates[0] ?? 0,
     };
-  }, [items, shipping, totalProductBrl]);
+  }, [items, shipping, totalProductBrl, freightPromo]);
+
+  const displayItems =
+    items.length > 0 ? items : summaryLock?.itemsSnapshot ?? [];
+  const displayShipping =
+    items.length > 0 ? shipping : summaryLock?.shipping ?? shipping;
+  const displayTotalProductBrl =
+    items.length > 0 ? totalProductBrl : summaryLock?.totalProductBrl ?? 0;
+  const displayGrandTotal =
+    items.length > 0 ? grandTotal : summaryLock?.grandTotal ?? 0;
+  const displayFreightPromo =
+    items.length > 0 ? freightPromo : summaryLock?.freightPromo ?? freightPromo;
 
   useEffect(() => {
     if (!user) return;
@@ -603,6 +675,7 @@ const Checkout = () => {
           estimatedTotalBrl,
           checkoutGroupId,
           orderItemsJson,
+          silentOrderCreation: true,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -610,12 +683,11 @@ const Checkout = () => {
       if (!firstOrderId) firstOrderId = data.id;
     }
 
-    clearCart();
     const sid = { firstOrderId: firstOrderId! };
     checkoutSessionRef.current = sid;
     setCheckoutSession(sid);
     return firstOrderId;
-  }, [items, checkoutComputation, form, clearCart]);
+  }, [items, checkoutComputation, form]);
 
   const createPixPayment = async (orderId: string) => {
     const res = await fetch(apiUrl(`/api/orders/${orderId}/create-payment`), {
@@ -629,17 +701,32 @@ const Checkout = () => {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Erro ao criar pagamento PIX");
-    const poi = data.point_of_interaction;
-    const txData = poi?.transaction_data ?? poi;
-    setPixData(txData || null);
+
+    const txData = pixDataFromCreatePaymentResponse(data);
     if (data.status === "approved") {
+      clearCart();
+      setSummaryLock(null);
       toast.success("Pagamento aprovado!");
       navigate(`/pedido-confirmado/${orderId}`, { replace: true });
-    } else {
-      toast.success(
-        "Pedido registrado. Escaneie o QR Code ou copie o PIX para concluir.",
+      return;
+    }
+    if (!hasRenderablePixPayload(txData)) {
+      throw new Error(
+        "O PIX foi criado, mas o QR Code não veio na resposta. Tente novamente em instantes ou use o link no e-mail quando chegar.",
       );
     }
+    setSummaryLock({
+      itemsSnapshot: items.map((i) => ({ ...i })),
+      shipping: { ...shipping },
+      totalProductBrl,
+      grandTotal,
+      freightPromo: { ...freightPromo },
+    });
+    setPixData(txData);
+    clearCart();
+    toast.success(
+      "PIX gerado. Pague para confirmar o pedido — o status vira “pago” após a confirmação do banco.",
+    );
   };
 
   const handlePixCheckout = async (e: React.FormEvent) => {
@@ -683,6 +770,8 @@ const Checkout = () => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao processar pagamento");
         if (data.status === "approved") {
+          clearCart();
+          setSummaryLock(null);
           toast.success("Pagamento aprovado!");
           navigate(`/pedido-confirmado/${orderId}`, { replace: true });
         } else {
@@ -697,7 +786,7 @@ const Checkout = () => {
         setPaying(false);
       }
     },
-    [form.customerName, navigate],
+    [form.customerName, navigate, clearCart],
   );
 
   useEffect(() => {
@@ -826,10 +915,11 @@ const Checkout = () => {
   }, [step]);
 
   const summaryProps = {
-    items,
-    shipping,
-    totalProductBrl,
-    grandTotal,
+    items: displayItems,
+    shipping: displayShipping,
+    totalProductBrl: displayTotalProductBrl,
+    grandTotal: displayGrandTotal,
+    freightPromo: displayFreightPromo,
   };
 
   const handleGoToDelivery = () => {
@@ -842,7 +932,7 @@ const Checkout = () => {
     setStep(1);
   };
 
-  if (items.length === 0) {
+  if (items.length === 0 && !checkoutSession) {
     return (
       <div className="min-h-screen bg-muted/25">
         <Navbar />
@@ -907,8 +997,8 @@ const Checkout = () => {
           </div>
           <p className="text-sm text-muted-foreground mb-8 max-w-2xl leading-relaxed">
             {step === 1
-              ? "Informe onde entregamos e seus dados. Na próxima tela você escolhe PIX ou cartão — o pedido só é criado nessa hora."
-              : "Última etapa: pagamento seguro. Seu pedido entra no sistema ao gerar o PIX ou ao confirmar o cartão."}
+              ? "Informe onde entregamos e seus dados. Na próxima tela você escolhe PIX ou cartão."
+              : "Última etapa: no PIX, primeiro geramos o QR Code; o pedido passa a “pago” quando o banco confirmar o pagamento."}
           </p>
 
           <div className="grid lg:grid-cols-[minmax(0,1fr),380px] gap-8 xl:gap-10 items-start">
@@ -920,8 +1010,8 @@ const Checkout = () => {
                     <span className="truncate">
                       Pedido ({items.length}{" "}
                       {items.length === 1 ? "item" : "itens"}) ·{" "}
-                      {totalProductBrl > 0
-                        ? `R$ ${grandTotal.toFixed(2)}`
+                      {displayTotalProductBrl > 0
+                        ? `R$ ${displayGrandTotal.toFixed(2)}`
                         : "Total a confirmar"}
                     </span>
                   </span>
@@ -930,8 +1020,9 @@ const Checkout = () => {
                     aria-hidden
                   />
                 </summary>
-                <div className="border-t border-border px-4 pb-4 pt-2 bg-muted/20">
+                <div className="border-t border-border px-4 pb-4 pt-2 bg-muted/20 space-y-3">
                   <OrderSummaryPanel {...summaryProps} variant="compact" />
+                  <FreightPromoRulesLink size="xs" />
                 </div>
               </details>
 
@@ -1211,9 +1302,11 @@ const Checkout = () => {
                       {!pixData ? (
                         <form onSubmit={handlePixCheckout} className="space-y-4">
                           <p className="text-sm text-muted-foreground">
-                            O pedido será criado ao gerar o PIX. Usaremos o
-                            e-mail abaixo (já preenchido com seus dados) para o
-                            comprovante.
+                            Ao gerar o PIX, criamos o pedido e exibimos o QR Code.
+                            O comprovante vai para o e-mail abaixo. A confirmação
+                            do pedido como pago ocorre quando o PIX for
+                            compensado (você pode acompanhar em &quot;Meus
+                            pedidos&quot;).
                           </p>
                           <div>
                             <Label htmlFor="pix-email">E-mail</Label>
@@ -1237,8 +1330,8 @@ const Checkout = () => {
                             className="w-full bg-china-red text-white py-3.5 rounded-xl font-semibold hover:bg-china-red/90 disabled:opacity-60 transition-opacity"
                           >
                             {paying
-                              ? "Registrando pedido e gerando PIX..."
-                              : "Gerar PIX e registrar pedido"}
+                              ? "Gerando PIX..."
+                              : "Gerar QR Code PIX"}
                           </button>
                         </form>
                       ) : (
@@ -1259,6 +1352,14 @@ const Checkout = () => {
                                 {pixData.qr_code}
                               </p>
                             )}
+                            {!pixData.qr_code &&
+                              !pixData.qr_code_base64 &&
+                              pixData.ticket_url && (
+                                <p className="text-sm text-center text-muted-foreground">
+                                  Abra o link abaixo para pagar com PIX no app ou
+                                  no banco.
+                                </p>
+                              )}
                             {pixData.qr_code && (
                               <button
                                 type="button"
@@ -1284,7 +1385,7 @@ const Checkout = () => {
                               to={`/pedido-confirmado/${checkoutSession.firstOrderId}`}
                               className="block text-center text-sm font-medium text-foreground underline"
                             >
-                              Ver confirmação do pedido →
+                              Ver status do pedido →
                             </Link>
                           )}
                         </div>
@@ -1434,6 +1535,9 @@ const Checkout = () => {
               <div className="sticky top-28 space-y-4">
                 <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
                   <OrderSummaryPanel {...summaryProps} />
+                  <div className="mt-3">
+                    <FreightPromoRulesLink size="xs" />
+                  </div>
                 </div>
                 {step === 2 && checkoutComputation && (
                   <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-1">
@@ -1471,7 +1575,9 @@ const Checkout = () => {
                   Total estimado
                 </p>
                 <p className="text-xl font-bold text-china-red tabular-nums truncate">
-                  {totalProductBrl > 0 ? `R$ ${grandTotal.toFixed(2)}` : "—"}
+                  {displayTotalProductBrl > 0
+                    ? `R$ ${displayGrandTotal.toFixed(2)}`
+                    : "—"}
                 </p>
               </div>
               <button

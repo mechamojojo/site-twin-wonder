@@ -98,3 +98,34 @@ export async function createPayment(params: {
     } | undefined,
   };
 }
+
+/** Extrai QR / copia e cola / link do retorno do MP (estruturas variam por versão de API). */
+export function extractPixTransactionData(pointOfInteraction: unknown): {
+  qr_code?: string;
+  qr_code_base64?: string;
+  ticket_url?: string;
+} | null {
+  if (!pointOfInteraction || typeof pointOfInteraction !== "object") {
+    return null;
+  }
+  const poi = pointOfInteraction as Record<string, unknown>;
+  const rawTd = poi.transaction_data;
+  const td =
+    rawTd && typeof rawTd === "object"
+      ? (rawTd as Record<string, unknown>)
+      : poi;
+
+  const qr_code =
+    typeof td.qr_code === "string"
+      ? td.qr_code
+      : typeof td.qrcode === "string"
+        ? td.qrcode
+        : undefined;
+  const qr_code_base64 =
+    typeof td.qr_code_base64 === "string" ? td.qr_code_base64 : undefined;
+  const ticket_url =
+    typeof td.ticket_url === "string" ? td.ticket_url : undefined;
+
+  if (!qr_code && !qr_code_base64 && !ticket_url) return null;
+  return { qr_code, qr_code_base64, ticket_url };
+}

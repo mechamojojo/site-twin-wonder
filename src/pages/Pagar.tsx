@@ -1,6 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { apiUrl } from "@/lib/api";
+import {
+  hasRenderablePixPayload,
+  pixDataFromCreatePaymentResponse,
+} from "@/lib/pixResponse";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Input } from "@/components/ui/input";
@@ -195,9 +199,13 @@ const Pagar = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao criar pagamento");
-      const poi = data.point_of_interaction;
-      const txData = poi?.transaction_data ?? poi;
-      setPixData(txData || null);
+      const txData = pixDataFromCreatePaymentResponse(data);
+      if (data.status !== "approved" && !hasRenderablePixPayload(txData)) {
+        throw new Error(
+          "O QR Code do PIX não veio na resposta. Tente novamente.",
+        );
+      }
+      setPixData(txData);
       if (data.status === "approved") {
         toast.success("Pagamento aprovado!");
         setTimeout(() => (window.location.href = `/pedido-confirmado/${id}`), 2000);
