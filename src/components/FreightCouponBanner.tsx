@@ -21,9 +21,8 @@ export default function FreightCouponBanner() {
         <p className="text-sm text-foreground leading-snug">
           Use o cupom{" "}
           <strong className="font-semibold font-mono">{FRETE_PROMO_COUPON_CODE}</strong>{" "}
-          no caminho da compra (carrinho ou checkout) para{" "}
-          <strong className="font-semibold">frete grátis</strong> em pedidos acima de
-          R$ {FRETE_PROMO_SUBTOTAL_MIN_BRL.toLocaleString("pt-BR")}.{" "}
+          no Checkout para ganhar frete grátis em pedidos acima de R${" "}
+          {FRETE_PROMO_SUBTOTAL_MIN_BRL.toLocaleString("pt-BR")}.{" "}
           <Link
             to="/carrinho#regras-frete"
             className="text-china-red font-medium hover:underline underline-offset-2 whitespace-nowrap"
@@ -32,10 +31,10 @@ export default function FreightCouponBanner() {
           </Link>
         </p>
         <Link
-          to="/carrinho"
+          to="/checkout"
           className="shrink-0 text-sm font-semibold text-china-red hover:underline underline-offset-2"
         >
-          Ir ao carrinho →
+          Ir ao checkout →
         </Link>
       </div>
     </div>
