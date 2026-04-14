@@ -17,6 +17,23 @@ import { Badge } from "@/components/ui/badge";
 
 const ADMIN_TOKEN_KEY = "compraschina-admin-token";
 
+type UserProfile = {
+  id: string;
+  name: string;
+  email: string;
+  customerCpf: string | null;
+  customerWhatsapp: string | null;
+  cep: string | null;
+  addressStreet: string | null;
+  addressNumber: string | null;
+  addressComplement: string | null;
+  addressNeighborhood: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  emailVerified: boolean;
+  createdAt: string;
+};
+
 type ConvRow = {
   id: string;
   status: string;
@@ -34,6 +51,94 @@ type ThreadMsg = {
   body: string;
   createdAt: string;
 };
+
+function formatCpfDisplay(v: string | null | undefined): string {
+  if (!v) return "—";
+  const d = v.replace(/\D/g, "");
+  if (d.length !== 11) return v;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+function formatCepDisplay(v: string | null | undefined): string {
+  if (!v) return "—";
+  const c = v.replace(/\D/g, "");
+  if (c.length === 8) return `${c.slice(0, 5)}-${c.slice(5)}`;
+  return v;
+}
+
+function addressLines(u: UserProfile): string {
+  const parts = [u.addressStreet, u.addressNumber, u.addressComplement].filter(
+    Boolean,
+  );
+  const line1 = parts.join(", ");
+  const line2 = [u.addressNeighborhood, u.addressCity, u.addressState]
+    .filter(Boolean)
+    .join(", ");
+  return [line1, line2, u.cep ? `CEP ${formatCepDisplay(u.cep)}` : ""]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function whatsAppClientLink(phone: string | null | undefined): string {
+  if (!phone) return "#";
+  const digits = phone.replace(/\D/g, "").replace(/^0/, "");
+  let num: string;
+  if (digits.length > 11 || (digits.startsWith("55") && digits.length >= 12)) {
+    num = digits;
+  } else if (digits.length === 11) {
+    num = "55" + digits;
+  } else {
+    num = digits;
+  }
+  return `https://wa.me/${num}`;
+}
+
+function CadastroResumo({ user }: { user: UserProfile }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm space-y-2">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        Dados do cadastro no site
+      </p>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+        <div>
+          <dt className="text-muted-foreground">CPF</dt>
+          <dd className="font-mono text-foreground">{formatCpfDisplay(user.customerCpf)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">WhatsApp</dt>
+          <dd>
+            {user.customerWhatsapp ? (
+              <a
+                href={whatsAppClientLink(user.customerWhatsapp)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-china-red font-medium hover:underline"
+              >
+                {user.customerWhatsapp}
+              </a>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-muted-foreground">Endereço (cadastro)</dt>
+          <dd className="whitespace-pre-wrap text-foreground">
+            {addressLines(user).trim() || "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">E-mail verificado</dt>
+          <dd>{user.emailVerified ? "Sim" : "Não"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Cadastro em</dt>
+          <dd>{new Date(user.createdAt).toLocaleString("pt-BR")}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
 
 const AdminSuporte = () => {
   const navigate = useNavigate();
@@ -58,6 +163,11 @@ const AdminSuporte = () => {
   const [sending, setSending] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [lookupEmail, setLookupEmail] = useState("");
+  const [lookupUser, setLookupUser] = useState<UserProfile | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
 
   const fetchList = useCallback(async () => {
     if (!token) return;
@@ -99,7 +209,7 @@ const AdminSuporte = () => {
           status: string;
           guestName: string | null;
           guestEmail: string | null;
-          user: { name: string; email: string } | null;
+          user: UserProfile | null;
           messages: ThreadMsg[];
         };
         setThread(data);
@@ -168,6 +278,37 @@ const AdminSuporte = () => {
       toast.error("Erro de rede.");
     } finally {
       setSending(false);
+    }
+  };
+
+  const runLookup = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const em = lookupEmail.trim().toLowerCase();
+    if (!em) {
+      setLookupError("Digite um e-mail.");
+      return;
+    }
+    setLookupLoading(true);
+    setLookupError(null);
+    setLookupUser(null);
+    try {
+      const res = await fetch(
+        apiUrl(`/api/admin/users/lookup?email=${encodeURIComponent(em)}`),
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        user?: UserProfile;
+      };
+      if (!res.ok) {
+        setLookupError(data.error || "Não encontrado.");
+        return;
+      }
+      if (data.user) setLookupUser(data.user);
+    } catch {
+      setLookupError("Erro de rede.");
+    } finally {
+      setLookupLoading(false);
     }
   };
 
@@ -256,6 +397,40 @@ const AdminSuporte = () => {
           </Button>
         </div>
 
+        <form
+          onSubmit={runLookup}
+          className="rounded-xl border border-border bg-card p-4 mb-4 flex flex-col sm:flex-row gap-3 sm:items-end"
+        >
+          <div className="flex-1 min-w-0">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+              Buscar cadastro por e-mail (sem precisar de pedido)
+            </label>
+            <input
+              type="email"
+              value={lookupEmail}
+              onChange={(e) => setLookupEmail(e.target.value)}
+              placeholder="cliente@email.com"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              autoComplete="off"
+            />
+          </div>
+          <Button type="submit" disabled={lookupLoading} variant="secondary">
+            {lookupLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "Buscar"
+            )}
+          </Button>
+        </form>
+        {lookupError && (
+          <p className="text-sm text-red-600 mb-4 -mt-2">{lookupError}</p>
+        )}
+        {lookupUser && (
+          <div className="mb-4">
+            <CadastroResumo user={lookupUser} />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-[480px]">
           <div className="lg:col-span-2 rounded-xl border border-border bg-card overflow-hidden flex flex-col max-h-[70vh] lg:max-h-none">
             <div className="px-3 py-2 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -316,7 +491,8 @@ const AdminSuporte = () => {
               </div>
             ) : thread ? (
               <>
-                <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2 justify-between bg-muted/20">
+                <div className="px-4 py-3 border-b border-border space-y-3 bg-muted/20">
+                  <div className="flex flex-wrap items-center gap-2 justify-between">
                   <div>
                     <p className="font-semibold text-foreground">
                       {threadDisplayName}
@@ -348,6 +524,17 @@ const AdminSuporte = () => {
                       </Button>
                     )}
                   </div>
+                  </div>
+                  {thread.user ? (
+                    <CadastroResumo user={thread.user} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground border border-dashed border-border rounded-lg px-3 py-2">
+                      <strong className="text-foreground">Visitante sem login:</strong> só há
+                      nome e e-mail dados no formulário do chat. CPF, WhatsApp e endereço
+                      completos vêm do cadastro ou do checkout — use a busca por e-mail acima
+                      se a pessoa já tiver conta.
+                    </p>
+                  )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                   {thread.messages.map((m) => (

@@ -1,13 +1,10 @@
 import { Link } from "react-router-dom";
-import { Mail, MessageCircle, Send } from "lucide-react";
+import { Mail, MessagesSquare, Send } from "lucide-react";
 import {
   CONTACT_EMAIL,
   CNPJ,
   TELEGRAM_URL,
   TELEGRAM_DISPLAY,
-  whatsAppUrl,
-  WHATSAPP_DEFAULT_MESSAGE,
-  WHATSAPP_DISPLAY,
 } from "@/data/siteConfig";
 
 const Footer = () => {
@@ -31,15 +28,13 @@ const Footer = () => {
                 <Mail className="w-4 h-4" />
                 {CONTACT_EMAIL}
               </a>
-              <a
-                href={whatsAppUrl(WHATSAPP_DEFAULT_MESSAGE)}
-                target="_blank"
-                rel="noreferrer"
+              <Link
+                to="/fale-conosco"
                 className="inline-flex items-center gap-2 text-sm text-background/70 hover:text-gold transition-colors"
               >
-                <MessageCircle className="w-4 h-4" />
-                WhatsApp {WHATSAPP_DISPLAY}
-              </a>
+                <MessagesSquare className="w-4 h-4" />
+                Atendimento (chat no site)
+              </Link>
               <a
                 href={TELEGRAM_URL}
                 target="_blank"

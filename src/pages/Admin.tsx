@@ -113,8 +113,7 @@ function formatAddress(o: OrderWithDetails): string {
   const line2 = [o.addressNeighborhood, o.addressCity, o.addressState]
     .filter(Boolean)
     .join(", ");
-  const cepLine =
-    o.cep && o.cep !== "00000000" ? `CEP ${o.cep}` : "";
+  const cepLine = o.cep && o.cep !== "00000000" ? `CEP ${o.cep}` : "";
   return [line1, line2, cepLine].filter(Boolean).join("\n");
 }
 

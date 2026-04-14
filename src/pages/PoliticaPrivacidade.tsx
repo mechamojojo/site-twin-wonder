@@ -17,7 +17,7 @@ const PoliticaPrivacidade = () => {
           <section>
             <h2 className="text-lg font-heading font-semibold text-foreground mb-2">1. Controlador dos Dados</h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              O controlador dos seus dados pessoais é a ComprasChina, empresa brasileira de intermediação de compras internacionais. Para exercer seus direitos ou tirar dúvidas sobre o tratamento dos seus dados, entre em contato pelo e-mail <strong>contato@compraschina.com.br</strong> ou pelo WhatsApp disponível no site.
+              O controlador dos seus dados pessoais é a ComprasChina, empresa brasileira de intermediação de compras internacionais. Para exercer seus direitos ou tirar dúvidas sobre o tratamento dos seus dados, entre em contato pelo e-mail <strong>contato@compraschina.com.br</strong> ou pelo atendimento em <strong>compraschina.com.br/fale-conosco</strong> (chat no site).
             </p>
           </section>
 
@@ -28,7 +28,7 @@ const PoliticaPrivacidade = () => {
             </p>
             <ul className="mt-2 space-y-1 text-sm text-muted-foreground list-disc list-inside">
               <li>Dados de identificação: nome completo e CPF (quando necessário para fins aduaneiros).</li>
-              <li>Dados de contato: e-mail e número de WhatsApp.</li>
+              <li>Dados de contato: e-mail e, quando você usa o chat, as mensagens enviadas nesse canal.</li>
               <li>Dados de entrega: CEP e endereço completo.</li>
               <li>Dados do pedido: link do produto, variação, quantidade e observações fornecidas.</li>
               <li>Dados de pagamento: processados por gateways certificados (Mercado Pago); não armazenamos dados de cartão.</li>

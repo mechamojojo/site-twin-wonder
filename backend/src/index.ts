@@ -3678,6 +3678,45 @@ app.post(
   },
 );
 
+/** Campos do cadastro (sem senha) — admin para suporte / lookup */
+const ADMIN_USER_PROFILE_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  customerCpf: true,
+  customerWhatsapp: true,
+  cep: true,
+  addressStreet: true,
+  addressNumber: true,
+  addressComplement: true,
+  addressNeighborhood: true,
+  addressCity: true,
+  addressState: true,
+  emailVerified: true,
+  createdAt: true,
+} as const;
+
+app.get("/api/admin/users/lookup", requireAdmin, async (req, res) => {
+  try {
+    const email =
+      typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+    if (!email || !isSimpleEmail(email)) {
+      return res.status(400).json({ error: "Informe um e-mail válido." });
+    }
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: ADMIN_USER_PROFILE_SELECT,
+    });
+    if (!user) {
+      return res.status(404).json({ error: "Nenhum cadastro com este e-mail." });
+    }
+    res.json({ user });
+  } catch (err) {
+    console.error("[admin user lookup]", err);
+    res.status(500).json({ error: "Erro ao buscar cadastro." });
+  }
+});
+
 app.get("/api/admin/support/conversations", requireAdmin, async (_req, res) => {
   try {
     const list = await prisma.supportConversation.findMany({
@@ -3733,7 +3772,7 @@ app.get(
       const conv = await prisma.supportConversation.findUnique({
         where: { id },
         include: {
-          user: { select: { name: true, email: true } },
+          user: { select: ADMIN_USER_PROFILE_SELECT },
         },
       });
       if (!conv) {
