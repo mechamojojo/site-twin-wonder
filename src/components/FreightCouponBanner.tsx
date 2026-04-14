@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import {
   FRETE_PROMO_COUPON_CODE,
-  FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL,
   FRETE_PROMO_SUBTOTAL_MIN_BRL,
 } from "@/lib/shipping";
 import { Tag } from "lucide-react";
@@ -20,11 +19,17 @@ export default function FreightCouponBanner() {
           </span>
         </span>
         <p className="text-sm text-foreground leading-snug">
-          Use o cupom <strong className="font-semibold">{FRETE_PROMO_COUPON_CODE}</strong>{" "}
-          no carrinho para{" "}
+          Cupom{" "}
+          <strong className="font-semibold font-mono">{FRETE_PROMO_COUPON_CODE}</strong>{" "}
+          no carrinho —{" "}
           <strong className="font-semibold">frete grátis</strong> em compras acima de
-          R$ {FRETE_PROMO_SUBTOTAL_MIN_BRL.toLocaleString("pt-BR")} (até R${" "}
-          {FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL} de desconto no frete estimado).
+          R$ {FRETE_PROMO_SUBTOTAL_MIN_BRL.toLocaleString("pt-BR")}.{" "}
+          <Link
+            to="/carrinho#regras-frete"
+            className="text-china-red font-medium hover:underline underline-offset-2 whitespace-nowrap"
+          >
+            Ver regras
+          </Link>
         </p>
         <Link
           to="/carrinho"

@@ -8,6 +8,8 @@ type FreightPromoRulesProps = {
   /** "sm" = texto menor (carrinho); "xs" = ainda menor */
   size?: "sm" | "xs";
   className?: string;
+  /** Âncora para links do tipo /carrinho#id */
+  id?: string;
 };
 
 /**
@@ -16,11 +18,13 @@ type FreightPromoRulesProps = {
 export function FreightPromoRulesLink({
   size = "sm",
   className = "",
+  id,
 }: FreightPromoRulesProps) {
   const textCls =
     size === "xs" ? "text-[11px] leading-snug" : "text-xs leading-relaxed";
   return (
     <details
+      id={id}
       className={`group rounded-lg border border-border/80 bg-muted/30 px-3 py-2 ${className}`}
     >
       <summary

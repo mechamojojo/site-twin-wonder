@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo } from "react";
+import { Link, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
@@ -19,8 +19,18 @@ import { QuantityStepper } from "@/components/QuantityStepper";
 import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 
 const Cart = () => {
+  const { hash } = useLocation();
   const { items, removeItem, updateQuantity, updateKeepBox, freightCouponCode } =
     useCart();
+
+  useEffect(() => {
+    if (hash !== "#regras-frete") return;
+    const el = document.getElementById("regras-frete");
+    if (el instanceof HTMLDetailsElement) {
+      el.open = true;
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [hash]);
 
   const totalBrl = items.reduce(
     (acc, i) =>
@@ -260,7 +270,7 @@ const Cart = () => {
                 </div>
               )}
               <div className="pt-2">
-                <FreightPromoRulesLink size="sm" />
+                <FreightPromoRulesLink id="regras-frete" size="sm" />
               </div>
               {totalBrl > 0 && (
                 <div className="flex justify-between text-sm font-bold text-china-red pt-1 border-t border-border">
