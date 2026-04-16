@@ -1899,6 +1899,7 @@ async function findOrCreateSupplier(name: string) {
 
 function getSourceFromUrl(url: string): string {
   const host = url.toLowerCase();
+  if (host.includes("cssbuy") && host.includes("item-xianyu")) return "Goofish";
   if (host.includes("1688")) return "1688";
   if (host.includes("taobao")) return "Taobao";
   if (host.includes("weidian")) return "Weidian";

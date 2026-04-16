@@ -167,6 +167,8 @@ const CSSBUY_ITEM_TO_MARKETPLACE: Record<string, (id: string) => string> = {
   "pinduoduo": (id) => `https://mobile.yangkeduo.com/goods.html?goods_id=${id}`,
   "vip": (id) => `https://detail.vip.com/detail-${id}.html`,
   "dangdang": (id) => `https://product.dangdang.com/${id}.html`,
+  /** 闲鱼 / Goofish — CSSBuy usa prefixo item-xianyu- */
+  xianyu: (id) => `https://www.goofish.com/item?id=${id}`,
 };
 
 /** Converte URL de marketplace para URL CSSBuy (formato suportado pelo CSSBuy). Retorna null se não conseguir. */
@@ -210,6 +212,14 @@ export function marketplaceToCssbuyUrl(url: string): string | null {
       const id = parsed.pathname.match(/\/(\d+)\.html/)?.[1] || parsed.searchParams.get("product_id");
       if (id && /^\d+$/.test(id)) return `${CSSBUY_BASE}/item-dangdang-${id}.html`;
     }
+    /** Goofish (闲鱼) — ex.: https://www.goofish.com/item?id=1044909264813 → item-xianyu-{id}.html no CSSBuy */
+    if (host.includes("goofish")) {
+      const id =
+        parsed.searchParams.get("id") ||
+        parsed.searchParams.get("itemId") ||
+        parsed.pathname.match(/\/item\/(\d+)/)?.[1];
+      if (id && /^\d+$/.test(id)) return `${CSSBUY_BASE}/item-xianyu-${id}.html`;
+    }
   } catch (_) {}
   return null;
 }
@@ -224,10 +234,13 @@ function resolveProductUrl(url: string): string {
     if (inner && (inner.startsWith("http://") || inner.startsWith("https://"))) return inner;
 
     // Formato: /item-1688-xxx.html, /item-taobao-xxx.html, /item-micro-xxx.html, /item-jd-xxx.html, etc.
-    const match = parsed.pathname.match(/\/item-(1688|taobao|tmall|weidian|micro|jd|pinduoduo|vip|dangdang)-([\d\-]+)\.html$/i);
+    const match = parsed.pathname.match(
+      /\/item-(1688|taobao|tmall|weidian|micro|jd|pinduoduo|vip|dangdang|xianyu)-([\d\-]+)\.html$/i,
+    );
     if (match) {
       const [, source, id] = match;
-      const key = source!.toLowerCase() === "micro" ? "weidian" : source!.toLowerCase();
+      const src = source!.toLowerCase();
+      const key = src === "micro" ? "weidian" : src;
       const toUrl = CSSBUY_ITEM_TO_MARKETPLACE[key];
       if (toUrl && id) return toUrl(id);
     }
@@ -302,7 +315,7 @@ export async function getProductPreview(productUrl: string): Promise<ProductPrev
     return null;
   }
 
-  // Fallback: marketplace não suporta conversão para CSSBuy (ex.: Goofish, outros) → scrape direto
+  // Fallback: marketplace sem conversão conhecida para CSSBuy → scrape direto
   console.log("[scraper] No CSSBuy conversion, scraping marketplace directly:", productUrl.slice(0, 60));
   for (let attempt = 0; attempt <= SCRAPE_RETRY_COUNT; attempt++) {
     if (attempt > 0) {

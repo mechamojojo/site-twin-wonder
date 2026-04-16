@@ -129,6 +129,8 @@ const getSourceLabel = (url: string) => {
     if (host.includes("dangdang")) return "Dangdang";
     if (host.includes("vip.com") || host.includes("vipshop")) return "VIP Shop";
     if (host.includes("yupoo")) return "Yupoo";
+    if (host.includes("cssbuy") && url.toLowerCase().includes("item-xianyu"))
+      return "Goofish";
     if (host.includes("cssbuy")) return "CSSBuy";
     return "Loja chinesa";
   } catch {

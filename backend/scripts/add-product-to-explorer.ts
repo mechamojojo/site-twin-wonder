@@ -17,7 +17,9 @@ function getSourceFromUrl(url: string): "1688" | "Taobao" | "Weidian" | "TMALL" 
   const lower = url.toLowerCase();
   // CSSBuy URL path: item-1688-xxx, item-micro-xxx (Weidian), item-taobao-xxx, item-tmall-xxx, etc.
   if (lower.includes("cssbuy") && /\/item-[a-z0-9]+-/.test(url)) {
-    const m = url.match(/\/item-(?:micro|1688|taobao|tmall|jd|pinduoduo|vip|dangdang)-/i);
+    const m = url.match(
+      /\/item-(?:micro|1688|taobao|tmall|jd|pinduoduo|vip|dangdang|xianyu)-/i,
+    );
     if (m) {
       const src = m[0].replace(/\/item-|-$/gi, "").toLowerCase();
       if (src === "micro") return "Weidian";
@@ -28,6 +30,7 @@ function getSourceFromUrl(url: string): "1688" | "Taobao" | "Weidian" | "TMALL" 
       if (src === "pinduoduo") return "Pinduoduo";
       if (src === "vip") return "VIP Shop";
       if (src === "dangdang") return "Dangdang";
+      if (src === "xianyu") return "Goofish";
     }
   }
   if (lower.includes("1688")) return "1688";
