@@ -15,7 +15,7 @@ import {
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import {
   hasProductDisplayTitle,
-  productDisplayTitle,
+  catalogCardTitle,
 } from "@/lib/productDisplayTitle";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
@@ -41,6 +41,7 @@ type ProductLike = {
   brand?: string;
   storeName?: string;
   isChineseBrand?: boolean;
+  supplierName?: string | null;
 };
 
 function ProductCard({ product }: { product: ProductLike }) {
@@ -62,9 +63,10 @@ function ProductCard({ product }: { product: ProductLike }) {
           <div className="aspect-[3/4] bg-muted/50 relative overflow-hidden">
             <img
               src={imgSrc}
-              alt={productDisplayTitle(
+              alt={catalogCardTitle(
                 product.titlePt,
                 product.title,
+                product.supplierName,
                 "Produto",
               )}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -102,7 +104,12 @@ function ProductCard({ product }: { product: ProductLike }) {
               </div>
             )}
             <h3 className="font-medium text-foreground text-sm line-clamp-2">
-              {productDisplayTitle(product.titlePt, product.title, "Produto")}
+              {catalogCardTitle(
+                product.titlePt,
+                product.title,
+                product.supplierName,
+                "Produto",
+              )}
             </h3>
             <div className="mt-auto pt-2 flex items-center justify-between">
               <span className="text-base font-bold text-china-red">

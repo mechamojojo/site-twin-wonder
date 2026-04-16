@@ -28,6 +28,7 @@ const AdminResgate = lazy(() => import("./pages/AdminResgate"));
 const AdminClientePedido = lazy(() => import("./pages/AdminClientePedido"));
 const AdminPedido = lazy(() => import("./pages/AdminPedido"));
 const Explorar = lazy(() => import("./pages/Explorar"));
+const Fornecedores = lazy(() => import("./pages/Fornecedores"));
 const Produto = lazy(() => import("./pages/Produto"));
 const ProdutosSalvos = lazy(() => import("./pages/ProdutosSalvos"));
 const MinhaConta = lazy(() => import("./pages/MinhaConta"));
@@ -82,6 +83,7 @@ const App = () => (
                 <Route path="/admin/pedido/:id" element={<AdminPedido />} />
                 <Route path="/admin/conversas" element={<AdminSuporte />} />
                 <Route path="/explorar" element={<Explorar />} />
+                <Route path="/fornecedores" element={<Fornecedores />} />
                 <Route path="/produto/:slug" element={<Produto />} />
                 <Route path="/produtos-salvos" element={<ProdutosSalvos />} />
                 <Route path="/minha-conta" element={<MinhaConta />} />

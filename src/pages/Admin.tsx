@@ -193,6 +193,7 @@ const CATEGORIES = [
   "acessorios",
   "casa",
   "beleza",
+  "marcas-chinesas",
   "outros",
 ] as const;
 
@@ -210,6 +211,8 @@ type CatalogProduct = {
   category: string;
   slug: string;
   featured: boolean;
+  supplierName?: string | null;
+  supplierSlug?: string | null;
 };
 
 function toCatalogProduct(p: Record<string, unknown>): CatalogProduct {
@@ -232,7 +235,69 @@ function toCatalogProduct(p: Record<string, unknown>): CatalogProduct {
     category: String(p.category ?? "outros"),
     slug: String(p.slug ?? ""),
     featured: Boolean(p.featured),
+    supplierName:
+      p.supplierName != null ? String(p.supplierName) : null,
+    supplierSlug:
+      p.supplierSlug != null ? String(p.supplierSlug) : null,
   };
+}
+
+function normalizeBulkCategory(
+  raw: string | undefined,
+  fallback: string,
+): string {
+  const c = (raw ?? "").trim().toLowerCase();
+  if (CATEGORIES.includes(c as (typeof CATEGORIES)[number])) return c;
+  return fallback;
+}
+
+type BulkCatalogRow = {
+  url: string;
+  category: string;
+  supplierName: string | null;
+};
+
+function parseBulkCatalogLines(
+  text: string,
+  defaultCategory: string,
+  defaultSupplier: string,
+): BulkCatalogRow[] {
+  const seen = new Set<string>();
+  const out: BulkCatalogRow[] = [];
+  const defSup = defaultSupplier.trim();
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let url = "";
+    let catRaw: string | undefined;
+    let supRaw: string | undefined;
+    if (trimmed.includes("\t")) {
+      const p = trimmed.split("\t").map((x) => x.trim());
+      if (p[0]?.startsWith("http")) {
+        url = p[0]!;
+        catRaw = p[1];
+        supRaw = p[2];
+      }
+    } else if (trimmed.includes("|")) {
+      const p = trimmed.split("|").map((x) => x.trim());
+      if (p[0]?.startsWith("http")) {
+        url = p[0]!;
+        catRaw = p[1];
+        supRaw = p[2];
+      }
+    } else if (trimmed.startsWith("http")) {
+      url = trimmed;
+    }
+    if (!url) continue;
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const category = normalizeBulkCategory(catRaw, defaultCategory);
+    let supplierName: string | null = null;
+    if (supRaw && supRaw.length > 0) supplierName = supRaw;
+    else if (defSup) supplierName = defSup;
+    out.push({ url, category, supplierName });
+  }
+  return out;
 }
 
 const Admin = () => {
@@ -250,12 +315,16 @@ const Admin = () => {
   const [activeTab, setActiveTab] = useState<"pedidos" | "catálogo">("pedidos");
   const [addUrl, setAddUrl] = useState("");
   const [addCategory, setAddCategory] = useState<string>("outros");
+  /** Nome exibido no Explorar após " - " (ex.: Original, nome da loja) */
+  const [addSupplierName, setAddSupplierName] = useState("");
   const [addFeatured, setAddFeatured] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState("");
   const [addSuccess, setAddSuccess] = useState("");
   /** Uma URL por linha — importação sequencial (uma de cada vez no servidor). */
   const [bulkUrlsText, setBulkUrlsText] = useState("");
+  /** Fornecedor aplicado às linhas que só têm URL (ou coluna 2 sem fornecedor). */
+  const [bulkDefaultSupplier, setBulkDefaultSupplier] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{
     current: number;
@@ -277,6 +346,7 @@ const Admin = () => {
     featured: false,
     image: "",
     images: "",
+    supplierName: "",
   });
   const catalogImageInputRef = useRef<HTMLInputElement>(null);
   const [catalogImageUploading, setCatalogImageUploading] = useState(false);
@@ -501,6 +571,9 @@ const Admin = () => {
           url,
           category: addCategory,
           featured: addFeatured,
+          ...(addSupplierName.trim()
+            ? { supplierName: addSupplierName.trim() }
+            : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -525,30 +598,21 @@ const Admin = () => {
     }
   };
 
-  const parseBulkUrls = (text: string): string[] => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const line of text.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("http")) continue;
-      if (seen.has(trimmed)) continue;
-      seen.add(trimmed);
-      out.push(trimmed);
-    }
-    return out;
-  };
-
   const BULK_IMPORT_MAX = 150;
   const BULK_GAP_MS = 450;
 
   const handleBulkImportProducts = async () => {
     if (!token) return;
-    const urls = parseBulkUrls(bulkUrlsText);
-    if (urls.length === 0) {
+    const rows = parseBulkCatalogLines(
+      bulkUrlsText,
+      addCategory,
+      bulkDefaultSupplier,
+    );
+    if (rows.length === 0) {
       toast.error("Cole pelo menos uma URL válida (uma por linha).");
       return;
     }
-    if (urls.length > BULK_IMPORT_MAX) {
+    if (rows.length > BULK_IMPORT_MAX) {
       toast.error(`No máximo ${BULK_IMPORT_MAX} links por vez.`);
       return;
     }
@@ -559,9 +623,9 @@ const Admin = () => {
     let skipped = 0;
     let failed = 0;
     try {
-      for (let i = 0; i < urls.length; i++) {
-        const url = urls[i]!;
-        setBulkProgress({ current: i + 1, total: urls.length, url });
+      for (let i = 0; i < rows.length; i++) {
+        const { url, category, supplierName } = rows[i]!;
+        setBulkProgress({ current: i + 1, total: rows.length, url });
         try {
           const res = await fetch(apiUrl("/api/admin/products"), {
             method: "POST",
@@ -571,8 +635,9 @@ const Admin = () => {
             },
             body: JSON.stringify({
               url,
-              category: addCategory,
+              category,
               featured: addFeatured,
+              ...(supplierName ? { supplierName } : {}),
             }),
           });
           const data = await res.json().catch(() => ({}));
@@ -587,7 +652,7 @@ const Admin = () => {
         } catch {
           failed++;
         }
-        if (i < urls.length - 1) {
+        if (i < rows.length - 1) {
           await new Promise((r) => setTimeout(r, BULK_GAP_MS));
         }
       }
@@ -621,6 +686,7 @@ const Admin = () => {
       featured: p.featured,
       image: p.image ?? "",
       images: imagesStr,
+      supplierName: p.supplierName ?? "",
     });
   };
 
@@ -709,6 +775,7 @@ const Admin = () => {
                   .map((u) => u.trim())
                   .filter((u) => u.startsWith("http"))
               : [],
+            supplierName: editForm.supplierName.trim(),
           }),
         },
       );
@@ -1283,9 +1350,12 @@ const Admin = () => {
               <p className="text-sm text-muted-foreground mb-4">
                 Cole o link de um produto (Taobao, 1688, Weidian, TMALL, etc.)
                 ou use a caixa abaixo para várias URLs de uma vez — cada link é
-                processado em sequência (um após o outro). A categoria e
-                &quot;Em destaque&quot; valem para todos. Use
-                &quot;Excluir&quot; na lista para remover itens.
+                processado em sequência. Defina categoria e, se quiser, o nome
+                do fornecedor (aparece no Explorar como &quot; - Nome&quot;;
+                use por exemplo <strong>Original</strong>). Na lista em massa
+                você pode usar uma coluna por campo: URL, categoria e
+                fornecedor separados por <strong>tab</strong> ou{" "}
+                <strong>|</strong>.
               </p>
               <form onSubmit={handleAddProduct} className="space-y-4">
                 <div>
@@ -1321,6 +1391,22 @@ const Admin = () => {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">
+                      Fornecedor (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder='ex.: Original ou nome da loja'
+                      value={addSupplierName}
+                      onChange={(e) => setAddSupplierName(e.target.value)}
+                      disabled={addLoading || bulkImporting}
+                      className="w-full max-w-xs px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Vai para o título no Explorar: &quot;… - Fornecedor&quot;.
+                    </p>
                   </div>
                   <label className="flex items-center gap-2 mt-6">
                     <input
@@ -1360,16 +1446,37 @@ const Admin = () => {
                   Várias URLs de uma vez
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Uma URL por linha. O site importa na ordem,{" "}
-                  <strong>uma de cada vez</strong> (pausa curta entre cada uma
-                  para não sobrecarregar o scraper). Máximo {BULK_IMPORT_MAX}{" "}
+                  <strong>Só URL</strong> por linha usa a categoria e o
+                  fornecedor padrão abaixo. Ou, por linha:{" "}
+                  <code className="text-[11px] bg-muted px-1 rounded">
+                    URL [tab] categoria [tab] fornecedor
+                  </code>{" "}
+                  (ou com <code className="text-[11px] bg-muted px-1">|</code>
+                  ). Categorias: eletronicos, moda, acessorios, casa, beleza,
+                  marcas-chinesas, outros. Importação{" "}
+                  <strong>uma de cada vez</strong>. Máximo {BULK_IMPORT_MAX}{" "}
                   links.
                 </p>
+                <div className="flex flex-wrap gap-4 items-end">
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">
+                      Fornecedor padrão (lista)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Opcional — ex.: Original"
+                      value={bulkDefaultSupplier}
+                      onChange={(e) => setBulkDefaultSupplier(e.target.value)}
+                      disabled={addLoading || bulkImporting}
+                      className="w-full min-w-[200px] px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
+                    />
+                  </div>
+                </div>
                 <textarea
                   value={bulkUrlsText}
                   onChange={(e) => setBulkUrlsText(e.target.value)}
                   placeholder={
-                    "https://weidian.com/item.html?itemID=...\nhttps://item.taobao.com/item.htm?id=..."
+                    "https://weidian.com/item.html?itemID=...\nhttps://item.taobao.com/item.htm?id=...\n\nOu com colunas (tab ou |):\nhttps://...	item.moda	Original"
                   }
                   rows={8}
                   disabled={addLoading || bulkImporting}
@@ -1629,6 +1736,14 @@ const Admin = () => {
                             <span>
                               {CATEGORY_LABELS[p.category] ?? p.category}
                             </span>
+                            {p.supplierName && (
+                              <>
+                                <span>·</span>
+                                <span className="text-china-red/90">
+                                  {p.supplierName}
+                                </span>
+                              </>
+                            )}
                             {p.featured && (
                               <Badge className="text-[10px] py-0">
                                 Destaque
@@ -1888,6 +2003,25 @@ const Admin = () => {
                             className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
                             placeholder="Título traduzido"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            Fornecedor (Explorar)
+                          </label>
+                          <input
+                            value={editForm.supplierName}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                supplierName: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-china-red/40"
+                            placeholder='ex.: Original — deixe vazio para remover'
+                          />
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            O título no site ganha o sufixo &quot; - nome&quot;.
+                          </p>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-foreground mb-1">

@@ -17,7 +17,7 @@ import {
 import { getDisplayPriceBrl } from "@/lib/pricing";
 import {
   hasProductDisplayTitle,
-  productDisplayTitle,
+  catalogCardTitle,
 } from "@/lib/productDisplayTitle";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import {
@@ -48,6 +48,8 @@ type Product = {
   brand?: string;
   storeName?: string;
   isChineseBrand?: boolean;
+  supplierName?: string | null;
+  supplierSlug?: string | null;
 };
 
 const CATEGORIES = [
@@ -71,7 +73,12 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
     p.image ?? undefined,
   );
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER;
-  const displayTitle = productDisplayTitle(p.titlePt, p.title, "Produto");
+  const displayTitle = catalogCardTitle(
+    p.titlePt,
+    p.title,
+    p.supplierName,
+    "Produto",
+  );
   const displayBrl = getDisplayPriceBrl(p.priceCny, p.priceBrl);
   const priceStr =
     displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
@@ -135,13 +142,40 @@ const Explorar = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const q = (searchParams.get("q") ?? "").toLowerCase().trim();
   const category = searchParams.get("category") ?? "all";
+  const fornecedor = (searchParams.get("fornecedor") ?? "").trim();
   const pageParam = Math.max(1, Number(searchParams.get("page") ?? "1"));
 
   const [apiProducts, setApiProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState(q);
   const [sort, setSort] = useState<SortOption>("default");
+  const [fornecedorLabel, setFornecedorLabel] = useState("");
   useEffect(() => setSearchInput(q), [q]);
+
+  useEffect(() => {
+    if (!fornecedor) {
+      setFornecedorLabel("");
+      return;
+    }
+    fetch(apiUrl("/api/suppliers"))
+      .then((r) => r.json())
+      .then((data) => {
+        const list = data.suppliers as { slug: string; name: string }[];
+        const row = Array.isArray(list)
+          ? list.find((x) => x.slug === fornecedor)
+          : undefined;
+        setFornecedorLabel(row?.name ?? fornecedor);
+      })
+      .catch(() => setFornecedorLabel(fornecedor));
+  }, [fornecedor]);
+
+  const explorarSemFornecedorTo = useMemo(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("fornecedor");
+    next.delete("page");
+    const s = next.toString();
+    return s ? `/explorar?${s}` : "/explorar";
+  }, [searchParams]);
 
   useEffect(() => {
     fetch(apiUrl("/api/products?limit=500"))
@@ -180,12 +214,16 @@ const Explorar = () => {
   const { products, total, totalPages } = useMemo(() => {
     let list = sourceList;
     if (category !== "all") list = list.filter((p) => p.category === category);
+    if (fornecedor) {
+      list = list.filter((p) => p.supplierSlug === fornecedor);
+    }
     if (q.length >= 2) {
       list = list.filter(
         (p) =>
           p.titlePt?.toLowerCase().includes(q) ||
           p.title?.toLowerCase().includes(q) ||
-          p.category?.toLowerCase().includes(q),
+          p.category?.toLowerCase().includes(q) ||
+          p.supplierName?.toLowerCase().includes(q),
       );
     }
     // Sort
@@ -211,23 +249,29 @@ const Explorar = () => {
     const page = Math.min(pageParam, totalPages);
     const paginated = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     return { products: paginated, total, totalPages };
-  }, [sourceList, q, category, sort, pageParam]);
+  }, [sourceList, q, category, fornecedor, sort, pageParam]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = searchInput.trim();
+    const base: Record<string, string> = {};
+    if (category !== "all") base.category = category;
+    if (fornecedor) base.fornecedor = fornecedor;
     setSearchParams(
       trimmed
-        ? { q: trimmed, category }
-        : category !== "all"
-          ? { category }
+        ? { ...base, q: trimmed }
+        : Object.keys(base).length
+          ? base
           : {},
     );
   };
 
   const handleCategory = (cat: string) => {
+    const next: Record<string, string> = {};
+    if (q) next.q = q;
+    if (fornecedor) next.fornecedor = fornecedor;
     setSearchParams(
-      cat === "all" ? (q ? { q } : {}) : { ...(q ? { q } : {}), category: cat },
+      cat === "all" ? next : { ...next, category: cat },
     );
   };
 
@@ -235,6 +279,7 @@ const Explorar = () => {
     const params: Record<string, string> = {};
     if (q) params.q = q;
     if (category !== "all") params.category = category;
+    if (fornecedor) params.fornecedor = fornecedor;
     if (p > 1) params.page = String(p);
     setSearchParams(params);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -283,6 +328,27 @@ const Explorar = () => {
               </button>
             ))}
           </div>
+
+          {fornecedor && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Fornecedor:</span>
+              <span className="font-medium text-foreground">
+                {fornecedorLabel || fornecedor}
+              </span>
+              <Link
+                to={explorarSemFornecedorTo}
+                className="text-china-red text-xs font-medium hover:underline"
+              >
+                Limpar filtro
+              </Link>
+              <Link
+                to="/fornecedores"
+                className="text-xs text-muted-foreground hover:text-foreground ml-2"
+              >
+                Todos os fornecedores
+              </Link>
+            </div>
+          )}
 
           {q.length >= 2 && (
             <div className="mt-4 p-4 rounded-xl border border-border bg-muted/30">

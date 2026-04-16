@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
 import { getDisplayPriceBrl } from "@/lib/pricing";
-import { productDisplayTitle } from "@/lib/productDisplayTitle";
+import { catalogCardTitle } from "@/lib/productDisplayTitle";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart } from "lucide-react";
 import { SaveProductHeart } from "@/components/SaveProductHeart";
@@ -21,6 +21,7 @@ type Product = {
   priceBrl: number | null;
   source: string;
   category: string;
+  supplierName?: string | null;
 };
 
 const PLACEHOLDER =
@@ -44,7 +45,12 @@ const Produto = () => {
 
   const handleAddToCart = () => {
     if (!product) return;
-    const name = productDisplayTitle(product.titlePt, product.title, "Produto");
+    const name = catalogCardTitle(
+      product.titlePt,
+      product.title,
+      product.supplierName,
+      "Produto",
+    );
     addItem({
       url: product.originalUrl,
       quantity: 1,
@@ -92,9 +98,10 @@ const Produto = () => {
     );
   }
 
-  const displayTitle = productDisplayTitle(
+  const displayTitle = catalogCardTitle(
     product.titlePt,
     product.title,
+    product.supplierName,
     "Produto",
   );
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);

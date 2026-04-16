@@ -33,6 +33,7 @@ const Navbar = () => {
 
   const navLinks = [
     { to: "/explorar", label: "Explorar" },
+    { to: "/fornecedores", label: "Fornecedores" },
     { to: "/servicos", label: "Serviços" },
     { to: "/#how-it-works", label: "Recursos" },
     { to: "/#about", label: "Empresa" },

@@ -1667,30 +1667,72 @@ function serializeCatalogProduct<
   };
 }
 
+function serializeProductForApi(
+  p: Parameters<typeof serializeCatalogProduct>[0] & {
+    supplier?: { name: string; slug: string } | null;
+  },
+) {
+  const { supplier, ...rest } = p;
+  return {
+    ...serializeCatalogProduct(rest),
+    supplierName: supplier?.name ?? null,
+    supplierSlug: supplier?.slug ?? null,
+  };
+}
+
+app.get("/api/suppliers", async (_req, res) => {
+  try {
+    const suppliers = await prisma.supplier.findMany({
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        _count: { select: { products: true } },
+      },
+    });
+    res.json({
+      suppliers: suppliers.map((s) => ({
+        id: s.id,
+        name: s.name,
+        slug: s.slug,
+        description: s.description,
+        productCount: s._count.products,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao listar fornecedores" });
+  }
+});
+
 // Catálogo de produtos — busca e listagem (ordem = mesma do admin, sortOrder)
 app.get("/api/products", async (req, res) => {
   try {
     const q = (req.query.q as string)?.trim().toLowerCase();
     const category = (req.query.category as string)?.trim();
     const featured = req.query.featured === "true";
+    const fornecedor = (req.query.fornecedor as string)?.trim();
     const limit = Math.min(Number(req.query.limit) || 48, 500);
     const offset = Math.max(0, Number(req.query.offset) || 0);
 
     const where: Record<string, unknown> = {};
     if (featured) where.featured = true;
     if (category) where.category = category;
+    if (fornecedor) {
+      where.supplier = { slug: fornecedor };
+    }
     if (q && q.length >= 2) {
       where.OR = [
         { title: { contains: q, mode: "insensitive" } },
         { titlePt: { contains: q, mode: "insensitive" } },
         { description: { contains: q, mode: "insensitive" } },
         { originalUrl: { contains: q, mode: "insensitive" } },
+        { supplier: { name: { contains: q, mode: "insensitive" } } },
       ];
     }
 
     const [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
+        include: { supplier: true },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], // mesma ordem definida no admin (reordenar)
         take: limit,
         skip: offset,
@@ -1711,7 +1753,7 @@ app.get("/api/products", async (req, res) => {
           row = p;
         }
       }
-      return serializeCatalogProduct(row);
+      return serializeProductForApi(row);
     });
 
     res.json({ products: withImageFallback, total });
@@ -1742,6 +1784,7 @@ app.get("/api/products/most-saved", async (req, res) => {
 
     const products = await prisma.product.findMany({
       where: { slug: { in: slugs } },
+      include: { supplier: true },
     });
     const bySlug = new Map(products.map((p) => [p.slug, p]));
     const items = slugs
@@ -1749,7 +1792,7 @@ app.get("/api/products/most-saved", async (req, res) => {
         const product = bySlug.get(slug);
         if (!product) return null;
         return {
-          product: serializeCatalogProduct(product),
+          product: serializeProductForApi(product),
           saveCount: countBySlug.get(slug) ?? 0,
         };
       })
@@ -1757,9 +1800,7 @@ app.get("/api/products/most-saved", async (req, res) => {
         (
           x,
         ): x is {
-          product: ReturnType<
-            typeof serializeCatalogProduct<(typeof products)[number]>
-          >;
+          product: ReturnType<typeof serializeProductForApi>;
           saveCount: number;
         } => x !== null,
       );
@@ -1795,6 +1836,7 @@ app.get("/api/products/:idOrSlug", async (req, res) => {
     const { idOrSlug } = req.params;
     const product = await prisma.product.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      include: { supplier: true },
     });
     if (!product)
       return res.status(404).json({ error: "Produto não encontrado" });
@@ -1816,7 +1858,7 @@ app.get("/api/products/:idOrSlug", async (req, res) => {
       }
     }
     return res.json({
-      ...serializeCatalogProduct(withImage),
+      ...serializeProductForApi(withImage),
       saveCount,
     });
   } catch (err) {
@@ -1835,6 +1877,25 @@ function slugify(s: string): string {
       .replace(/-+/g, "-")
       .slice(0, 80) || "produto"
   );
+}
+
+async function findOrCreateSupplier(name: string) {
+  const n = name.trim().slice(0, 120);
+  if (!n) return null;
+  const existing = await prisma.supplier.findFirst({
+    where: { name: { equals: n, mode: "insensitive" } },
+  });
+  if (existing) return existing;
+  const baseSlug = slugify(n.normalize("NFD").replace(/\p{Diacritic}/gu, "")) || "fornecedor";
+  let slug = baseSlug;
+  let attempt = 0;
+  while (await prisma.supplier.findUnique({ where: { slug } })) {
+    attempt++;
+    slug = `${baseSlug}-${attempt}`;
+  }
+  return prisma.supplier.create({
+    data: { name: n, slug, sortOrder: 0 },
+  });
 }
 
 function getSourceFromUrl(url: string): string {
@@ -1928,12 +1989,16 @@ app.get("/api/admin/products", requireAdmin, async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 500, 500);
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const products = await prisma.product.findMany({
+      include: { supplier: true },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       take: limit,
       skip: offset,
     });
     const total = await prisma.product.count();
-    res.json({ products, total });
+    res.json({
+      products: products.map((p) => serializeProductForApi(p)),
+      total,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao listar produtos" });
@@ -2080,6 +2145,17 @@ app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
       );
       updates.images = urls.length ? JSON.stringify(urls) : null;
     }
+    if (body.supplierId === null) {
+      updates.supplierId = null;
+    } else if (typeof body.supplierName === "string") {
+      const sn = body.supplierName.trim();
+      if (!sn) {
+        updates.supplierId = null;
+      } else {
+        const s = await findOrCreateSupplier(sn);
+        if (s) updates.supplierId = s.id;
+      }
+    }
 
     if (Object.keys(updates).length === 0) {
       return res
@@ -2090,8 +2166,9 @@ app.patch("/api/admin/products/:id", requireAdmin, async (req, res) => {
     const product = await prisma.product.update({
       where: { id },
       data: updates,
+      include: { supplier: true },
     });
-    res.json(product);
+    res.json(serializeProductForApi(product));
   } catch (err) {
     if ((err as { code?: string })?.code === "P2025") {
       return res.status(404).json({ error: "Produto não encontrado" });
@@ -2152,6 +2229,102 @@ app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
   }
 });
 
+// Admin: fornecedores (CRUD simples)
+app.get("/api/admin/suppliers", requireAdmin, async (_req, res) => {
+  try {
+    const suppliers = await prisma.supplier.findMany({
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { _count: { select: { products: true } } },
+    });
+    res.json({
+      suppliers: suppliers.map((s) => ({
+        id: s.id,
+        name: s.name,
+        slug: s.slug,
+        description: s.description,
+        sortOrder: s.sortOrder,
+        productCount: s._count.products,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao listar fornecedores" });
+  }
+});
+
+app.post("/api/admin/suppliers", requireAdmin, async (req, res) => {
+  try {
+    const { name, description } = req.body ?? {};
+    const n = String(name ?? "").trim().slice(0, 120);
+    if (!n) return res.status(400).json({ error: "Nome obrigatório" });
+    const s = await findOrCreateSupplier(n);
+    if (!s) return res.status(500).json({ error: "Erro ao criar fornecedor" });
+    const desc =
+      typeof description === "string"
+        ? description.trim().slice(0, 8000) || null
+        : null;
+    if (desc !== null) {
+      const updated = await prisma.supplier.update({
+        where: { id: s.id },
+        data: { description: desc },
+      });
+      return res.status(201).json(updated);
+    }
+    res.status(201).json(s);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: safeErrorMessage(err, "Erro ao salvar") });
+  }
+});
+
+app.patch("/api/admin/suppliers/:id", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body ?? {};
+    const data: Record<string, unknown> = {};
+    if (typeof body.name === "string" && body.name.trim()) {
+      data.name = body.name.trim().slice(0, 120);
+    }
+    if (typeof body.description === "string") {
+      data.description = body.description.trim().slice(0, 8000) || null;
+    }
+    if (typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder)) {
+      data.sortOrder = Math.floor(body.sortOrder);
+    }
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: "Nada para atualizar" });
+    }
+    const s = await prisma.supplier.update({ where: { id }, data });
+    res.json(s);
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2025") {
+      return res.status(404).json({ error: "Fornecedor não encontrado" });
+    }
+    console.error(err);
+    res.status(500).json({ error: safeErrorMessage(err, "Erro ao atualizar") });
+  }
+});
+
+app.delete("/api/admin/suppliers/:id", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const count = await prisma.product.count({ where: { supplierId: id } });
+    if (count > 0) {
+      return res.status(400).json({
+        error: `Não é possível excluir: ${count} produto(s) vinculado(s).`,
+      });
+    }
+    await prisma.supplier.delete({ where: { id } });
+    res.status(204).send();
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2025") {
+      return res.status(404).json({ error: "Fornecedor não encontrado" });
+    }
+    console.error(err);
+    res.status(500).json({ error: safeErrorMessage(err, "Erro ao excluir") });
+  }
+});
+
 // Admin: importar múltiplos produtos em massa (sem scraping) — protegido
 app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
   try {
@@ -2206,6 +2379,14 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
       }
 
       try {
+        let supplierId: string | null = null;
+        if (
+          typeof item.supplierName === "string" &&
+          item.supplierName.trim()
+        ) {
+          const sup = await findOrCreateSupplier(item.supplierName.trim());
+          if (sup) supplierId = sup.id;
+        }
         await prisma.product.create({
           data: {
             originalUrl: url,
@@ -2223,6 +2404,7 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
             category: String(item.category ?? "outros").trim(),
             slug,
             featured: Boolean(item.featured),
+            supplierId,
           },
         });
         created++;
@@ -2249,9 +2431,10 @@ app.post(
   "/api/admin/products/bulk-import-urls",
   requireAdmin,
   async (req, res) => {
-    const { urls, category = "outros" } = (req.body ?? {}) as {
+    const { urls, category = "outros", supplierName } = (req.body ?? {}) as {
       urls?: unknown;
       category?: string;
+      supplierName?: string;
     };
 
     if (!Array.isArray(urls) || urls.length === 0) {
@@ -2268,6 +2451,12 @@ app.post(
 
     if (urlList.length === 0) {
       return res.status(400).json({ error: "Nenhuma URL válida encontrada" });
+    }
+
+    let bulkSupplierId: string | null = null;
+    if (typeof supplierName === "string" && supplierName.trim()) {
+      const sup = await findOrCreateSupplier(supplierName.trim());
+      if (sup) bulkSupplierId = sup.id;
     }
 
     console.log(
@@ -2348,6 +2537,7 @@ app.post(
             slug,
             featured: false,
             sortOrder: maxSort + 1,
+            supplierId: bulkSupplierId,
           },
         });
 
@@ -2424,16 +2614,22 @@ app.post(
 // Admin: adicionar produto ao catálogo (protegido)
 app.post("/api/admin/products", requireAdmin, async (req, res) => {
   try {
-    const { url, category = "outros", featured = false } = req.body ?? {};
+    const {
+      url,
+      category = "outros",
+      featured = false,
+      supplierName,
+    } = req.body ?? {};
     const u = (url as string)?.trim();
     if (!u || !u.startsWith("http")) {
       return res.status(400).json({ error: "URL inválida" });
     }
 
-    const existing = await prisma.product.findUnique({
+    const existing = await prisma.product.findFirst({
       where: { originalUrl: u },
+      include: { supplier: true },
     });
-    if (existing) return res.json(existing);
+    if (existing) return res.json(serializeProductForApi(existing));
 
     const { getProductPreview } = await import("./scraper/productPreview");
     const preview = await getProductPreview(u);
@@ -2465,7 +2661,13 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
       .then((r) => r._max.sortOrder ?? -1);
     const sortOrder = maxSort + 1;
 
-    const product = await prisma.product.create({
+    let supplierId: string | null = null;
+    if (typeof supplierName === "string" && supplierName.trim()) {
+      const s = await findOrCreateSupplier(supplierName);
+      if (s) supplierId = s.id;
+    }
+
+    await prisma.product.create({
       data: {
         originalUrl: u,
         title: preview.title || title,
@@ -2480,10 +2682,19 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
         slug,
         featured: !!featured,
         sortOrder,
+        supplierId,
       },
     });
 
-    res.status(201).json(product);
+    const created = await prisma.product.findFirst({
+      where: { originalUrl: u },
+      include: { supplier: true },
+    });
+    if (!created) {
+      return res.status(500).json({ error: "Produto criado mas não encontrado" });
+    }
+
+    res.status(201).json(serializeProductForApi(created));
   } catch (err) {
     console.error("Admin add product:", err);
     res
