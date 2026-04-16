@@ -40,3 +40,26 @@ export function catalogCardTitle(
   if (lower.endsWith(suffLower)) return base;
   return base + suffix;
 }
+
+/** Quando há tag de fornecedor no card, o título fica só com o nome do produto (sem repetir o sufixo). */
+export function catalogCardHeadline(
+  titlePt: string | null | undefined,
+  title: string | null | undefined,
+  supplierName: string | null | undefined,
+  fallback = "",
+): string {
+  if (supplierName?.trim()) {
+    return productDisplayTitle(titlePt, title, fallback);
+  }
+  return catalogCardTitle(titlePt, title, supplierName, fallback);
+}
+
+export function supplierTagDisplay(supplierName: string): {
+  label: string;
+  isOriginal: boolean;
+} {
+  const t = supplierName.trim();
+  if (!t) return { label: "", isOriginal: false };
+  const isOriginal = t.toLowerCase() === "original";
+  return { label: isOriginal ? "Original" : t, isOriginal };
+}

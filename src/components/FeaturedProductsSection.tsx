@@ -16,7 +16,9 @@ import { getDisplayPriceBrl } from "@/lib/pricing";
 import {
   hasProductDisplayTitle,
   catalogCardTitle,
+  catalogCardHeadline,
 } from "@/lib/productDisplayTitle";
+import { SupplierTag } from "@/components/SupplierTag";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
 
@@ -55,6 +57,18 @@ function ProductCard({ product }: { product: ProductLike }) {
   const priceStr =
     displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
   const to = `/pedido?url=${encodeURIComponent(url)}`;
+  const headline = catalogCardHeadline(
+    product.titlePt,
+    product.title,
+    product.supplierName,
+    "Produto",
+  );
+  const imgAlt = catalogCardTitle(
+    product.titlePt,
+    product.title,
+    product.supplierName,
+    "Produto",
+  );
 
   return (
     <div ref={containerRef} className="h-full">
@@ -63,12 +77,7 @@ function ProductCard({ product }: { product: ProductLike }) {
           <div className="aspect-[3/4] bg-muted/50 relative overflow-hidden">
             <img
               src={imgSrc}
-              alt={catalogCardTitle(
-                product.titlePt,
-                product.title,
-                product.supplierName,
-                "Produto",
-              )}
+              alt={imgAlt}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               referrerPolicy={referrerPolicyForImage(imgSrc)}
               loading="lazy"
@@ -78,7 +87,10 @@ function ProductCard({ product }: { product: ProductLike }) {
             />
           </div>
           <CardContent className="p-3 flex-1 flex flex-col">
-            {(product.isChineseBrand || product.brand || product.storeName) && (
+            {(product.isChineseBrand ||
+              product.brand ||
+              product.storeName ||
+              product.supplierName?.trim()) && (
               <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                 {product.isChineseBrand && (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
@@ -101,15 +113,13 @@ function ProductCard({ product }: { product: ProductLike }) {
                     {product.storeName}
                   </span>
                 )}
+                {product.supplierName?.trim() && (
+                  <SupplierTag supplierName={product.supplierName} />
+                )}
               </div>
             )}
             <h3 className="font-medium text-foreground text-sm line-clamp-2">
-              {catalogCardTitle(
-                product.titlePt,
-                product.title,
-                product.supplierName,
-                "Produto",
-              )}
+              {headline}
             </h3>
             <div className="mt-auto pt-2 flex items-center justify-between">
               <span className="text-base font-bold text-china-red">

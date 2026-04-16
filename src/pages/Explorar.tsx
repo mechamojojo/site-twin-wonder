@@ -18,7 +18,9 @@ import { getDisplayPriceBrl } from "@/lib/pricing";
 import {
   hasProductDisplayTitle,
   catalogCardTitle,
+  catalogCardHeadline,
 } from "@/lib/productDisplayTitle";
+import { SupplierTag } from "@/components/SupplierTag";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import {
   ShoppingBag,
@@ -73,7 +75,13 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
     p.image ?? undefined,
   );
   const imgSrc = lazyImage ? ensureHttpsImage(lazyImage) : PLACEHOLDER;
-  const displayTitle = catalogCardTitle(
+  const displayTitle = catalogCardHeadline(
+    p.titlePt,
+    p.title,
+    p.supplierName,
+    "Produto",
+  );
+  const imgAlt = catalogCardTitle(
     p.titlePt,
     p.title,
     p.supplierName,
@@ -89,7 +97,7 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
         <div className="aspect-[3/4] bg-muted/30 relative overflow-hidden rounded-sm">
           <img
             src={imgSrc}
-            alt=""
+            alt={imgAlt}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             referrerPolicy={referrerPolicyForImage(imgSrc)}
             onError={(e) => {
@@ -98,8 +106,11 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
           />
         </div>
         <div className="pt-2.5 flex flex-col min-h-0">
-          {(p.isChineseBrand || p.brand || p.storeName) && (
-            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+          {(p.isChineseBrand ||
+            p.brand ||
+            p.storeName ||
+            p.supplierName?.trim()) && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
               {p.isChineseBrand && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                   Marca chinesa
@@ -120,6 +131,9 @@ function ExplorarProductCard({ p, to }: { p: Product; to: string }) {
                 >
                   {p.storeName}
                 </span>
+              )}
+              {p.supplierName?.trim() && (
+                <SupplierTag supplierName={p.supplierName} />
               )}
             </div>
           )}

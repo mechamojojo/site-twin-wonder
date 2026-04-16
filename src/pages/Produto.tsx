@@ -4,7 +4,11 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
 import { getDisplayPriceBrl } from "@/lib/pricing";
-import { catalogCardTitle } from "@/lib/productDisplayTitle";
+import {
+  catalogCardTitle,
+  catalogCardHeadline,
+} from "@/lib/productDisplayTitle";
+import { SupplierTag } from "@/components/SupplierTag";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart } from "lucide-react";
 import { SaveProductHeart } from "@/components/SaveProductHeart";
@@ -98,7 +102,7 @@ const Produto = () => {
     );
   }
 
-  const displayTitle = catalogCardTitle(
+  const headline = catalogCardHeadline(
     product.titlePt,
     product.title,
     product.supplierName,
@@ -128,9 +132,14 @@ const Produto = () => {
             <p className="text-xs font-semibold text-china-red uppercase tracking-wider">
               {product.source}
             </p>
+            {product.supplierName?.trim() && (
+              <div className="mt-2">
+                <SupplierTag supplierName={product.supplierName} />
+              </div>
+            )}
             <div className="flex items-start gap-2 mt-2">
               <h1 className="text-2xl font-heading font-bold text-foreground flex-1">
-                {displayTitle}
+                {headline}
               </h1>
               {slug && <SaveProductHeart slug={slug} variant="inline" />}
             </div>
