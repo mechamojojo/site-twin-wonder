@@ -1,14 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
+import { priceCnyToSellingBrl } from "./pricing";
 
-/** Mesmos valores que em src/lib/pricing.ts e index.ts (RATE_CNY × 2×) */
-const RATE_CNY_TO_BRL = 0.81;
-const DISPLAY_PRICE_MULTIPLIER = 2;
-
-function brlFromCny(priceCny: number): number {
-  const costBrl = priceCny * RATE_CNY_TO_BRL;
-  return Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
-}
-
+/** Mesma regra que `src/lib/pricing.ts` e importações de produto em `index.ts`. */
 export type ResyncCatalogPricesResult = {
   updated: number;
   skipped: number;
@@ -39,7 +32,7 @@ export async function resyncCatalogPrices(
       continue;
     }
 
-    const nextBrl = brlFromCny(cny);
+    const nextBrl = priceCnyToSellingBrl(cny);
     const prevBrl =
       p.priceBrl != null && String(p.priceBrl) !== ""
         ? Number(p.priceBrl as unknown as string | number)

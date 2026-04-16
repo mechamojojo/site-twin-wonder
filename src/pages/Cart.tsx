@@ -104,6 +104,7 @@ const Cart = () => {
               const keepBox = item.keepBox ?? false;
               const weightPerUnit = itemWeightG(cat, item.weightG, keepBox);
               const totalWeightForItem = weightPerUnit * item.quantity;
+              const unitDisplay = getDisplayPriceBrl(item.priceCny, item.priceBrl);
 
               return (
                 <div
@@ -148,11 +149,9 @@ const Cart = () => {
                         </p>
                       )}
                       <p className="text-sm font-semibold text-china-red mt-1">
-                        {item.priceBrl != null
-                          ? `R$ ${(item.priceBrl * item.quantity).toFixed(2)}`
-                          : item.priceCny != null
-                            ? `R$ ${((getDisplayPriceBrl(item.priceCny, item.priceBrl) ?? 0) * item.quantity).toFixed(2)}`
-                            : "—"}
+                        {unitDisplay != null
+                          ? `R$ ${(unitDisplay * item.quantity).toFixed(2)}`
+                          : "—"}
                       </p>
 
                       {/* Weight badge */}

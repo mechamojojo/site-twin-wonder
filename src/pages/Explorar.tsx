@@ -29,6 +29,7 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
+  Store,
 } from "lucide-react";
 
 const PAGE_SIZE = 40;
@@ -163,33 +164,27 @@ const Explorar = () => {
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState(q);
   const [sort, setSort] = useState<SortOption>("default");
-  const [fornecedorLabel, setFornecedorLabel] = useState("");
+  /** Nomes oficiais dos fornecedores (API) para rótulos dos chips */
+  const [supplierNameBySlug, setSupplierNameBySlug] = useState<
+    Record<string, string>
+  >({});
   useEffect(() => setSearchInput(q), [q]);
 
   useEffect(() => {
-    if (!fornecedor) {
-      setFornecedorLabel("");
-      return;
-    }
     fetch(apiUrl("/api/suppliers"))
       .then((r) => r.json())
       .then((data) => {
-        const list = data.suppliers as { slug: string; name: string }[];
-        const row = Array.isArray(list)
-          ? list.find((x) => x.slug === fornecedor)
-          : undefined;
-        setFornecedorLabel(row?.name ?? fornecedor);
+        const list = data.suppliers as { slug?: string; name?: string }[];
+        const m: Record<string, string> = {};
+        if (Array.isArray(list)) {
+          for (const s of list) {
+            if (s.slug && s.name) m[s.slug] = s.name;
+          }
+        }
+        setSupplierNameBySlug(m);
       })
-      .catch(() => setFornecedorLabel(fornecedor));
-  }, [fornecedor]);
-
-  const explorarSemFornecedorTo = useMemo(() => {
-    const next = new URLSearchParams(searchParams);
-    next.delete("fornecedor");
-    next.delete("page");
-    const s = next.toString();
-    return s ? `/explorar?${s}` : "/explorar";
-  }, [searchParams]);
+      .catch(() => setSupplierNameBySlug({}));
+  }, []);
 
   useEffect(() => {
     fetch(apiUrl("/api/products?limit=500"))
@@ -224,6 +219,50 @@ const Explorar = () => {
       return p;
     });
   }, [apiProducts, explorarTitleByKey]);
+
+  /** Lista base para contagens de fornecedor (categoria + busca, sem filtro de fornecedor). */
+  const listForSupplierCounts = useMemo(() => {
+    let list = sourceList;
+    if (category !== "all") list = list.filter((p) => p.category === category);
+    if (q.length >= 2) {
+      list = list.filter(
+        (p) =>
+          p.titlePt?.toLowerCase().includes(q) ||
+          p.title?.toLowerCase().includes(q) ||
+          p.category?.toLowerCase().includes(q) ||
+          p.supplierName?.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [sourceList, category, q]);
+
+  /** Fornecedores que têm ao menos um produto no contexto atual, com contagem. */
+  const supplierChips = useMemo(() => {
+    const m = new Map<
+      string,
+      { slug: string; name: string; count: number }
+    >();
+    for (const p of listForSupplierCounts) {
+      const slug = p.supplierSlug?.trim();
+      if (!slug) continue;
+      const name =
+        p.supplierName?.trim() ||
+        supplierNameBySlug[slug] ||
+        slug;
+      const prev = m.get(slug);
+      if (prev) prev.count += 1;
+      else m.set(slug, { slug, name, count: 1 });
+    }
+    return Array.from(m.values()).sort(
+      (a, b) =>
+        b.count - a.count || a.name.localeCompare(b.name, "pt-BR"),
+    );
+  }, [listForSupplierCounts, supplierNameBySlug]);
+
+  const activeSupplierDisplayName =
+    fornecedor && (supplierNameBySlug[fornecedor] ||
+      supplierChips.find((s) => s.slug === fornecedor)?.name ||
+      fornecedor);
 
   const { products, total, totalPages } = useMemo(() => {
     let list = sourceList;
@@ -299,6 +338,15 @@ const Explorar = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const setFornecedorFilter = (slug: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("page");
+    if (slug) next.set("fornecedor", slug);
+    else next.delete("fornecedor");
+    setSearchParams(next);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -312,7 +360,7 @@ const Explorar = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Buscar produtos..."
+                placeholder="Buscar por produto, categoria ou nome do fornecedor…"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 sm:py-2.5 rounded-md border border-border bg-background text-base sm:text-sm outline-none focus:border-foreground/30 min-h-[44px]"
@@ -343,24 +391,94 @@ const Explorar = () => {
             ))}
           </div>
 
-          {fornecedor && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Fornecedor:</span>
-              <span className="font-medium text-foreground">
-                {fornecedorLabel || fornecedor}
-              </span>
-              <Link
-                to={explorarSemFornecedorTo}
-                className="text-china-red text-xs font-medium hover:underline"
-              >
-                Limpar filtro
-              </Link>
-              <Link
-                to="/fornecedores"
-                className="text-xs text-muted-foreground hover:text-foreground ml-2"
-              >
-                Todos os fornecedores
-              </Link>
+          {supplierChips.length > 0 && (
+            <div className="mt-5 sm:mt-6">
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Store className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                    Fornecedor
+                  </span>
+                </div>
+                <Link
+                  to="/fornecedores"
+                  className="text-[11px] sm:text-xs text-china-red font-medium hover:underline shrink-0"
+                >
+                  Ver página de fornecedores
+                </Link>
+              </div>
+              <div className="relative -mx-1">
+                <div
+                  className="flex gap-2 overflow-x-auto pb-1.5 pt-0.5 px-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setFornecedorFilter("")}
+                    className={`touch-target shrink-0 min-h-[44px] px-3.5 py-2 rounded-full text-xs font-medium border transition-colors ${
+                      !fornecedor
+                        ? "bg-foreground text-background border-foreground"
+                        : "bg-background text-muted-foreground border-border hover:border-foreground/30 hover:text-foreground"
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  {supplierChips.map((s) => {
+                    const selected = fornecedor === s.slug;
+                    const label =
+                      supplierNameBySlug[s.slug] ?? s.name;
+                    return (
+                      <button
+                        key={s.slug}
+                        type="button"
+                        onClick={() =>
+                          setFornecedorFilter(selected ? "" : s.slug)
+                        }
+                        className={`touch-target shrink-0 min-h-[44px] px-3.5 py-2 rounded-full text-xs font-medium border transition-colors max-w-[min(100vw-6rem,16rem)] ${
+                          selected
+                            ? "bg-china-red text-white border-china-red shadow-sm"
+                            : "bg-background text-foreground border-border hover:border-china-red/40"
+                        }`}
+                        title={label}
+                      >
+                        <span className="line-clamp-1 text-left">
+                          {label}
+                        </span>
+                        <span
+                          className={`ml-1.5 tabular-nums ${
+                            selected
+                              ? "text-white/90"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          ({s.count})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {fornecedor && (
+                <p className="mt-2 text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>
+                    Mostrando produtos de{" "}
+                    <strong className="text-foreground font-medium">
+                      {activeSupplierDisplayName}
+                    </strong>
+                    {q.length >= 2 || category !== "all"
+                      ? " (com os filtros atuais)"
+                      : ""}
+                    .
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFornecedorFilter("")}
+                    className="text-china-red font-medium hover:underline"
+                  >
+                    Ver todos os fornecedores
+                  </button>
+                </p>
+              )}
             </div>
           )}
 
@@ -400,8 +518,8 @@ const Explorar = () => {
         ) : products.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-muted-foreground mb-4">
-              {q || category !== "all"
-                ? "Nenhum produto encontrado. Tente outros termos."
+              {q || category !== "all" || fornecedor
+                ? "Nenhum produto encontrado com esses filtros. Tente limpar a busca, a categoria ou o fornecedor."
                 : "Nenhum produto no catálogo. Adicione e organize itens em Admin → Produtos no catálogo (Home e Explorar)."}
             </p>
             <Link

@@ -6,11 +6,9 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { EXPLORAR_PRODUCTS } from "../prisma/seed-explorar-products";
+import { priceCnyToSellingBrl } from "../src/pricing";
 
 const prisma = new PrismaClient();
-
-const RATE_CNY = 0.81;
-const DISPLAY_PRICE_MULTIPLIER = 2;
 
 function slugify(s: string): string {
   return s
@@ -53,8 +51,7 @@ async function main() {
 
     let priceBrl: number | null = null;
     if (priceCny != null && priceCny > 0) {
-      const costBrl = priceCny * RATE_CNY;
-      priceBrl = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
+      priceBrl = priceCnyToSellingBrl(priceCny);
     }
 
     const existing = await prisma.product.findUnique({ where: { originalUrl: p.url } });

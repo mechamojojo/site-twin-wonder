@@ -6,13 +6,11 @@
  */
 
 import { getProductPreview } from "../src/scraper/productPreview";
+import { priceCnyToSellingBrl } from "../src/pricing";
 import * as fs from "fs";
 import * as path from "path";
 
 const FEATURED_PATH = path.join(__dirname, "../../src/data/featuredProducts.ts");
-
-const RATE_CNY_TO_BRL = 0.81;
-const DISPLAY_PRICE_MULTIPLIER = 2;
 
 function getSourceFromUrl(url: string): string {
   const host = url.toLowerCase();
@@ -134,8 +132,7 @@ async function main() {
 
       let newPriceBrl = isStorePage ? undefined : p.priceBrl;
       if (!isStorePage && newPriceCny != null && newPriceCny > 0) {
-        const costBrl = newPriceCny * RATE_CNY_TO_BRL;
-        newPriceBrl = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
+        newPriceBrl = priceCnyToSellingBrl(newPriceCny);
       }
 
       updated.push({

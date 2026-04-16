@@ -7,10 +7,9 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { getProductPreview } from "../src/scraper/productPreview";
+import { priceCnyToSellingBrl } from "../src/pricing";
 
 const prisma = new PrismaClient();
-const RATE_CNY = 0.81;
-const DISPLAY_PRICE_MULTIPLIER = 2;
 
 function getLimit(): number | null {
   const arg = process.argv.find((a) => a === "--limit" || a.startsWith("--limit="));
@@ -49,8 +48,7 @@ async function main() {
       const priceCnyVal = preview.priceCny != null ? Number(preview.priceCny) : (p.priceCny != null ? Number(p.priceCny) : null);
       let priceBrlVal: number | null = p.priceBrl != null ? Number(p.priceBrl) : null;
       if (priceCnyVal != null && priceCnyVal > 0) {
-        const costBrl = priceCnyVal * RATE_CNY;
-        priceBrlVal = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
+        priceBrlVal = priceCnyToSellingBrl(priceCnyVal);
       }
 
       await prisma.product.update({

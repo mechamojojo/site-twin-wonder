@@ -9,11 +9,9 @@
  */
 
 import { getProductPreview } from "../src/scraper/productPreview";
+import { priceCnyToSellingBrl } from "../src/pricing";
 import * as fs from "fs";
 import * as path from "path";
-
-const RATE_CNY_TO_BRL = 0.81;
-const DISPLAY_PRICE_MULTIPLIER = 2;
 
 function getSourceFromUrl(url: string): "1688" | "Taobao" | "Weidian" | "TMALL" | "JD.com" | "Pinduoduo" | "Goofish" | "Dangdang" | "VIP Shop" {
   const lower = url.toLowerCase();
@@ -63,8 +61,7 @@ async function addOne(
 
   let priceBrl: number | undefined;
   if (priceCny != null && priceCny > 0) {
-    const costBrl = priceCny * RATE_CNY_TO_BRL;
-    priceBrl = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
+    priceBrl = priceCnyToSellingBrl(priceCny);
   }
 
   const source = getSourceFromUrl(url);

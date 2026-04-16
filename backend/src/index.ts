@@ -44,6 +44,7 @@ import {
 } from "@prisma/client";
 import { marketplaceToCssbuyUrl } from "./scraper/productPreview";
 import { resyncCatalogPrices } from "./resyncCatalogPrices";
+import { sellingPriceFromCostBrl } from "./pricing";
 import { MAX_ORDER_LINE_QUANTITY } from "./quantityLimits";
 import { MP_MAX_INSTALLMENTS_CARD } from "./mercadopago";
 
@@ -228,8 +229,6 @@ const ADMIN_SECRET = (process.env.ADMIN_SECRET || "").trim();
 const ADMIN_SESSIONS = new Map<string, number>();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_CNY = 0.81;
-/** Preço exibido = custo em R$ (CNY × taxa) × fator. 2 = dobro do custo. */
-const DISPLAY_PRICE_MULTIPLIER = 2;
 /** Frete estimado (R$) na cotação automática — igual ao POST /api/orders */
 const FREIGHT_ESTIMATE_BRL = 45;
 
@@ -2513,7 +2512,7 @@ app.post(
         let priceBrl: number | null = null;
         if (priceCny != null && priceCny > 0) {
           const costBrl = priceCny * RATE_CNY;
-          priceBrl = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
+          priceBrl = sellingPriceFromCostBrl(costBrl);
         }
 
         const maxSort = await prisma.product
@@ -2653,7 +2652,7 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
     let priceBrl: number | null = null;
     if (priceCny != null && priceCny > 0) {
       const costBrl = priceCny * RATE_CNY;
-      priceBrl = Math.round(costBrl * DISPLAY_PRICE_MULTIPLIER * 100) / 100;
+      priceBrl = sellingPriceFromCostBrl(costBrl);
     }
 
     const maxSort = await prisma.product
@@ -3320,8 +3319,11 @@ app.get("/api/price/preview", async (req, res) => {
     }
 
     const costBrl = productPriceCny * RATE_CNY_TO_BRL;
-    const marginPercent = (DISPLAY_PRICE_MULTIPLIER - 1) * 100; // ex.: 2× → +100% sobre o custo
-    const totalProductBrl = costBrl * DISPLAY_PRICE_MULTIPLIER;
+    const totalProductBrl = sellingPriceFromCostBrl(costBrl);
+    const marginPercent =
+      costBrl > 0
+        ? Math.round((totalProductBrl / costBrl - 1) * 10000) / 100
+        : null;
 
     return res.json({
       originalUrl: url,
