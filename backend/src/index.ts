@@ -232,6 +232,35 @@ const RATE_CNY = 0.81;
 /** Frete estimado (R$) na cotação automática — igual ao POST /api/orders */
 const FREIGHT_ESTIMATE_BRL = 45;
 
+/**
+ * Converte a cotação armazenada em R$ para exibição no link de pagamento
+ * (mesma convenção do POST /api/orders: produtos × rate×1.25, frete × rate×1.1).
+ */
+function quoteBreakdownForPaymentDisplay(quote: {
+  productsCny: unknown;
+  freightCny: unknown;
+  serviceFeeBrl: unknown;
+  taxesEstimatedBrl: unknown;
+  currencyRateCnyToBrl: unknown;
+  totalBrl: unknown;
+}): {
+  lineTotalBrl: number;
+  productsBrlEst: number;
+  freightBrlEst: number;
+  feesBrl: number;
+} {
+  const rate = Number(quote.currencyRateCnyToBrl);
+  const pc = Number(quote.productsCny);
+  const fc = Number(quote.freightCny);
+  const serviceFee = Number(quote.serviceFeeBrl);
+  const taxes = Number(quote.taxesEstimatedBrl);
+  const lineTotalBrl = Math.round(Number(quote.totalBrl) * 100) / 100;
+  const productsBrlEst = Math.round(pc * rate * 1.25 * 100) / 100;
+  const freightBrlEst = Math.round(fc * rate * 1.1 * 100) / 100;
+  const feesBrl = Math.round((serviceFee + taxes) * 100) / 100;
+  return { lineTotalBrl, productsBrlEst, freightBrlEst, feesBrl };
+}
+
 const ADMIN_JWT_EXPIRES = "7d";
 
 function signAdminToken(): string {
@@ -3228,6 +3257,28 @@ app.get("/api/orders/:id", async (req, res) => {
 
     let checkoutGroupPayableTotalBrl: number | null = null;
     let checkoutGroupPayableCount: number | null = null;
+    let checkoutPayableLines:
+      | {
+          orderId: string;
+          title: string;
+          quantity: number;
+          lineTotalBrl: number;
+          productsBrlEst: number;
+          freightBrlEst: number;
+          feesBrl: number;
+        }[]
+      | null = null;
+
+    function orderTitleForPayment(o: {
+      productTitle: string | null;
+      productDescription: string;
+    }) {
+      const t = o.productTitle?.trim();
+      if (t) return t;
+      const d = o.productDescription?.trim();
+      return d || "Produto";
+    }
+
     if (order.checkoutGroupId && order.customerEmail?.trim()) {
       const groupOrders = await prisma.order.findMany({
         where: {
@@ -3248,13 +3299,35 @@ app.get("/api/orders/:id", async (req, res) => {
           Math.round(
             awaiting.reduce((s, o) => s + Number(o.quote!.totalBrl), 0) * 100,
           ) / 100;
+        checkoutPayableLines = [...awaiting]
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+          .map((o) => ({
+            orderId: o.id,
+            title: orderTitleForPayment(o),
+            quantity: o.quantity,
+            ...quoteBreakdownForPaymentDisplay(o.quote!),
+          }));
       }
+    } else if (
+      order.status === OrderStatus.AGUARDANDO_PAGAMENTO &&
+      order.quote &&
+      Number(order.quote.totalBrl) > 0
+    ) {
+      checkoutPayableLines = [
+        {
+          orderId: order.id,
+          title: orderTitleForPayment(order),
+          quantity: order.quantity,
+          ...quoteBreakdownForPaymentDisplay(order.quote),
+        },
+      ];
     }
 
     res.json({
       ...order,
       checkoutGroupPayableTotalBrl,
       checkoutGroupPayableCount,
+      checkoutPayableLines,
     });
   } catch (err) {
     console.error(err);

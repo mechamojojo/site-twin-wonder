@@ -51,6 +51,16 @@ declare global {
   }
 }
 
+type CheckoutPayableLine = {
+  orderId: string;
+  title: string;
+  quantity: number;
+  lineTotalBrl: number;
+  productsBrlEst: number;
+  freightBrlEst: number;
+  feesBrl: number;
+};
+
 type OrderData = {
   id: string;
   status: string;
@@ -61,6 +71,8 @@ type OrderData = {
   /** Soma dos pedidos do mesmo checkout ainda em aberto (quando há checkoutGroupId). */
   checkoutGroupPayableTotalBrl?: number | null;
   checkoutGroupPayableCount?: number | null;
+  /** Itens incluídos neste pagamento com discriminação (produtos / frete / taxas). */
+  checkoutPayableLines?: CheckoutPayableLine[] | null;
 };
 
 const Pagar = () => {
@@ -522,10 +534,52 @@ const Pagar = () => {
           {/* Resumo do pedido (sidebar) */}
           <div className="md:sticky md:top-24 h-fit order-first md:order-none">
             <div className="rounded-2xl border border-border bg-card p-5">
-              <h2 className="font-semibold text-foreground mb-4">Resumo do pedido</h2>
-              <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{order.productDescription}</p>
+              <h2 className="font-semibold text-foreground mb-4">Resumo do pagamento</h2>
+              {order.checkoutPayableLines && order.checkoutPayableLines.length > 0 ? (
+                <div className="space-y-4 mb-4">
+                  {order.checkoutPayableLines.map((line) => (
+                    <div
+                      key={line.orderId}
+                      className="rounded-xl border border-border bg-muted/20 px-3 py-3 text-sm"
+                    >
+                      <p className="font-medium text-foreground leading-snug">{line.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Quantidade: {line.quantity}</p>
+                      <dl className="mt-3 space-y-1.5 text-xs text-muted-foreground">
+                        <div className="flex justify-between gap-2">
+                          <dt>Produtos (estimado)</dt>
+                          <dd className="tabular-nums text-foreground shrink-0">
+                            R$ {line.productsBrlEst.toFixed(2)}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <dt>Frete internacional (estimado)</dt>
+                          <dd className="tabular-nums text-foreground shrink-0">
+                            R$ {line.freightBrlEst.toFixed(2)}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <dt>Taxas e serviço</dt>
+                          <dd className="tabular-nums text-foreground shrink-0">
+                            R$ {line.feesBrl.toFixed(2)}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-2 pt-2 border-t border-border font-medium text-foreground">
+                          <dt>Subtotal do item</dt>
+                          <dd className="tabular-nums text-china-red">R$ {line.lineTotalBrl.toFixed(2)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  ))}
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Valores de produto e frete seguem a cotação armazenada; o subtotal de cada linha é o valor cobrado
+                    neste pagamento.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{order.productDescription}</p>
+              )}
               <div className="flex justify-between items-baseline mb-2">
-                <span className="text-muted-foreground">Total</span>
+                <span className="text-muted-foreground">Total a pagar</span>
                 <span className="text-xl font-bold text-china-red">R$ {totalBrl.toFixed(2)}</span>
               </div>
               <div className="flex flex-col gap-2">
