@@ -614,7 +614,6 @@ const Checkout = () => {
       lineEstimates,
       sumLineEstimates,
       expectedCheckoutTotal,
-      firstLineTotalBrl: lineEstimates[0] ?? 0,
     };
   }, [
     items,
@@ -897,9 +896,9 @@ const Checkout = () => {
     return () => window.removeEventListener("load", initMp);
   }, []);
 
-  const firstLineAmountStr = checkoutComputation
-    ? String(Math.round(checkoutComputation.firstLineTotalBrl * 100) / 100)
-    : "0";
+  /** Valor enviado ao Mercado Pago: soma de todos os itens do checkout (vários pedidos no backend). */
+  const mpCardChargeAmountStr =
+    grandTotal > 0 ? String(Math.round(grandTotal * 100) / 100) : "0";
 
   const submitOrdersRef = useRef(submitOrders);
   submitOrdersRef.current = submitOrders;
@@ -908,8 +907,7 @@ const Checkout = () => {
 
   useEffect(() => {
     if (step !== 2 || paymentMethod !== "card" || !mpRef.current) return;
-    if (!checkoutComputation || checkoutComputation.firstLineTotalBrl <= 0)
-      return;
+    if (!checkoutComputation || grandTotal <= 0) return;
 
     const formEl = document.getElementById("checkout-mp-card-form");
     if (!formEl) return;
@@ -917,7 +915,7 @@ const Checkout = () => {
     setCardFormReady(false);
     try {
       const cardForm = mpRef.current.cardForm({
-        amount: firstLineAmountStr,
+        amount: mpCardChargeAmountStr,
         iframe: true,
         form: {
           id: "checkout-mp-card-form",
@@ -992,7 +990,7 @@ const Checkout = () => {
       setCardFormReady(false);
       cardFormInstanceRef.current = null;
     };
-  }, [step, paymentMethod, firstLineAmountStr, checkoutComputation]);
+  }, [step, paymentMethod, mpCardChargeAmountStr, checkoutComputation, grandTotal]);
 
   useEffect(() => {
     if (step !== 2 || paymentMethod !== "card" || !cardFormReady) return;
@@ -1680,18 +1678,15 @@ const Checkout = () => {
               </section>
 
             {checkoutComputation && items.length > 1 && (
-              <p className="text-xs text-muted-foreground leading-relaxed rounded-xl border border-amber-200/80 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/50 px-4 py-3">
+              <p className="text-xs text-muted-foreground leading-relaxed rounded-xl border border-emerald-200/80 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900/50 px-4 py-3">
                 <strong className="text-foreground font-medium">
                   Vários produtos no carrinho:
                 </strong>{" "}
-                cada item vira um pedido separado. O PIX/cartão desta tela
-                cobre o{" "}
+                cada item vira um registro de pedido separado, mas{" "}
                 <span className="font-semibold text-foreground">
-                  primeiro item
+                  um único pagamento (PIX ou cartão) cobre todos os itens
                 </span>{" "}
-                (R${" "}
-                {checkoutComputation.firstLineTotalBrl.toFixed(2)}). Os outros
-                ficam em &quot;Meus pedidos&quot; para pagamento.
+                — total R$ {grandTotal.toFixed(2)}.
               </p>
             )}
           </div>
@@ -1712,10 +1707,12 @@ const Checkout = () => {
                       Cobrança nesta etapa
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      1º item do carrinho
+                      {items.length > 1
+                        ? "Total cobrado (todos os itens)"
+                        : "Valor cobrado"}
                     </p>
                     <p className="text-2xl font-bold text-china-red tabular-nums">
-                      R$ {checkoutComputation.firstLineTotalBrl.toFixed(2)}
+                      R$ {grandTotal.toFixed(2)}
                     </p>
                   </div>
                 )}

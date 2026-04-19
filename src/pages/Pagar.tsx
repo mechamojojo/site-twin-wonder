@@ -58,6 +58,9 @@ type OrderData = {
   customerName: string | null;
   productDescription: string;
   quote?: { totalBrl: string };
+  /** Soma dos pedidos do mesmo checkout ainda em aberto (quando há checkoutGroupId). */
+  checkoutGroupPayableTotalBrl?: number | null;
+  checkoutGroupPayableCount?: number | null;
 };
 
 const Pagar = () => {
@@ -142,15 +145,21 @@ const Pagar = () => {
 
   useEffect(() => {
     if (paymentMethod !== "card" || !mpRef.current || !order?.quote) return;
-    const totalBrl = Number(order.quote.totalBrl);
-    if (totalBrl <= 0) return;
+    const line = Number(order.quote.totalBrl);
+    const group =
+      typeof order.checkoutGroupPayableTotalBrl === "number" &&
+      order.checkoutGroupPayableTotalBrl > 0
+        ? order.checkoutGroupPayableTotalBrl
+        : null;
+    const chargeBrl = group ?? line;
+    if (chargeBrl <= 0) return;
 
     const formEl = document.getElementById("form-checkout");
     if (!formEl) return;
 
     try {
       const cardForm = mpRef.current.cardForm({
-        amount: String(Math.round(totalBrl * 100) / 100),
+        amount: String(Math.round(chargeBrl * 100) / 100),
         iframe: true,
         form: {
           id: "form-checkout",
@@ -185,7 +194,12 @@ const Pagar = () => {
     }
 
     return () => setCardFormReady(false);
-  }, [paymentMethod, order?.quote, submitCardPayment]);
+  }, [
+    paymentMethod,
+    order?.quote,
+    order?.checkoutGroupPayableTotalBrl,
+    submitCardPayment,
+  ]);
 
   useEffect(() => {
     if (paymentMethod !== "card" || !cardFormReady) return;
@@ -258,8 +272,15 @@ const Pagar = () => {
     );
   }
 
-  const totalBrl = order.quote ? Number(order.quote.totalBrl) : 0;
-  const canPay = order.status === "AGUARDANDO_PAGAMENTO" && order.quote && totalBrl > 0;
+  const lineQuote = order.quote ? Number(order.quote.totalBrl) : 0;
+  const groupPayable =
+    typeof order.checkoutGroupPayableTotalBrl === "number" &&
+    order.checkoutGroupPayableTotalBrl > 0
+      ? order.checkoutGroupPayableTotalBrl
+      : null;
+  const totalBrl = groupPayable ?? lineQuote;
+  const canPay =
+    order.status === "AGUARDANDO_PAGAMENTO" && order.quote && totalBrl > 0;
 
   if (!canPay) {
     return (
@@ -294,7 +315,24 @@ const Pagar = () => {
         </Link>
 
         <h1 className="text-2xl md:text-3xl font-heading font-bold mb-2">Finalizar pagamento</h1>
-        <p className="text-muted-foreground mb-8">Pedido #{order.id.slice(-8)}</p>
+        <div className="mb-8 space-y-3">
+          <p className="text-muted-foreground">Pedido #{order.id.slice(-8)}</p>
+          {typeof order.checkoutGroupPayableCount === "number" &&
+            order.checkoutGroupPayableCount > 1 &&
+            groupPayable != null && (
+              <p className="text-sm text-muted-foreground rounded-lg border border-border bg-muted/30 px-3 py-2">
+                Este pagamento cobre{" "}
+                <strong className="text-foreground">
+                  {order.checkoutGroupPayableCount} itens
+                </strong>{" "}
+                do mesmo checkout em aberto — total{" "}
+                <strong className="text-china-red">
+                  R$ {groupPayable.toFixed(2)}
+                </strong>
+                .
+              </p>
+            )}
+        </div>
 
         <div className="grid md:grid-cols-[1fr,340px] gap-8">
           {/* Coluna principal: forma de pagamento */}

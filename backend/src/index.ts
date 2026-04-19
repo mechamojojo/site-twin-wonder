@@ -3125,7 +3125,36 @@ app.get("/api/orders/:id", async (req, res) => {
       return res.status(404).json({ error: "Pedido não encontrado" });
     }
 
-    res.json(order);
+    let checkoutGroupPayableTotalBrl: number | null = null;
+    let checkoutGroupPayableCount: number | null = null;
+    if (order.checkoutGroupId && order.customerEmail?.trim()) {
+      const groupOrders = await prisma.order.findMany({
+        where: {
+          checkoutGroupId: order.checkoutGroupId,
+          customerEmail: order.customerEmail,
+        },
+        include: { quote: true },
+      });
+      const awaiting = groupOrders.filter(
+        (o) =>
+          o.status === OrderStatus.AGUARDANDO_PAGAMENTO &&
+          o.quote &&
+          Number(o.quote.totalBrl) > 0,
+      );
+      if (awaiting.length > 0) {
+        checkoutGroupPayableCount = awaiting.length;
+        checkoutGroupPayableTotalBrl =
+          Math.round(
+            awaiting.reduce((s, o) => s + Number(o.quote!.totalBrl), 0) * 100,
+          ) / 100;
+      }
+    }
+
+    res.json({
+      ...order,
+      checkoutGroupPayableTotalBrl,
+      checkoutGroupPayableCount,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao buscar pedido" });
@@ -3439,6 +3468,132 @@ app.post("/api/orders/:id/quote", async (req, res) => {
   }
 });
 
+type OrderForMpCharge = {
+  id: string;
+  customerEmail: string | null;
+  checkoutGroupId: string | null;
+  status: OrderStatus;
+  productTitle: string | null;
+  productDescription: string;
+  originalUrl: string;
+  productImage: string | null;
+  quote: { totalBrl: unknown } | null;
+  payment: { status: string } | null;
+};
+
+/**
+ * Vários itens no carrinho viram vários Orders com o mesmo checkoutGroupId.
+ * O Mercado Pago deve cobrar a soma das cotações; o registro Payment fica no pedido da URL (âncora).
+ */
+async function resolveMercadoPagoChargeForOrder(
+  order: OrderForMpCharge,
+): Promise<
+  | { ok: true; transactionAmount: number; mpDescription: string }
+  | { ok: false; message: string }
+> {
+  if (!order.quote) {
+    return { ok: false, message: "Cotação ainda não disponível." };
+  }
+  const anchorEmail = order.customerEmail?.trim().toLowerCase();
+  if (!anchorEmail) {
+    return { ok: false, message: "Pedido sem e-mail do cliente." };
+  }
+  if (!order.checkoutGroupId) {
+    return {
+      ok: true,
+      transactionAmount: Number(order.quote.totalBrl),
+      mpDescription: `ComprasChina - Pedido ${order.id}`,
+    };
+  }
+  const siblings = await prisma.order.findMany({
+    where: { checkoutGroupId: order.checkoutGroupId },
+    include: { quote: true, payment: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const payable = siblings.filter((o) => {
+    const em = o.customerEmail?.trim().toLowerCase();
+    return (
+      em === anchorEmail &&
+      o.status === OrderStatus.AGUARDANDO_PAGAMENTO &&
+      o.quote &&
+      Number(o.quote.totalBrl) > 0
+    );
+  });
+  if (payable.length === 0) {
+    return {
+      ok: false,
+      message: "Nenhum item deste checkout está aguardando pagamento.",
+    };
+  }
+  /** Só bloqueia PIX/cartão duplicado em andamento — pagamento já concluído (PAGO) em outro item do grupo é permitido (saldo restante após bug antigo ou retificações). */
+  const blockingPending = siblings.find(
+    (o) => o.payment && o.payment.status === "PENDENTE",
+  );
+  if (blockingPending) {
+    return {
+      ok: false,
+      message:
+        "Já existe um pagamento em andamento para este checkout. Aguarde a confirmação ou contate o suporte.",
+    };
+  }
+  const transactionAmount =
+    Math.round(
+      payable.reduce((s, o) => s + Number(o.quote!.totalBrl), 0) * 100,
+    ) / 100;
+  const mpDescription =
+    payable.length > 1
+      ? `ComprasChina - ${payable.length} itens (${order.id.slice(-8)})`
+      : `ComprasChina - Pedido ${order.id}`;
+  return { ok: true, transactionAmount, mpDescription };
+}
+
+async function markOrdersPaidAfterMercadoPago(anchorOrderId: string) {
+  const anchor = await prisma.order.findUnique({
+    where: { id: anchorOrderId },
+  });
+  if (!anchor) return;
+  if (!anchor.checkoutGroupId) {
+    await prisma.order.update({
+      where: { id: anchorOrderId },
+      data: { status: OrderStatus.PAGO },
+    });
+    return;
+  }
+  await prisma.order.updateMany({
+    where: {
+      checkoutGroupId: anchor.checkoutGroupId,
+      customerEmail: anchor.customerEmail,
+      status: OrderStatus.AGUARDANDO_PAGAMENTO,
+    },
+    data: { status: OrderStatus.PAGO },
+  });
+}
+
+async function ensureCatalogProductsForPaidCheckout(anchorOrderId: string) {
+  const anchor = await prisma.order.findUnique({ where: { id: anchorOrderId } });
+  if (!anchor) return;
+  const orders = anchor.checkoutGroupId
+    ? await prisma.order.findMany({
+        where: {
+          checkoutGroupId: anchor.checkoutGroupId,
+          customerEmail: anchor.customerEmail,
+        },
+      })
+    : [anchor];
+  for (const o of orders) {
+    try {
+      await ensureProductFromOrder({
+        originalUrl: o.originalUrl,
+        productTitle: o.productTitle,
+        productDescription: o.productDescription,
+        productImage: o.productImage,
+      });
+    } catch (err) {
+      console.warn("Erro ao adicionar produto ao catálogo:", err);
+    }
+  }
+}
+
 // Mercado Pago - Criar pagamento (Checkout Transparente)
 app.post("/api/orders/:id/create-payment", async (req, res) => {
   try {
@@ -3477,7 +3632,11 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
       return res.status(400).json({ error: "Este pedido já foi pago." });
     }
 
-    const totalBrl = Number(order.quote.totalBrl);
+    const charge = await resolveMercadoPagoChargeForOrder(order);
+    if (!charge.ok) {
+      return res.status(400).json({ error: charge.message });
+    }
+    const totalBrl = charge.transactionAmount;
     if (totalBrl <= 0) {
       return res.status(400).json({ error: "Valor inválido para pagamento." });
     }
@@ -3534,7 +3693,7 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
       paymentMethodId: isPix ? "pix" : payment_method_id || "visa",
       payerEmail,
       payerName: payer_name || order.customerName || undefined,
-      description: `ComprasChina - Pedido ${order.id}`,
+      description: charge.mpDescription,
       installments: isPix ? 1 : installmentsForCard,
       issuerId: issuer_id,
       identificationType: identification_type,
@@ -3565,20 +3724,8 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
     });
 
     if (result.status === "approved") {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { status: OrderStatus.PAGO },
-      });
-      try {
-        await ensureProductFromOrder({
-          originalUrl: order.originalUrl,
-          productTitle: order.productTitle,
-          productDescription: order.productDescription,
-          productImage: order.productImage,
-        });
-      } catch (err) {
-        console.warn("Erro ao adicionar produto ao catálogo:", err);
-      }
+      await markOrdersPaidAfterMercadoPago(order.id);
+      await ensureCatalogProductsForPaidCheckout(order.id);
       const orderUrl =
         (process.env.SITE_URL || "https://compraschina.com.br").replace(
           /\/$/,
@@ -3586,6 +3733,9 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
         ) +
         "/admin/pedido/" +
         order.id;
+      const groupNote = order.checkoutGroupId
+        ? "\n📎 Checkout com vários itens — todos os pedidos do grupo foram confirmados."
+        : "";
       sendTelegram(
         "✅ Pedido confirmado\n" +
           "Pedido " +
@@ -3599,6 +3749,7 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
           "\n" +
           "👤 " +
           (order.customerName || order.customerEmail || "—") +
+          groupNote +
           "\n\n" +
           "🔗 Gerenciar: " +
           orderUrl,
@@ -4169,20 +4320,8 @@ async function processWebhookPayment(paymentId: string) {
     include: { order: true },
   });
   if (!dbPayment || dbPayment.order.status === "PAGO") return;
-  await prisma.order.update({
-    where: { id: dbPayment.orderId },
-    data: { status: OrderStatus.PAGO },
-  });
-  try {
-    await ensureProductFromOrder({
-      originalUrl: dbPayment.order.originalUrl,
-      productTitle: dbPayment.order.productTitle,
-      productDescription: dbPayment.order.productDescription,
-      productImage: dbPayment.order.productImage,
-    });
-  } catch (err) {
-    console.warn("Erro ao adicionar produto ao catálogo:", err);
-  }
+  await markOrdersPaidAfterMercadoPago(dbPayment.orderId);
+  await ensureCatalogProductsForPaidCheckout(dbPayment.orderId);
   const totalBrl = Number(dbPayment.amountBrl);
   const orderUrl =
     (process.env.SITE_URL || "https://compraschina.com.br").replace(/\/$/, "") +
