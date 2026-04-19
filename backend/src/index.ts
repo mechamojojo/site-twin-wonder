@@ -894,6 +894,107 @@ app.get("/api/admin/orders", requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * Agrupa pedidos selecionados em um novo checkoutGroupId para um único pagamento em /pagar/:id
+ * (ex.: cliente pagou só 1 de 6 — admin escolhe os 5 em aberto e gera o link).
+ */
+app.post("/api/admin/orders/payment-link", requireAdmin, async (req, res) => {
+  try {
+    const raw = req.body?.orderIds;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return res.status(400).json({
+        error: "Informe orderIds: array com os IDs dos pedidos a incluir no link.",
+      });
+    }
+    const uniqueIds = [
+      ...new Set(
+        raw
+          .map((x: unknown) => String(x ?? "").trim())
+          .filter((s: string) => s.length > 0),
+      ),
+    ];
+    if (uniqueIds.length === 0) {
+      return res.status(400).json({ error: "Nenhum ID de pedido válido." });
+    }
+
+    const rows = await prisma.order.findMany({
+      where: { id: { in: uniqueIds } },
+      include: { quote: true, payment: true },
+    });
+    if (rows.length !== uniqueIds.length) {
+      return res.status(400).json({
+        error: "Um ou mais pedidos não foram encontrados.",
+      });
+    }
+
+    const emails = new Set(
+      rows.map((r) => r.customerEmail?.trim().toLowerCase() ?? ""),
+    );
+    const emailArr = [...emails];
+    if (emailArr.length !== 1 || !emailArr[0]) {
+      return res.status(400).json({
+        error:
+          "Todos os pedidos devem ser do mesmo cliente (mesmo e-mail de contato).",
+      });
+    }
+
+    for (const r of rows) {
+      if (r.status !== OrderStatus.AGUARDANDO_PAGAMENTO) {
+        return res.status(400).json({
+          error: `O pedido …${r.id.slice(-8)} não está aguardando pagamento (status: ${r.status}).`,
+        });
+      }
+      if (!r.quote || Number(r.quote.totalBrl) <= 0) {
+        return res.status(400).json({
+          error: `O pedido …${r.id.slice(-8)} não tem cotação em reais válida.`,
+        });
+      }
+      if (
+        r.payment &&
+        (r.payment.status === "PAGO" || r.payment.status === "PENDENTE")
+      ) {
+        return res.status(400).json({
+          error: `O pedido …${r.id.slice(-8)} já tem registro de pagamento no Mercado Pago.`,
+        });
+      }
+    }
+
+    const newGroupId = crypto.randomUUID();
+    await prisma.$transaction(
+      uniqueIds.map((id) =>
+        prisma.order.update({
+          where: { id },
+          data: { checkoutGroupId: newGroupId },
+        }),
+      ),
+    );
+
+    const anchor = [...rows].sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )[0]!;
+    const totalBrl =
+      Math.round(
+        rows.reduce((s, r) => s + Number(r.quote!.totalBrl), 0) * 100,
+      ) / 100;
+    const siteBase = (
+      process.env.SITE_URL || "https://compraschina.com.br"
+    ).replace(/\/$/, "");
+    const url = `${siteBase}/pagar/${anchor.id}`;
+
+    res.json({
+      url,
+      checkoutGroupId: newGroupId,
+      anchorOrderId: anchor.id,
+      orderCount: rows.length,
+      totalBrl,
+    });
+  } catch (err) {
+    console.error("[admin payment-link]", err);
+    res.status(500).json({ error: safeErrorMessage(err, "Erro ao gerar link.") });
+  }
+});
+
 // Admin: obter pedido único (protegido)
 app.get("/api/admin/orders/:id", requireAdmin, async (req, res) => {
   try {

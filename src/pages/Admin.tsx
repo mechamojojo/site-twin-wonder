@@ -24,6 +24,7 @@ import {
   Plus,
   RefreshCw,
   ShoppingBag,
+  Link2,
   ShoppingCart,
   Trash2,
   Upload,
@@ -31,6 +32,16 @@ import {
 import { CATEGORY_LABELS } from "@/lib/categoryLabels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FEATURED_PRODUCTS } from "@/data/featuredProducts";
 import { EXPLORAR_PRODUCTS } from "@/data/explorarProducts";
 
@@ -65,6 +76,7 @@ type OrderWithDetails = {
   internalNotes: string | null;
   createdAt: string;
   quote?: { totalBrl: string };
+  payment?: { status: string } | null;
   shipment?: { trackingCode: string | null; carrier: string | null } | null;
 };
 
@@ -93,6 +105,14 @@ function isCartSnapshotLeader(
   const t = (x: OrderWithDetails) => new Date(x.createdAt).getTime();
   const leader = siblings.reduce((a, b) => (t(a) <= t(b) ? a : b));
   return leader.id === o.id;
+}
+
+function isOrderSelectableForPaymentLink(o: OrderWithDetails): boolean {
+  if (o.status !== "AGUARDANDO_PAGAMENTO") return false;
+  if (!o.quote || Number(o.quote.totalBrl) <= 0) return false;
+  if (o.payment?.status === "PAGO" || o.payment?.status === "PENDENTE")
+    return false;
+  return true;
 }
 
 function formatCpf(v: string | null): string {
@@ -362,6 +382,14 @@ const Admin = () => {
     skipped: number;
   } | null>(null);
 
+  const [payLinkModalGroupId, setPayLinkModalGroupId] = useState<string | null>(
+    null,
+  );
+  const [payLinkSelectedIds, setPayLinkSelectedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [payLinkGenerating, setPayLinkGenerating] = useState(false);
+
   const fetchOrders = (authToken: string) => {
     const url =
       filter === "all"
@@ -410,6 +438,87 @@ const Admin = () => {
 
     return () => controller.abort();
   }, [token, filter]);
+
+  const payLinkSiblings = useMemo(() => {
+    if (!payLinkModalGroupId) return [];
+    return orders
+      .filter((x) => x.checkoutGroupId === payLinkModalGroupId)
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+  }, [payLinkModalGroupId, orders]);
+
+  const payLinkInitForGroupRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!payLinkModalGroupId) {
+      payLinkInitForGroupRef.current = null;
+      return;
+    }
+    if (payLinkInitForGroupRef.current === payLinkModalGroupId) return;
+    payLinkInitForGroupRef.current = payLinkModalGroupId;
+    const sib = orders
+      .filter((x) => x.checkoutGroupId === payLinkModalGroupId)
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
+    const payable = sib.filter(isOrderSelectableForPaymentLink);
+    setPayLinkSelectedIds(new Set(payable.map((x) => x.id)));
+  }, [payLinkModalGroupId, orders]);
+
+  const payLinkTotalSelected = useMemo(() => {
+    let s = 0;
+    for (const id of payLinkSelectedIds) {
+      const ord = orders.find((x) => x.id === id);
+      if (ord?.quote) s += Number(ord.quote.totalBrl);
+    }
+    return Math.round(s * 100) / 100;
+  }, [payLinkSelectedIds, orders]);
+
+  const handleGeneratePaymentLink = async () => {
+    if (!token || payLinkSelectedIds.size === 0) {
+      toast.error("Selecione ao menos um pedido em aberto.");
+      return;
+    }
+    setPayLinkGenerating(true);
+    try {
+      const res = await fetch(apiUrl("/api/admin/orders/payment-link"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderIds: [...payLinkSelectedIds] }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        url?: string;
+      };
+      if (!res.ok) {
+        toast.error(
+          typeof data.error === "string" ? data.error : "Erro ao gerar link",
+        );
+        return;
+      }
+      const url = typeof data.url === "string" ? data.url : "";
+      if (url) {
+        void navigator.clipboard.writeText(url).catch(() => {});
+      }
+      const refreshed = await fetchOrders(token);
+      setOrders(refreshed as OrderWithDetails[]);
+      setPayLinkModalGroupId(null);
+      toast.success(
+        url
+          ? "Link copiado para a área de transferência. Envie ao cliente."
+          : "Grupo de pagamento atualizado.",
+      );
+    } catch {
+      toast.error("Erro de conexão");
+    } finally {
+      setPayLinkGenerating(false);
+    }
+  };
 
   const fetchCatalogProducts = useCallback(
     (options?: { mergeWithPrevious?: boolean }) => {
@@ -2194,6 +2303,29 @@ const Admin = () => {
                             </ul>
                           </div>
                         )}
+                      {o.checkoutGroupId && isCartSnapshotLeader(o, orders) && (
+                        <div className="mb-3 rounded-lg border border-dashed border-china-red/35 bg-china-red/[0.06] dark:bg-china-red/10 p-3">
+                          <p className="text-xs font-medium text-foreground mb-2">
+                            Pagamento do cliente
+                          </p>
+                          <p className="text-[11px] text-muted-foreground mb-2">
+                            Selecione no diálogo quais pedidos em aberto entram
+                            no mesmo link (PIX ou cartão na página Pagar).
+                          </p>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() =>
+                              setPayLinkModalGroupId(o.checkoutGroupId!)
+                            }
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                            Gerar link de pagamento
+                          </Button>
+                        </div>
+                      )}
                       <p className="text-sm font-medium text-foreground line-clamp-2">
                         {o.productTitle || o.productDescription}
                       </p>
@@ -2382,6 +2514,104 @@ const Admin = () => {
           </div>
         )}
       </main>
+
+      <Dialog
+        open={payLinkModalGroupId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPayLinkModalGroupId(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Gerar link de pagamento</DialogTitle>
+            <DialogDescription>
+              Marque os pedidos em aberto que entram neste pagamento. O cliente
+              usa a página Pagar; o valor no Mercado Pago será a soma das
+              cotações selecionadas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-1 max-h-[45vh] overflow-y-auto pr-1">
+            {payLinkSiblings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhum pedido encontrado para este carrinho. Recarregue a lista
+                de pedidos.
+              </p>
+            ) : (
+              payLinkSiblings.map((row) => {
+                const sel = isOrderSelectableForPaymentLink(row);
+                const checked = payLinkSelectedIds.has(row.id);
+                return (
+                  <div
+                    key={row.id}
+                    className={`flex gap-3 items-start rounded-lg border border-border p-2.5 text-sm ${
+                      !sel ? "opacity-60" : ""
+                    }`}
+                  >
+                    <Checkbox
+                      id={`paylink-${row.id}`}
+                      checked={sel && checked}
+                      disabled={!sel}
+                      onCheckedChange={(c) => {
+                        if (!sel) return;
+                        setPayLinkSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (c === true) next.add(row.id);
+                          else next.delete(row.id);
+                          return next;
+                        });
+                      }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <Label
+                        htmlFor={`paylink-${row.id}`}
+                        className="font-medium cursor-pointer leading-snug block"
+                      >
+                        {row.productTitle || row.productDescription}
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        …{row.id.slice(-8)} · {row.status}
+                        {row.quote && (
+                          <span className="text-china-red font-semibold ml-2">
+                            R$ {Number(row.quote.totalBrl).toFixed(2)}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <p className="text-sm font-semibold text-foreground border-t border-border pt-3">
+            Total selecionado:{" "}
+            <span className="text-china-red tabular-nums">
+              R$ {payLinkTotalSelected.toFixed(2)}
+            </span>
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setPayLinkModalGroupId(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="bg-china-red hover:bg-china-red/90"
+              disabled={
+                payLinkGenerating ||
+                payLinkSelectedIds.size === 0 ||
+                payLinkSiblings.length === 0
+              }
+              onClick={() => void handleGeneratePaymentLink()}
+            >
+              {payLinkGenerating ? "Gerando..." : "Gerar e copiar link"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Footer />
     </div>
   );
