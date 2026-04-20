@@ -23,6 +23,7 @@ import {
   sendPasswordResetEmail,
   sendOrderStatusEmail,
   sendWarehousePhotosEmail,
+  sendPedidoAceitoEmail,
   sendSupportStaffReplyEmail,
 } from "./email";
 import { verifyTurnstile } from "./turnstile";
@@ -1278,6 +1279,49 @@ app.post(
       res.json({ ok: true });
     } catch (err) {
       console.error("Admin email warehouse photos:", err);
+      res.status(500).json({ error: "Erro ao enviar e-mail" });
+    }
+  },
+);
+
+// Admin: enviar e-mail “pedido aceito / pagamento confirmado” ao cliente
+app.post(
+  "/api/admin/orders/:id/email-pedido-aceito",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: { user: { select: { email: true, name: true } } },
+      });
+      if (!order)
+        return res.status(404).json({ error: "Pedido não encontrado" });
+      const email =
+        order.customerEmail?.trim() || order.user?.email?.trim() || "";
+      if (!email) {
+        return res
+          .status(400)
+          .json({ error: "Cliente sem e-mail (pedido ou conta)." });
+      }
+      const name =
+        order.customerName?.trim() || order.user?.name?.trim() || "Cliente";
+      const ok = await sendPedidoAceitoEmail(
+        email,
+        name,
+        order.id,
+        order.productTitle,
+        order.productDescription,
+      );
+      if (!ok) {
+        return res.status(500).json({
+          error:
+            "Não foi possível enviar o e-mail. Verifique RESEND_API_KEY e o domínio no Resend.",
+        });
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("Admin email pedido aceito:", err);
       res.status(500).json({ error: "Erro ao enviar e-mail" });
     }
   },
@@ -2881,6 +2925,7 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       silentOrderCreation,
       deliveryInBrazil: bodyDeliveryInBrazil,
       internationalAddressLines: bodyInternationalAddressLines,
+      importDeclarationText: bodyImportDeclarationText,
     } = req.body ?? {};
 
     const deliveryInBrazil = bodyDeliveryInBrazil === false ? false : true;
@@ -2912,6 +2957,17 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       return res.status(400).json({
         error:
           "Informe um WhatsApp válido (inclua DDI se estiver fora do +55).",
+      });
+    }
+
+    const importDeclRaw =
+      typeof bodyImportDeclarationText === "string"
+        ? bodyImportDeclarationText.trim()
+        : "";
+    const MIN_IMPORT_DECL_LEN = 40;
+    if (importDeclRaw.length < MIN_IMPORT_DECL_LEN) {
+      return res.status(400).json({
+        error: `Preencha a descrição do produto (estilo CSSBuy: nome/modelo, cor, tamanho, material) com pelo menos ${MIN_IMPORT_DECL_LEN} caracteres.`,
       });
     }
 
@@ -3072,6 +3128,8 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         addressCity: city,
         addressState: stateUf,
         checkoutGroupId,
+        importDeclarationText: importDeclRaw.slice(0, 8000),
+        importDeclarationConfirmedAt: new Date(),
         ...(orderItemsJson !== undefined ? { orderItemsJson } : {}),
       },
     });

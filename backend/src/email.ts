@@ -117,6 +117,45 @@ function assetBaseForEmail(): string {
   return SITE_URL.replace(/\/$/, "");
 }
 
+/** Aviso manual “pedido aceito” enviado pelo admin (substitui o antigo link de WhatsApp). */
+export async function sendPedidoAceitoEmail(
+  toEmail: string,
+  recipientFullName: string,
+  orderId: string,
+  productTitle: string | null,
+  productDescription: string,
+): Promise<boolean> {
+  const first =
+    recipientFullName.trim().split(/\s+/)[0] || "Cliente";
+  const productName = (
+    productTitle?.trim() ||
+    productDescription.trim() ||
+    "seu pedido"
+  ).slice(0, 120);
+  const orderLink = `${SITE_URL.replace(/\/$/, "")}/pedido-confirmado/${orderId}`;
+  const html = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111">
+      <h2 style="color:#b22222;margin-bottom:4px">ComprasChina</h2>
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0 20px">
+      <p>Olá, ${escapeHtml(first)}! O pagamento do seu pedido foi confirmado.</p>
+      <p>O produto <strong>${escapeHtml(productName)}</strong> já está em processamento na ComprasChina.</p>
+      <p>Assim que tivermos mais novidades, entraremos em contato.</p>
+      <p style="margin-top:24px">
+        <a href="${escapeHtml(orderLink)}" style="background:#b22222;color:#fff;padding:10px 20px;border-radius:20px;text-decoration:none;font-weight:bold;font-size:14px">
+          Acompanhar pedido →
+        </a>
+      </p>
+      <hr style="border:none;border-top:1px solid #eee;margin:28px 0 12px">
+      <p style="font-size:12px;color:#888">ComprasChina — Intermediário brasileiro de compras na China</p>
+    </div>
+  `;
+  return sendEmail({
+    to: toEmail,
+    subject: "Pagamento confirmado — ComprasChina",
+    html,
+  });
+}
+
 export async function sendWarehousePhotosEmail(
   toEmail: string,
   name: string,

@@ -184,6 +184,10 @@ model Order {
   internalNotes      String?      // Notas internas (só admin)
   /** URLs públicas (/uploads/order-warehouse/...) — fotos do produto recebidas no armazém (QC) */
   warehousePhotosJson Json?
+  /** Texto fornecido pelo cliente no checkout: como o produto deve ser declarado na importação */
+  importDeclarationText      String?   @db.Text
+  /** Momento em que o cliente confirmou o checkbox de veracidade (proteção documental) */
+  importDeclarationConfirmedAt DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 

@@ -115,6 +115,17 @@ function isOrderSelectableForPaymentLink(o: OrderWithDetails): boolean {
   return true;
 }
 
+/** Só mostrar “Gerar link de pagamento” se ainda houver pedido do grupo em aberto na lista. */
+function checkoutGroupHasPendingPaymentInList(
+  groupId: string,
+  all: OrderWithDetails[],
+): boolean {
+  return all.some(
+    (x) =>
+      x.checkoutGroupId === groupId && isOrderSelectableForPaymentLink(x),
+  );
+}
+
 function formatCpf(v: string | null): string {
   if (!v) return "";
   const d = v.replace(/\D/g, "");
@@ -2311,7 +2322,12 @@ const Admin = () => {
                             </ul>
                           </div>
                         )}
-                      {o.checkoutGroupId && isCartSnapshotLeader(o, orders) && (
+                      {o.checkoutGroupId &&
+                        isCartSnapshotLeader(o, orders) &&
+                        checkoutGroupHasPendingPaymentInList(
+                          o.checkoutGroupId,
+                          orders,
+                        ) && (
                         <div className="mb-3 rounded-lg border border-dashed border-china-red/35 bg-china-red/[0.06] dark:bg-china-red/10 p-3">
                           <p className="text-xs font-medium text-foreground mb-2">
                             Pagamento do cliente

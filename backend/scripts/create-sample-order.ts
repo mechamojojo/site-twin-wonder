@@ -27,6 +27,8 @@ const body = {
   addressState: "SP",
   notes: "Pedido criado pelo script create-sample-order para visualizar no admin.",
   estimatedTotalBrl: 180,
+  importDeclarationText:
+    "Produto de exemplo para teste no admin — camiseta algodão preta tamanho M, marca genérica, 1 unidade.",
 };
 
 async function main() {

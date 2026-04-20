@@ -3,7 +3,6 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl, publicUploadUrl } from "@/lib/api";
-import { SITE_URL } from "@/data/siteConfig";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -91,6 +90,8 @@ type Order = {
   cssbuyOrderId: string | null;
   internalNotes: string | null;
   warehousePhotosJson?: unknown;
+  importDeclarationText?: string | null;
+  importDeclarationConfirmedAt?: string | null;
   user?: { email: string | null; name: string | null } | null;
   quote?: { totalBrl: string };
   shipment?: { trackingCode: string | null; carrier: string | null };
@@ -174,6 +175,13 @@ function buildCssBuyCopyText(o: Order): string {
     `Endereço:\n${formatAddress(o)}`,
     `WhatsApp: ${o.customerWhatsapp || "-"}`,
     `E-mail: ${o.customerEmail || "-"}`,
+    ...(o.importDeclarationText?.trim()
+      ? [
+          "",
+          "Product / descrição (checkout — formato CSSBuy):",
+          o.importDeclarationText.trim(),
+        ]
+      : []),
     "---",
   ].join("\n");
 }
@@ -387,6 +395,8 @@ const AdminPedido = () => {
     useState(false);
   const [sendingWarehouseEmail, setSendingWarehouseEmail] = useState(false);
   const [warehouseEmailNote, setWarehouseEmailNote] = useState("");
+  const [sendingPedidoAceitoEmail, setSendingPedidoAceitoEmail] =
+    useState(false);
 
   const handleProcessarCompra = async () => {
     if (!order?.id || !token) return;
@@ -516,6 +526,32 @@ const AdminPedido = () => {
     }
   };
 
+  const handleSendPedidoAceitoEmail = async () => {
+    if (!token || !order) return;
+    setSendingPedidoAceitoEmail(true);
+    try {
+      const res = await fetch(
+        apiUrl(`/api/admin/orders/${order.id}/email-pedido-aceito`),
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          (data as { error?: string }).error || "Erro ao enviar e-mail",
+        );
+        return;
+      }
+      toast.success('E-mail "pagamento confirmado" enviado ao cliente.');
+    } catch {
+      toast.error("Erro de conexão");
+    } finally {
+      setSendingPedidoAceitoEmail(false);
+    }
+  };
+
   if (!token) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -564,13 +600,8 @@ const AdminPedido = () => {
     order.productDescription ||
     "seu produto"
   ).slice(0, 80);
-  const linkAcompanhamento = `${SITE_URL.replace(/\/$/, "")}/pedido-confirmado/${order.id}`;
-
-  const msgPedidoAceito =
-    `Olá, ${nome}!\n\n` +
-    `O pagamento do produto *${produto}* foi confirmado e seu pedido já está em processamento na ComprasChina.\n\n` +
-    `Assim que tivermos mais novidades, entraremos em contato.\n\n` +
-    `Você pode acompanhar o status pelo link: ${linkAcompanhamento}`;
+  const customerEmailResolved =
+    order.customerEmail?.trim() || order.user?.email?.trim() || "";
 
   const msgEnviado = (code: string) =>
     `Olá, ${nome}!\n\n` +
@@ -760,6 +791,27 @@ const AdminPedido = () => {
             </div>
           </div>
 
+          {order.importDeclarationText?.trim() ? (
+            <div className="p-6 border-b border-border bg-slate-50/80 dark:bg-slate-950/30">
+              <h3 className="text-sm font-semibold text-foreground mb-2">
+                Product — descrição (checkout / CSSBuy)
+              </h3>
+              <p className="text-xs text-muted-foreground mb-2">
+                Texto único no estilo campo <strong>Product</strong> do CSSBuy.
+                Registrado em{" "}
+                {order.importDeclarationConfirmedAt
+                  ? new Date(
+                      order.importDeclarationConfirmedAt,
+                    ).toLocaleString("pt-BR")
+                  : "—"}
+                .
+              </p>
+              <div className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground whitespace-pre-wrap">
+                {order.importDeclarationText.trim()}
+              </div>
+            </div>
+          ) : null}
+
           {/* Fotos recebidas no armazém (QC) */}
           <div className="p-6 border-b border-border bg-sky-50/50 dark:bg-sky-950/20">
             <h3 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
@@ -870,80 +922,81 @@ const AdminPedido = () => {
             <h3 className="text-sm font-semibold text-foreground mb-3">
               Contatar cliente
             </h3>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
               {order.customerWhatsapp ? (
-                <>
-                  <Button
-                    size="sm"
-                    asChild
-                    className="gap-1.5 bg-green-600 hover:bg-green-700"
+                <Button
+                  size="sm"
+                  asChild
+                  className="gap-1.5 bg-green-600 hover:bg-green-700"
+                >
+                  <a
+                    href={whatsAppUrl(order.customerWhatsapp)}
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
-                    <a
-                      href={whatsAppUrl(order.customerWhatsapp)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      WhatsApp
-                    </a>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    asChild
-                    className="gap-1.5"
+                    <MessageCircle className="w-4 h-4" />
+                    WhatsApp
+                  </a>
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={
+                  !customerEmailResolved || sendingPedidoAceitoEmail
+                }
+                onClick={() => void handleSendPedidoAceitoEmail()}
+              >
+                <Mail className="w-4 h-4" />
+                {sendingPedidoAceitoEmail
+                  ? "Enviando…"
+                  : "Enviar: Pedido aceito"}
+              </Button>
+              {order.customerWhatsapp && order.shipment?.trackingCode ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  asChild
+                  className="gap-1.5"
+                >
+                  <a
+                    href={whatsAppUrl(
+                      order.customerWhatsapp,
+                      msgEnviado(order.shipment.trackingCode),
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
-                    <a
-                      href={whatsAppUrl(
-                        order.customerWhatsapp,
-                        msgPedidoAceito,
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Enviar: Pedido aceito
-                    </a>
-                  </Button>
-                  {order.shipment?.trackingCode && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      asChild
-                      className="gap-1.5"
-                    >
-                      <a
-                        href={whatsAppUrl(
-                          order.customerWhatsapp,
-                          msgEnviado(order.shipment.trackingCode),
-                        )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Enviar: Rastreio
-                      </a>
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    asChild
-                    className="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700"
+                    Enviar: Rastreio
+                  </a>
+                </Button>
+              ) : null}
+              {order.customerWhatsapp ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  asChild
+                  className="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700"
+                >
+                  <a
+                    href={whatsAppUrl(order.customerWhatsapp, msgNegado)}
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
-                    <a
-                      href={whatsAppUrl(order.customerWhatsapp, msgNegado)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Enviar: Pedido negado
-                    </a>
-                  </Button>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Sem WhatsApp cadastrado
-                </p>
-              )}
+                    Enviar: Pedido negado
+                  </a>
+                </Button>
+              ) : null}
             </div>
+            {!customerEmailResolved && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-2 max-w-lg">
+                Para enviar &quot;Pedido aceito&quot; por e-mail, o cliente precisa
+                ter e-mail no pedido ou na conta. Sem e-mail, use o WhatsApp
+                (se houver) para avisar manualmente.
+              </p>
+            )}
           </div>
 
           {/* Ações rápidas */}

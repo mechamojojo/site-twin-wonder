@@ -53,6 +53,8 @@ import { MP_PUBLIC_KEY } from "@/data/siteConfig";
 /** Mesma base da estimativa em `calcCartShipping`; o cliente não escolhe rota mais barata no site. */
 const CHECKOUT_SHIPPING_METHOD = "FJ_BR_EXP" as const;
 
+const MIN_IMPORT_DECLARATION_LEN = 40;
+
 type ViaCepResponse = {
   cep: string;
   logradouro: string;
@@ -128,6 +130,8 @@ type CheckoutForm = {
   notes: string;
   /** Texto livre quando o cliente não recebe no Brasil (CSSBuy / exterior) */
   internationalAddressLines: string;
+  /** Descrição para declaração de importação (checkout) */
+  importDeclarationText: string;
 };
 
 function validateShippingForm(
@@ -151,11 +155,13 @@ function validateShippingForm(
     if (!form.addressNeighborhood.trim()) return "Informe o bairro.";
     if (!form.addressCity.trim()) return "Informe a cidade.";
     if (!form.addressState.trim()) return "Informe o estado (UF).";
-    return null;
+  } else if (form.internationalAddressLines.trim().length < 15) {
+    return "Descreva o endereço completo no exterior (mínimo 15 caracteres): país, cidade, CEP/código postal e linhas de endereço.";
   }
 
-  if (form.internationalAddressLines.trim().length < 15) {
-    return "Descreva o endereço completo no exterior (mínimo 15 caracteres): país, cidade, CEP/código postal e linhas de endereço.";
+  const decl = form.importDeclarationText.trim();
+  if (decl.length < MIN_IMPORT_DECLARATION_LEN) {
+    return `Descreva o produto no estilo CSSBuy (nome/modelo, cor, tamanho, material…). Mínimo ${MIN_IMPORT_DECLARATION_LEN} caracteres.`;
   }
   return null;
 }
@@ -482,6 +488,7 @@ const Checkout = () => {
     customerWhatsapp: "",
     notes: "",
     internationalAddressLines: "",
+    importDeclarationText: "",
   });
 
   const fetchCep = useCallback(async (cep: string) => {
@@ -754,6 +761,7 @@ const Checkout = () => {
             : form.internationalAddressLines.trim(),
           shippingMethod: CHECKOUT_SHIPPING_METHOD,
           notes: form.notes || item.notes || null,
+          importDeclarationText: form.importDeclarationText.trim(),
           customerName: form.customerName.trim(),
           customerEmail: form.customerEmail.trim(),
           customerWhatsapp: form.customerWhatsapp.replace(/\D/g, ""),
@@ -1395,6 +1403,52 @@ const Checkout = () => {
                 className="resize-none"
               />
             </div>
+            </section>
+
+            <section className="rounded-xl border border-border bg-card p-4 sm:p-5 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-china-red/10 text-china-red">
+                  <Package className="h-4 w-4" aria-hidden />
+                </span>
+                Produto (descrição para envio)
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                No CSSBuy o campo <strong className="text-foreground/90">Product</strong>{" "}
+                reúne em uma linha: <strong className="text-foreground/90">nome (modelo), cor, tamanho, material</strong>{" "}
+                — cada atributo separado por espaço, como nos atributos Color,
+                Size e Material do pedido.
+              </p>
+              <div className="rounded-lg bg-muted/40 border border-border/80 px-3 py-2 text-[11px] text-muted-foreground space-y-1.5">
+                <p className="font-medium text-foreground/90">Dicas (exemplos)</p>
+                <ol className="list-decimal list-inside space-y-0.5">
+                  <li>Mouse óptico sem fio RT200 preto PVC plástico</li>
+                  <li>Tenis Masculino De Couro Azul Tamanho 42</li>
+                </ol>
+              </div>
+              <div>
+                <Label htmlFor="importDeclarationText">
+                  Product — descrição em uma linha *
+                </Label>
+                <Textarea
+                  id="importDeclarationText"
+                  name="importDeclarationText"
+                  rows={4}
+                  placeholder="Nome ou modelo, cor, tamanho, material (separados por espaço), como no CSSBuy"
+                  value={form.importDeclarationText}
+                  onChange={handleChange}
+                  className="mt-1.5 resize-y min-h-[100px]"
+                  required
+                  minLength={MIN_IMPORT_DECLARATION_LEN}
+                />
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Mínimo {MIN_IMPORT_DECLARATION_LEN} caracteres. O mesmo texto
+                  pode ser colado no CSSBuy no campo Product.
+                </p>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Usamos este texto para alinhar com o que você informar no
+                CSSBuy e manter registro do pedido.
+              </p>
             </section>
 
             <div className="hidden lg:flex gap-3 pt-2">
