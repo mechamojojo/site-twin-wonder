@@ -20,6 +20,7 @@ import MercadoPagoBadge from "@/components/MercadoPagoBadge";
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 import { getProductWeightOverrideG } from "@/lib/productWeightOverrides";
+import { applyCssbuyRam899498747944PreviewOverride } from "@/lib/cssbuyVariantOverrides";
 import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
 import { toast } from "sonner";
 
@@ -262,13 +263,17 @@ const Order = () => {
             size: [...sizeGroupDetected.values],
           };
         }
+        const ramPatched = applyCssbuyRam899498747944PreviewOverride(url, {
+          optionGroups,
+          variants,
+        });
         setProductPreview({
           title: data.title ?? null,
           titlePt: data.titlePt ?? null,
           priceCny: data.priceCny ?? null,
           images: Array.isArray(data.images) ? data.images : [],
-          variants,
-          optionGroups,
+          variants: ramPatched.variants,
+          optionGroups: ramPatched.optionGroups,
           specs: Array.isArray(data.specs) ? data.specs : [],
           description: data.description ?? null,
         });

@@ -7,6 +7,139 @@ import type { ProductPreviewResult, OptionGroup } from "./productPreview";
 import { translateToPortuguese } from "./translate";
 import { normalizeProductTitle } from "./normalizeProductTitle";
 
+/** Taobao via CSSBuy — um único blob em "Color Classification" (RAM DDR3/DDR4). Só este ID. */
+const CSSBUY_RAM_TAOBAO_ITEM_ID = "899498747944";
+
+function isCssbuyRamTaobaoSpecialCase(cssbuyUrl: string): boolean {
+  try {
+    const path = new URL(cssbuyUrl).pathname;
+    const m = path.match(/item-(?:[a-z0-9]+-)?(\d+)\.html$/i);
+    return m?.[1] === CSSBUY_RAM_TAOBAO_ITEM_ID;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Separa texto colado tipo "DDR4-8GB…XMPDDR4-16GB…" em uma opção por módulo.
+ * Só usado para o item acima; não altera outros produtos.
+ */
+function splitColorClassificationRamBlob(raw: string): string[] {
+  const s = String(raw).trim().replace(/\s+/g, " ");
+  if (!s || !/DDR[34]/i.test(s)) return [];
+  const normalized = s
+    .replace(/\.(?=DDR[34])/gi, " ")
+    .replace(/XMP(?=DDR[34])/gi, "XMP ");
+  const parts = normalized
+    .split(/(?=DDR[34]-)/i)
+    .map((p) => p.trim().replace(/\.$/, ""))
+    .filter((p) => /^DDR[34]-/i.test(p) && p.length >= 8);
+  return [...new Set(parts)];
+}
+
+function expandRamTaobaoSkuProps(
+  skuProps: Array<{
+    propName?: string;
+    prop?: string;
+    values?: Array<{ value?: string; image?: string }>;
+  }>,
+): void {
+  for (const prop of skuProps) {
+    const name = String(prop.propName ?? prop.prop ?? "").trim();
+    if (!/classification|color|colour|颜色|款式|规格|estilo|model/i.test(name))
+      continue;
+    const valuesArr = prop.values;
+    if (!valuesArr?.length) continue;
+    const out: Array<{ value?: string; image?: string }> = [];
+    for (const v of valuesArr) {
+      const txt = String(v?.value ?? "").trim();
+      const parts = splitColorClassificationRamBlob(txt);
+      if (parts.length > 1) {
+        for (const part of parts) out.push({ ...v, value: part });
+      } else {
+        out.push(v);
+      }
+    }
+    if (out.length > valuesArr.length) prop.values = out;
+  }
+}
+
+function expandRamTaobaoPageEvaluateData(data: {
+  colorValues: string[];
+  colorImages: string[];
+  optionGroups: { name: string; values: string[]; images: string[] }[];
+}): void {
+  const nextColors: string[] = [];
+  const nextImgs: string[] = [];
+  for (let i = 0; i < data.colorValues.length; i++) {
+    const c = data.colorValues[i];
+    const parts = splitColorClassificationRamBlob(c);
+    const img = data.colorImages[i] ?? "";
+    if (parts.length > 1) {
+      for (const p of parts) {
+        nextColors.push(p);
+        nextImgs.push(img);
+      }
+    } else {
+      nextColors.push(c);
+      nextImgs.push(img);
+    }
+  }
+  data.colorValues = nextColors;
+  data.colorImages = nextImgs;
+
+  for (const g of data.optionGroups || []) {
+    if (!/classification|color|colour|颜色|款式/i.test(g.name)) continue;
+    const nv: string[] = [];
+    const ni: string[] = [];
+    for (let i = 0; i < g.values.length; i++) {
+      const parts = splitColorClassificationRamBlob(g.values[i]);
+      if (parts.length > 1) {
+        for (const p of parts) {
+          nv.push(p);
+          ni.push(g.images?.[i] ?? "");
+        }
+      } else {
+        nv.push(g.values[i]);
+        ni.push(g.images?.[i] ?? "");
+      }
+    }
+    if (nv.length > g.values.length) {
+      g.values = nv;
+      g.images = ni;
+    }
+  }
+}
+
+/** Mesmos rótulos da "Color Classification" na CSSBuy para item Taobao 899498747944 — manter sync com `cssbuyVariantOverrides.ts` no frontend. */
+const RAM_TAOBAO_899498747944_CLASSIFICATION_VALUES: readonly string[] = [
+  "DDR4-8GB 3600MHz XMP",
+  "DDR4-16GB 3600MHz XMP",
+  "DDR4-8GB 2666MHz",
+  "DDR4-16GB 2666MHz",
+  "DDR4-8GB 3200MHz XMP",
+  "DDR4-16GB 3200MHz XMP",
+  "DDR3-8GB 1600MHz",
+];
+
+function ensureRamTaobao899498747944OptionGroups(
+  cssbuyUrl: string,
+  groups: OptionGroup[],
+): OptionGroup[] {
+  if (!isCssbuyRamTaobaoSpecialCase(cssbuyUrl)) return groups;
+  const flat = groups.flatMap((g) => g.values);
+  const distinct = new Set(flat.map((v) => String(v).trim())).size;
+  if (distinct >= 7) return groups;
+  return [
+    {
+      name: "Color Classification",
+      values: [...RAM_TAOBAO_899498747944_CLASSIFICATION_VALUES],
+      images: RAM_TAOBAO_899498747944_CLASSIFICATION_VALUES.map(() => ""),
+      displayAsImages: false,
+    },
+  ];
+}
+
 const SCRAPE_TIMEOUT_MS = 45000;
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -183,7 +316,9 @@ export async function getCssbuyProductPreview(
     // Many CSSBuy items render SKU/options (e.g. Color Classification) a bit later in #sku_box.
     // Waiting for it is safe: it resolves fast when absent and improves option capture when present.
     await page
-      .waitForSelector("#sku_box img[src], #sku_box a img[src]", { timeout: 4500 })
+      .waitForSelector("#sku_box img[src], #sku_box a img[src]", {
+        timeout: 4500,
+      })
       .catch(() => {});
 
     if (isItem1688) {
@@ -214,12 +349,16 @@ export async function getCssbuyProductPreview(
         for (const el of scrollables) {
           await el
             .evaluate((node) => {
-              (node as HTMLElement).scrollTop = (node as HTMLElement).scrollHeight;
+              (node as HTMLElement).scrollTop = (
+                node as HTMLElement
+              ).scrollHeight;
             })
             .catch(() => {});
           await page.waitForTimeout(400);
         }
-        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight / 2));
+        await page.evaluate(() =>
+          window.scrollTo(0, document.body.scrollHeight / 2),
+        );
         await page.waitForTimeout(500);
         await page.evaluate(() => {
           const buttons = Array.from(
@@ -230,8 +369,9 @@ export async function getCssbuyProductPreview(
           const more = buttons.find((b) => {
             const t = (b as HTMLElement).innerText?.toLowerCase() || "";
             return (
-              /more|all|view\s*all|show\s*all|展开|更多|全部|load\s*more/i.test(t) &&
-              t.length < 30
+              /more|all|view\s*all|show\s*all|展开|更多|全部|load\s*more/i.test(
+                t,
+              ) && t.length < 30
             );
           });
           if (more) (more as HTMLElement).click();
@@ -260,7 +400,11 @@ export async function getCssbuyProductPreview(
         fabricValues: string[];
         optionGroups: { name: string; values: string[]; images: string[] }[];
         specs: { key: string; value: string }[];
-        cssbuySkuRows: { label: string; inventory: number; priceLabel: string }[];
+        cssbuySkuRows: {
+          label: string;
+          inventory: number;
+          priceLabel: string;
+        }[];
       } = {
         title: null,
         priceCny: null,
@@ -564,7 +708,12 @@ export async function getCssbuyProductPreview(
       const scriptsForSku = document.querySelectorAll("script:not([src])");
       for (const s of scriptsForSku) {
         const text = s.textContent || "";
-        const skuPropsKey = text.indexOf('"skuProps":') !== -1 ? '"skuProps":' : text.indexOf('"sku_props":') !== -1 ? '"sku_props":' : null;
+        const skuPropsKey =
+          text.indexOf('"skuProps":') !== -1
+            ? '"skuProps":'
+            : text.indexOf('"sku_props":') !== -1
+              ? '"sku_props":'
+              : null;
         if (skuPropsKey === null) continue;
         const idx = text.indexOf(skuPropsKey);
         if (idx === -1) continue;
@@ -785,10 +934,7 @@ export async function getCssbuyProductPreview(
             tl.startsWith("color classification:") ||
             tl === "color classification" ||
             tl.startsWith("color classification");
-          if (
-            looksLikeColorLabel &&
-            t.length < 50
-          ) {
+          if (looksLikeColorLabel && t.length < 50) {
             let parent = el.parentElement;
             for (let i = 0; i < 8 && parent; i++) {
               const imgs = parent.querySelectorAll("img[src]");
@@ -930,16 +1076,26 @@ export async function getCssbuyProductPreview(
       function extractSizeOptions() {
         // CSSBuy 1688: "S size is suitable 50-60kg", "M size is suitable 65-70kg", "Xl size...", "Xxl size..."
         const bodyText = document.body?.innerText || "";
-        const sizeSuitableRe = /\b(S|M|L|Xl|Xxl|XL|XXL|2XL|3XL|XS)\s+size\s+is\s+suitable/gi;
+        const sizeSuitableRe =
+          /\b(S|M|L|Xl|Xxl|XL|XXL|2XL|3XL|XS)\s+size\s+is\s+suitable/gi;
         let match;
         const fromSuitable: string[] = [];
         while ((match = sizeSuitableRe.exec(bodyText)) !== null) {
           const size = match[1];
-          if (!fromSuitable.some((x) => x.toLowerCase() === size.toLowerCase())) fromSuitable.push(size);
+          if (!fromSuitable.some((x) => x.toLowerCase() === size.toLowerCase()))
+            fromSuitable.push(size);
         }
         if (fromSuitable.length > 0) {
           if (result.sizeValues.length === 0) result.sizeValues = fromSuitable;
-          else fromSuitable.forEach((s) => { if (!result.sizeValues.some((x) => x.toLowerCase() === s.toLowerCase())) result.sizeValues.push(s); });
+          else
+            fromSuitable.forEach((s) => {
+              if (
+                !result.sizeValues.some(
+                  (x) => x.toLowerCase() === s.toLowerCase(),
+                )
+              )
+                result.sizeValues.push(s);
+            });
         }
 
         let foundSizeSection = false;
@@ -1102,6 +1258,10 @@ export async function getCssbuyProductPreview(
       return result;
     });
 
+    if (isCssbuyRamTaobaoSpecialCase(cssbuyUrl)) {
+      expandRamTaobaoPageEvaluateData(data);
+    }
+
     const isSizeLike = (v: string) => {
       const t = v.trim();
       const baseNum = t
@@ -1251,6 +1411,9 @@ export async function getCssbuyProductPreview(
 
     const { bestPropsList, bestSkuProps, bestSkuList } =
       mergeFromApiResponses(capturedApiResponses);
+    if (isCssbuyRamTaobaoSpecialCase(cssbuyUrl)) {
+      expandRamTaobaoSkuProps(bestSkuProps);
+    }
     /** Nome de grupo = tamanho (1688/CSSBuy: 尺码, 鞋码, 规格…) */
     const SIZE_GROUP_NAME_RE =
       /tamanho|size|尺码|尺寸|鞋码|规格|内长|脚长|选择尺码|尺码选择/i;
@@ -1359,7 +1522,21 @@ export async function getCssbuyProductPreview(
         const colonIdx = raw.indexOf(":");
         const label = colonIdx >= 0 ? raw.slice(0, colonIdx).trim() : "";
         const val = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
-        if (!val || val.length > 50) continue;
+        if (!val) continue;
+        if (val.length > 50) {
+          if (isCssbuyRamTaobaoSpecialCase(cssbuyUrl)) {
+            const pieces = splitColorClassificationRamBlob(val);
+            if (pieces.length > 1) {
+              for (const part of pieces) {
+                if (!colors.includes(part)) {
+                  colors.push(part);
+                  imgs.push(img || "");
+                }
+              }
+            }
+          }
+          continue;
+        }
         if (label && isSizeLabel(label) && isSizeLike(val)) {
           sizes.add(val);
         } else if (label && isColorLabel(label)) {
@@ -1504,7 +1681,17 @@ export async function getCssbuyProductPreview(
         const colonIdx = raw.indexOf(":");
         const label = colonIdx >= 0 ? raw.slice(0, colonIdx).trim() : "";
         const v = colonIdx >= 0 ? raw.slice(colonIdx + 1).trim() : raw.trim();
-        if (!v || v.length > 50) continue;
+        if (!v) continue;
+        if (v.length > 50) {
+          if (isCssbuyRamTaobaoSpecialCase(cssbuyUrl)) {
+            const pieces = splitColorClassificationRamBlob(v);
+            for (const part of pieces) {
+              if (label && isColorLabel(label)) colorSet.add(part);
+              else if (!/^\d+$/.test(part)) colorSet.add(part);
+            }
+          }
+          continue;
+        }
         if (label && isSizeLabel(label) && isSizeLike(v)) sizeSet.add(v);
         else if (label && isColorLabel(label)) colorSet.add(v);
         else if (isSizeLike(v)) sizeSet.add(v);
@@ -1517,14 +1704,21 @@ export async function getCssbuyProductPreview(
     // Fallback: use sizes from DOM optionGroups (e.g. 1688 on CSSBuy when API wasn't captured)
     if (
       data.sizeValues.length === 0 &&
-      Array.isArray((data as { optionGroups?: { name: string; values: string[] }[] }).optionGroups)
+      Array.isArray(
+        (data as { optionGroups?: { name: string; values: string[] }[] })
+          .optionGroups,
+      )
     ) {
-      const domGroups = (data as { optionGroups: { name: string; values: string[] }[] }).optionGroups;
+      const domGroups = (
+        data as { optionGroups: { name: string; values: string[] }[] }
+      ).optionGroups;
       const sizeGrp = domGroups.find((g) =>
         /尺码|尺寸|size|tamanho|规格|码选择|选择尺码|spec/i.test(g.name),
       );
       if (sizeGrp?.values?.length) {
-        const vals = sizeGrp.values.filter((v) => v && String(v).trim().length > 0);
+        const vals = sizeGrp.values.filter(
+          (v) => v && String(v).trim().length > 0,
+        );
         if (vals.length > 0) data.sizeValues = vals;
       }
     }
@@ -1642,7 +1836,12 @@ export async function getCssbuyProductPreview(
     const hasLowOptionIds = (vals: string[]) => {
       const nums = vals
         .map((v) =>
-          parseInt(String(v).replace(/码|号|#/gi, "").trim(), 10),
+          parseInt(
+            String(v)
+              .replace(/码|号|#/gi, "")
+              .trim(),
+            10,
+          ),
         )
         .filter((n) => !Number.isNaN(n));
       if (nums.length < 8) return false;
@@ -1852,7 +2051,10 @@ export async function getCssbuyProductPreview(
     // Se props_list da API tiver mais entradas que skuProps (ex.: 6 estilos), montar grupos (estilo + tamanho) a partir dele
     const optionGroupsFromPropsList: OptionGroup[] = [];
     /** Map prop key to group name and display value — used to assign priceByValue per group (including Quality grade). */
-    const propKeyToGroupAndValue: Record<string, { groupName: string; value: string }> = {};
+    const propKeyToGroupAndValue: Record<
+      string,
+      { groupName: string; value: string }
+    > = {};
     if (propsList && typeof propsList === "object") {
       const plEntries = Object.entries(propsList) as [
         string,
@@ -1888,7 +2090,8 @@ export async function getCssbuyProductPreview(
         if (!val || val.length > 80) continue;
         // Options with images are product variations (colors/styles) — keep under 颜色, unless value is clearly a real size (S/M/L, 36-48)
         const hasImage = !!(img && String(img).trim().length > 0);
-        const isOptionIdLike = (v: string) => /^([1-9]|[1-3]\d|40)$/.test(v.trim());
+        const isOptionIdLike = (v: string) =>
+          /^([1-9]|[1-3]\d|40)$/.test(v.trim());
         const isClearlyRealSize = (v: string) => {
           const t = v.trim();
           return (
@@ -1896,32 +2099,47 @@ export async function getCssbuyProductPreview(
             /^(Large|Medium|Small|One\s*Size|Free\s*Size)$/i.test(t) ||
             /^(大|中|小|均码|自由)$/.test(t) ||
             /^(3[4-9]|4[0-8])(\.5)?(\s*(men|women|男|女))?$/i.test(t) ||
-            /^\d+码$/i.test(t) || /^\d+号$/i.test(t)
+            /^\d+码$/i.test(t) ||
+            /^\d+号$/i.test(t)
           );
         };
-        const addToSize = label && isSizeLabel(label) && isSizeLike(val) && (!hasImage || isClearlyRealSize(val));
+        const addToSize =
+          label &&
+          isSizeLabel(label) &&
+          isSizeLike(val) &&
+          (!hasImage || isClearlyRealSize(val));
         if (addToSize) {
           if (!sizeValues.includes(val)) {
             sizeValues.push(val);
             sizeImages.push(img ?? "");
           }
           if (sizeGroupName === "Tamanho" && label) sizeGroupName = label;
-          propKeyToGroupAndValue[propKey] = { groupName: sizeGroupName, value: val };
+          propKeyToGroupAndValue[propKey] = {
+            groupName: sizeGroupName,
+            value: val,
+          };
           continue;
         }
         if (label && isQualityGradeGroup(label)) {
           if (!qualityValues.includes(val)) qualityValues.push(val);
-          propKeyToGroupAndValue[propKey] = { groupName: "Quality grade", value: val };
+          propKeyToGroupAndValue[propKey] = {
+            groupName: "Quality grade",
+            value: val,
+          };
           continue;
         }
-        if (styleGroupName === "Estilo" && label && !isSizeLabel(label)) styleGroupName = label;
+        if (styleGroupName === "Estilo" && label && !isSizeLabel(label))
+          styleGroupName = label;
         if (hasImage && isSizeLabel(label)) styleGroupName = "颜色";
         // Any option with an image or without a size label goes to style/color (颜色)
         if (!styleValues.includes(val)) {
           styleValues.push(val);
           styleImages.push(img ?? "");
         }
-        propKeyToGroupAndValue[propKey] = { groupName: styleGroupName, value: val };
+        propKeyToGroupAndValue[propKey] = {
+          groupName: styleGroupName,
+          value: val,
+        };
       }
       if (qualityValues.length > 0)
         optionGroupsFromPropsList.push({
@@ -1981,24 +2199,28 @@ export async function getCssbuyProductPreview(
         const price =
           typeof priceRaw === "number" && priceRaw > 0 ? priceRaw : null;
         if (!propsStr || price == null) continue;
-        const parts = propsStr.split(/[;，,]/).map((p) => p.trim()).filter(Boolean);
+        const parts = propsStr
+          .split(/[;，,]/)
+          .map((p) => p.trim())
+          .filter(Boolean);
         for (const part of parts) {
           const entry = propKeyToGroupAndValue[part];
           if (!entry) continue;
-          if (!priceByGroup[entry.groupName]) priceByGroup[entry.groupName] = {};
+          if (!priceByGroup[entry.groupName])
+            priceByGroup[entry.groupName] = {};
           if (!(entry.value in priceByGroup[entry.groupName]))
             priceByGroup[entry.groupName][entry.value] = price;
         }
       }
       for (const g of optionGroupsFromPropsList) {
         const byValue = priceByGroup[g.name];
-        if (byValue && Object.keys(byValue).length > 0) g.priceByValue = byValue;
+        if (byValue && Object.keys(byValue).length > 0)
+          g.priceByValue = byValue;
       }
     }
     // Estoque por (estilo, tamanho) para Weidian com dois grupos — a partir de skuList
     const styleGroupFromProps = optionGroupsFromPropsList.find(
-      (g) =>
-        !isQualityGradeGroup(g.name) && !SIZE_GROUP_NAME_RE.test(g.name),
+      (g) => !isQualityGradeGroup(g.name) && !SIZE_GROUP_NAME_RE.test(g.name),
     );
     const sizeGroupFromProps = optionGroupsFromPropsList.find((g) =>
       SIZE_GROUP_NAME_RE.test(g.name),
@@ -2158,7 +2380,9 @@ export async function getCssbuyProductPreview(
       for (const g of optionGroups) {
         if (isQualityGradeGroup(g.name)) continue;
         if (SIZE_GROUP_NAME_RE.test(g.name)) continue;
-        const hasProductImages = (g.images ?? []).some((url) => url && String(url).trim().length > 0);
+        const hasProductImages = (g.images ?? []).some(
+          (url) => url && String(url).trim().length > 0,
+        );
         if (hasProductImages) continue;
         const sizeLikeIndices: number[] = [];
         const nonSizeLikeIndices: number[] = [];
@@ -2194,14 +2418,17 @@ export async function getCssbuyProductPreview(
     // Marcar explicitamente: cor/estilo = sempre imagens; tamanho/quality/fabric = sempre pills (depois do split para incluir Tamanho criado acima)
     const isSizeGroupByName = (name: string) => SIZE_GROUP_NAME_RE.test(name);
     const isColorOrStyleGroup = (name: string) =>
-      /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo|ws|款式图)$/i.test(name.trim()) ||
+      /^(Cor|Color|Style|Estilo|颜色|款式|Cor \/ Estilo|ws|款式图)$/i.test(
+        name.trim(),
+      ) ||
       (/cor|color|estilo|style|颜色|款式|modelo|model/i.test(name) &&
         !SIZE_GROUP_NAME_RE.test(name) &&
         !/quality|品质/i.test(name));
     for (const g of optionGroups) {
       if (isSizeGroupByName(g.name)) g.displayAsImages = false;
       else if (isQualityGradeGroup(g.name)) g.displayAsImages = false;
-      else if (/fabric|tecido|材质|面料/i.test(g.name)) g.displayAsImages = false;
+      else if (/fabric|tecido|材质|面料/i.test(g.name))
+        g.displayAsImages = false;
       else if (isColorOrStyleGroup(g.name)) g.displayAsImages = true;
     }
 
@@ -2337,6 +2564,11 @@ export async function getCssbuyProductPreview(
         },
       ];
     }
+
+    optionGroups = ensureRamTaobao899498747944OptionGroups(
+      cssbuyUrl,
+      optionGroups,
+    );
 
     let titlePt: string | null = null;
     if (data.title && data.title.trim().length > 0) {

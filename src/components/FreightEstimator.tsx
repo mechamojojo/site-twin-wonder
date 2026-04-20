@@ -84,6 +84,14 @@ export default function FreightEstimator() {
             <span className="text-muted-foreground">Entrega no Brasil</span>
             <span className="font-semibold text-foreground">R$ {result.domesticBrl.toFixed(2)}</span>
           </div>
+          {result.freightFloorSupplementBrl > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Piso mínimo (estimativa)</span>
+              <span className="font-semibold text-foreground">
+                R$ {result.freightFloorSupplementBrl.toFixed(2)}
+              </span>
+            </div>
+          )}
           <div className="border-t border-border pt-2 flex justify-between items-center">
             <span className="text-sm font-bold text-foreground">Frete estimado total</span>
             <span className="text-lg font-extrabold text-china-red">R$ {totalBrl.toFixed(2)}</span>
@@ -91,7 +99,8 @@ export default function FreightEstimator() {
         </div>
 
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          * Estimativa baseada em pesos médios por categoria. O valor exato aparece no carrinho antes do pagamento.
+          * Estimativa com +300 g por unidade e piso mínimo de R$ 100 no frete total quando a soma dos trechos fica abaixo disso.
+          O valor exato aparece no carrinho antes do pagamento.
           Quanto mais itens no mesmo pedido, menor o custo por unidade.
         </p>
       </div>

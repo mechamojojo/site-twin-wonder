@@ -103,7 +103,11 @@ const uploadCatalogImageMulter = multer({
 
 app.use("/uploads/catalog", express.static(CATALOG_UPLOAD_DIR));
 
-const ORDER_WAREHOUSE_DIR = path.join(process.cwd(), "uploads", "order-warehouse");
+const ORDER_WAREHOUSE_DIR = path.join(
+  process.cwd(),
+  "uploads",
+  "order-warehouse",
+);
 fs.mkdirSync(ORDER_WAREHOUSE_DIR, { recursive: true });
 
 const orderWarehouseStorage = multer.diskStorage({
@@ -111,10 +115,7 @@ const orderWarehouseStorage = multer.diskStorage({
   filename: (_req, file, cb) => {
     let ext = path.extname(file.originalname || "").toLowerCase();
     if (![".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(ext)) ext = ".jpg";
-    cb(
-      null,
-      `wh-${Date.now()}-${crypto.randomBytes(6).toString("hex")}${ext}`,
-    );
+    cb(null, `wh-${Date.now()}-${crypto.randomBytes(6).toString("hex")}${ext}`);
   },
 });
 
@@ -230,7 +231,8 @@ const ADMIN_SESSIONS = new Map<string, number>();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_CNY = 0.81;
 /** Frete estimado (R$) na cotação automática — igual ao POST /api/orders */
-const FREIGHT_ESTIMATE_BRL = 45;
+/** Frete mínimo estimado na cotação automática (produto + frete no total do pedido). */
+const FREIGHT_ESTIMATE_BRL = 100;
 
 /**
  * Converte a cotação armazenada em R$ para exibição no link de pagamento
@@ -932,7 +934,8 @@ app.post("/api/admin/orders/payment-link", requireAdmin, async (req, res) => {
     const raw = req.body?.orderIds;
     if (!Array.isArray(raw) || raw.length === 0) {
       return res.status(400).json({
-        error: "Informe orderIds: array com os IDs dos pedidos a incluir no link.",
+        error:
+          "Informe orderIds: array com os IDs dos pedidos a incluir no link.",
       });
     }
     const uniqueIds = [
@@ -1020,7 +1023,9 @@ app.post("/api/admin/orders/payment-link", requireAdmin, async (req, res) => {
     });
   } catch (err) {
     console.error("[admin payment-link]", err);
-    res.status(500).json({ error: safeErrorMessage(err, "Erro ao gerar link.") });
+    res
+      .status(500)
+      .json({ error: safeErrorMessage(err, "Erro ao gerar link.") });
   }
 });
 
@@ -1141,7 +1146,8 @@ app.post(
       }
       const { id } = req.params;
       const order = await prisma.order.findUnique({ where: { id } });
-      if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+      if (!order)
+        return res.status(404).json({ error: "Pedido não encontrado" });
       const existing = parseWarehousePhotosJson(order.warehousePhotosJson);
       const room = MAX_WAREHOUSE_PHOTOS_PER_ORDER - existing.length;
       if (room <= 0) {
@@ -1185,7 +1191,8 @@ app.post(
       }
       const { id } = req.params;
       const order = await prisma.order.findUnique({ where: { id } });
-      if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+      if (!order)
+        return res.status(404).json({ error: "Pedido não encontrado" });
       const existing = parseWarehousePhotosJson(order.warehousePhotosJson);
       if (!existing.includes(pathStr)) {
         return res
@@ -1231,12 +1238,15 @@ app.post(
         where: { id },
         include: { user: { select: { email: true, name: true } } },
       });
-      if (!order) return res.status(404).json({ error: "Pedido não encontrado" });
+      if (!order)
+        return res.status(404).json({ error: "Pedido não encontrado" });
       const photos = parseWarehousePhotosJson(order.warehousePhotosJson);
       if (photos.length === 0) {
         return res
           .status(400)
-          .json({ error: "Adicione fotos do armazém antes de enviar o e-mail." });
+          .json({
+            error: "Adicione fotos do armazém antes de enviar o e-mail.",
+          });
       }
       const email =
         order.customerEmail?.trim() || order.user?.email?.trim() || "";
@@ -1303,7 +1313,9 @@ app.patch("/api/admin/orders/:id", requireAdmin, async (req, res) => {
           ? body.barDisplayTitle.trim().slice(0, 300)
           : null;
     }
-    if (Object.prototype.hasOwnProperty.call(body, "hideFromRecentPurchasesBar")) {
+    if (
+      Object.prototype.hasOwnProperty.call(body, "hideFromRecentPurchasesBar")
+    ) {
       updates.hideFromRecentPurchasesBar = Boolean(
         body.hideFromRecentPurchasesBar,
       );
@@ -1713,11 +1725,9 @@ app.post("/api/admin/users/bootstrap", requireAdmin, async (req, res) => {
       return res.status(400).json({ error: msg });
     }
     console.error("Admin bootstrap user:", err);
-    res
-      .status(500)
-      .json({
-        error: safeErrorMessage(err, "Erro ao criar cliente e pedidos"),
-      });
+    res.status(500).json({
+      error: safeErrorMessage(err, "Erro ao criar cliente e pedidos"),
+    });
   }
 });
 
@@ -2015,7 +2025,8 @@ async function findOrCreateSupplier(name: string) {
     where: { name: { equals: n, mode: "insensitive" } },
   });
   if (existing) return existing;
-  const baseSlug = slugify(n.normalize("NFD").replace(/\p{Diacritic}/gu, "")) || "fornecedor";
+  const baseSlug =
+    slugify(n.normalize("NFD").replace(/\p{Diacritic}/gu, "")) || "fornecedor";
   let slug = baseSlug;
   let attempt = 0;
   while (await prisma.supplier.findUnique({ where: { slug } })) {
@@ -2233,11 +2244,9 @@ app.post(
   (req, res) => {
     const f = req.file;
     if (!f?.filename) {
-      return res
-        .status(400)
-        .json({
-          error: "Envie uma imagem (campo image). JPG, PNG, WebP ou GIF.",
-        });
+      return res.status(400).json({
+        error: "Envie uma imagem (campo image). JPG, PNG, WebP ou GIF.",
+      });
     }
     res.json({ path: `/uploads/catalog/${f.filename}` });
   },
@@ -2385,7 +2394,9 @@ app.get("/api/admin/suppliers", requireAdmin, async (_req, res) => {
 app.post("/api/admin/suppliers", requireAdmin, async (req, res) => {
   try {
     const { name, description } = req.body ?? {};
-    const n = String(name ?? "").trim().slice(0, 120);
+    const n = String(name ?? "")
+      .trim()
+      .slice(0, 120);
     if (!n) return res.status(400).json({ error: "Nome obrigatório" });
     const s = await findOrCreateSupplier(n);
     if (!s) return res.status(500).json({ error: "Erro ao criar fornecedor" });
@@ -2510,10 +2521,7 @@ app.post("/api/admin/products/bulk-import", requireAdmin, async (req, res) => {
 
       try {
         let supplierId: string | null = null;
-        if (
-          typeof item.supplierName === "string" &&
-          item.supplierName.trim()
-        ) {
+        if (typeof item.supplierName === "string" && item.supplierName.trim()) {
           const sup = await findOrCreateSupplier(item.supplierName.trim());
           if (sup) supplierId = sup.id;
         }
@@ -2561,7 +2569,11 @@ app.post(
   "/api/admin/products/bulk-import-urls",
   requireAdmin,
   async (req, res) => {
-    const { urls, category = "outros", supplierName } = (req.body ?? {}) as {
+    const {
+      urls,
+      category = "outros",
+      supplierName,
+    } = (req.body ?? {}) as {
       urls?: unknown;
       category?: string;
       supplierName?: string;
@@ -2821,7 +2833,9 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
       include: { supplier: true },
     });
     if (!created) {
-      return res.status(500).json({ error: "Produto criado mas não encontrado" });
+      return res
+        .status(500)
+        .json({ error: "Produto criado mas não encontrado" });
     }
 
     res.status(201).json(serializeProductForApi(created));
@@ -2881,8 +2895,13 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       });
     }
 
-    if (!String(customerName ?? "").trim() || !String(customerEmail ?? "").trim()) {
-      return res.status(400).json({ error: "Nome e e-mail do cliente são obrigatórios." });
+    if (
+      !String(customerName ?? "").trim() ||
+      !String(customerEmail ?? "").trim()
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Nome e e-mail do cliente são obrigatórios." });
     }
 
     const waDigits =
@@ -2891,7 +2910,8 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         : "";
     if (waDigits.length < 8) {
       return res.status(400).json({
-        error: "Informe um WhatsApp válido (inclua DDI se estiver fora do +55).",
+        error:
+          "Informe um WhatsApp válido (inclua DDI se estiver fora do +55).",
       });
     }
 
@@ -2914,11 +2934,14 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         typeof customerCpf === "string" ? customerCpf.replace(/\D/g, "") : "";
       if (cpfClean.length !== 11) {
         return res.status(400).json({
-          error: "CPF inválido. São necessários 11 dígitos para envio ao Brasil.",
+          error:
+            "CPF inválido. São necessários 11 dígitos para envio ao Brasil.",
         });
       }
       if (!String(addressStreet ?? "").trim()) {
-        return res.status(400).json({ error: "Informe o logradouro (rua/avenida)." });
+        return res
+          .status(400)
+          .json({ error: "Informe o logradouro (rua/avenida)." });
       }
       if (!String(addressNumber ?? "").trim()) {
         return res.status(400).json({ error: "Informe o número do endereço." });
@@ -3744,7 +3767,9 @@ async function markOrdersPaidAfterMercadoPago(anchorOrderId: string) {
 }
 
 async function ensureCatalogProductsForPaidCheckout(anchorOrderId: string) {
-  const anchor = await prisma.order.findUnique({ where: { id: anchorOrderId } });
+  const anchor = await prisma.order.findUnique({
+    where: { id: anchorOrderId },
+  });
   if (!anchor) return;
   const orders = anchor.checkoutGroupId
     ? await prisma.order.findMany({
@@ -3855,9 +3880,8 @@ app.post("/api/orders/:id/create-payment", async (req, res) => {
       }
     }
 
-    const { createPayment, extractPixTransactionData } = await import(
-      "./mercadopago"
-    );
+    const { createPayment, extractPixTransactionData } =
+      await import("./mercadopago");
     const idempotencyKey = `${order.id}-${crypto.randomUUID()}`;
     const result = await createPayment({
       accessToken,
@@ -4095,8 +4119,9 @@ app.post(
         },
       });
 
-      const siteBase = (process.env.SITE_URL || "https://compraschina.com.br")
-        .replace(/\/$/, "");
+      const siteBase = (
+        process.env.SITE_URL || "https://compraschina.com.br"
+      ).replace(/\/$/, "");
       const adminInbox = `${siteBase}/admin/conversas`;
       sendTelegram(
         "💬 Nova conversa no site\n" +
@@ -4131,46 +4156,42 @@ function trimStr(v: unknown, max: number): string {
   return v.trim().slice(0, max);
 }
 
-app.get(
-  "/api/support/conversations/:id",
-  optionalUser,
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      const userId = (req as express.Request & { userId?: string }).userId;
-      const visitorToken = supportVisitorTokenFromReq(req, {});
-      const access = await assertUserSupportAccess(id, userId, visitorToken);
-      if (!access.ok) {
-        return res.status(access.status).json({ error: access.error });
-      }
-      const messages = await prisma.supportMessage.findMany({
-        where: { conversationId: id },
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          sender: true,
-          body: true,
-          createdAt: true,
-        },
-      });
-      res.json({
-        id: access.conv.id,
-        status: access.conv.status,
-        guestName: access.conv.guestName,
-        guestEmail: access.conv.guestEmail,
-        messages: messages.map((m) => ({
-          id: m.id,
-          sender: m.sender,
-          body: m.body,
-          createdAt: m.createdAt.toISOString(),
-        })),
-      });
-    } catch (err) {
-      console.error("[support get]", err);
-      res.status(500).json({ error: "Erro ao carregar conversa." });
+app.get("/api/support/conversations/:id", optionalUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as express.Request & { userId?: string }).userId;
+    const visitorToken = supportVisitorTokenFromReq(req, {});
+    const access = await assertUserSupportAccess(id, userId, visitorToken);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
     }
-  },
-);
+    const messages = await prisma.supportMessage.findMany({
+      where: { conversationId: id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        sender: true,
+        body: true,
+        createdAt: true,
+      },
+    });
+    res.json({
+      id: access.conv.id,
+      status: access.conv.status,
+      guestName: access.conv.guestName,
+      guestEmail: access.conv.guestEmail,
+      messages: messages.map((m) => ({
+        id: m.id,
+        sender: m.sender,
+        body: m.body,
+        createdAt: m.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    console.error("[support get]", err);
+    res.status(500).json({ error: "Erro ao carregar conversa." });
+  }
+});
 
 app.post(
   "/api/support/conversations/:id/messages",
@@ -4210,8 +4231,9 @@ app.post(
         }),
       ]);
 
-      const siteBase = (process.env.SITE_URL || "https://compraschina.com.br")
-        .replace(/\/$/, "");
+      const siteBase = (
+        process.env.SITE_URL || "https://compraschina.com.br"
+      ).replace(/\/$/, "");
       sendTelegram(
         "💬 Nova mensagem (suporte)\n" +
           (access.conv.guestName || "Cliente") +
@@ -4252,7 +4274,9 @@ const ADMIN_USER_PROFILE_SELECT = {
 app.get("/api/admin/users/lookup", requireAdmin, async (req, res) => {
   try {
     const email =
-      typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+      typeof req.query.email === "string"
+        ? req.query.email.trim().toLowerCase()
+        : "";
     if (!email || !isSimpleEmail(email)) {
       return res.status(400).json({ error: "Informe um e-mail válido." });
     }
@@ -4261,7 +4285,9 @@ app.get("/api/admin/users/lookup", requireAdmin, async (req, res) => {
       select: ADMIN_USER_PROFILE_SELECT,
     });
     if (!user) {
-      return res.status(404).json({ error: "Nenhum cadastro com este e-mail." });
+      return res
+        .status(404)
+        .json({ error: "Nenhum cadastro com este e-mail." });
     }
     res.json({ user });
   } catch (err) {
@@ -4404,12 +4430,9 @@ app.post(
       const notifyName =
         conv.user?.name?.trim() || conv.guestName?.trim() || "Cliente";
       if (notifyEmail && isSimpleEmail(notifyEmail)) {
-        sendSupportStaffReplyEmail(
-          notifyEmail,
-          notifyName,
-          id,
-          text,
-        ).catch((e) => console.warn("[support reply email]", e));
+        sendSupportStaffReplyEmail(notifyEmail, notifyName, id, text).catch(
+          (e) => console.warn("[support reply email]", e),
+        );
       }
 
       res.json({ ok: true });
@@ -4429,7 +4452,9 @@ app.patch(
       const raw = req.body as { status?: unknown };
       const st = raw.status;
       if (st !== "OPEN" && st !== "CLOSED") {
-        return res.status(400).json({ error: "status deve ser OPEN ou CLOSED." });
+        return res
+          .status(400)
+          .json({ error: "status deve ser OPEN ou CLOSED." });
       }
       const conv = await prisma.supportConversation.findUnique({
         where: { id },

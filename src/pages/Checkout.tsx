@@ -391,6 +391,14 @@ function OrderSummaryPanel({
                 </span>
               </div>
             )}
+            {shipping.freightFloorSupplementBrl > 0 && (
+              <div className="flex justify-between gap-2">
+                <span>Piso mínimo de frete (estimativa)</span>
+                <span className="tabular-nums text-foreground">
+                  R$ {shipping.freightFloorSupplementBrl.toFixed(2)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between gap-2 pt-1 border-t border-border/40">
               <span>Peso total</span>
               <span className="tabular-nums text-foreground">

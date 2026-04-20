@@ -46,29 +46,44 @@ const KEEPBOX_EXTRA_G: Record<ProductCategory, number> = {
   other: 200,
 };
 
+/** Soma fixa por unidade ao peso estimado (embalagem real, variação de balança). */
+export const ESTIMATED_WEIGHT_BUFFER_PER_UNIT_G = 300;
+
+/** Piso do frete total estimado (China + Brasil + extras) em reais. */
+export const MIN_FREIGHT_ESTIMATE_TOTAL_BRL = 100;
+
 // ---------------------------------------------------------------------------
 // Category detection from title / explicit category field
 // ---------------------------------------------------------------------------
-const SHOE_RE = /t[eê]nis|sapatilha|bota|sandália|sandalia|sapato|shoe|sneaker|calçado|calcado/i;
+const SHOE_RE =
+  /t[eê]nis|sapatilha|bota|sandália|sandalia|sapato|shoe|sneaker|calçado|calcado/i;
 const COAT_RE = /casaco|abrigo|overcoat|trench|parka/i;
 const JACKET_RE = /jaqueta|moletom|blusa de frio|jaquetão|jacket|hoodie/i;
 const BAG_RE = /bolsa|carteira|bag|purse|clutch/i;
 const BACKPACK_RE = /mochila|backpack|背包|双肩包/i;
-const ELEC_RE = /fone|headphone|earphone|teclado|mouse|notebook|celular|tablet|câmera|camera|eletr/i;
-const CLOTH_RE = /camiseta|camisa|calça|shorts|vestido|saia|blusa|polo|top|legging|dress|shirt|pants/i;
-const ACCESS_RE = /cinto|óculos|óculos|colar|brinco|relógio|pulseira|chapéu|gorro|cachecol|luva|meia|belt|glasses|necklace|watch|bracelet|hat|scarf|glove|sock/i;
+const ELEC_RE =
+  /fone|headphone|earphone|teclado|mouse|notebook|celular|tablet|câmera|camera|eletr/i;
+const CLOTH_RE =
+  /camiseta|camisa|calça|shorts|vestido|saia|blusa|polo|top|legging|dress|shirt|pants/i;
+const ACCESS_RE =
+  /cinto|óculos|óculos|colar|brinco|relógio|pulseira|chapéu|gorro|cachecol|luva|meia|belt|glasses|necklace|watch|bracelet|hat|scarf|glove|sock/i;
 
-export function detectCategory(title?: string | null, explicitCategory?: string | null): ProductCategory {
+export function detectCategory(
+  title?: string | null,
+  explicitCategory?: string | null,
+): ProductCategory {
   if (explicitCategory) {
     const c = explicitCategory.toLowerCase();
     if (c === "shoes" || c === "calçados") return "shoes";
     if (c === "coat") return "coat";
     if (c === "jacket") return "jacket";
     if (c === "bag" || c === "bags") return "bag";
-    if (c === "backpack" || c === "mochila" || c === "mochilas") return "backpack";
+    if (c === "backpack" || c === "mochila" || c === "mochilas")
+      return "backpack";
     if (c === "electronics") return "electronics";
     if (c === "clothing" || c === "roupas") return "clothing";
-    if (c === "accessory" || c === "accessories" || c === "acessórios") return "accessory";
+    if (c === "accessory" || c === "accessories" || c === "acessórios")
+      return "accessory";
   }
   if (!title) return "other";
   if (SHOE_RE.test(title)) return "shoes";
@@ -84,7 +99,13 @@ export function detectCategory(title?: string | null, explicitCategory?: string 
 
 /** Returns true for categories where keepBox is relevant (bulky original boxes) */
 export function categorySupportsKeepBox(cat: ProductCategory): boolean {
-  return cat === "shoes" || cat === "coat" || cat === "jacket" || cat === "bag" || cat === "backpack";
+  return (
+    cat === "shoes" ||
+    cat === "coat" ||
+    cat === "jacket" ||
+    cat === "bag" ||
+    cat === "backpack"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +117,8 @@ export function itemWeightG(
   keepBox = false,
 ): number {
   const base = overrideWeightG ?? WEIGHT_BY_CATEGORY[category];
-  return keepBox ? base + KEEPBOX_EXTRA_G[category] : base;
+  const withKeep = keepBox ? base + KEEPBOX_EXTRA_G[category] : base;
+  return withKeep + ESTIMATED_WEIGHT_BUFFER_PER_UNIT_G;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,11 +129,11 @@ type FreightTier = { maxKg: number; rateCnyPerKg: number };
 
 const FJ_BR_EXP_TIERS: FreightTier[] = [
   { maxKg: 0.5, rateCnyPerKg: 130 },
-  { maxKg: 1,   rateCnyPerKg: 110 },
-  { maxKg: 2,   rateCnyPerKg: 95  },
-  { maxKg: 5,   rateCnyPerKg: 85  },
-  { maxKg: 10,  rateCnyPerKg: 75  },
-  { maxKg: 20,  rateCnyPerKg: 68  },
+  { maxKg: 1, rateCnyPerKg: 110 },
+  { maxKg: 2, rateCnyPerKg: 95 },
+  { maxKg: 5, rateCnyPerKg: 85 },
+  { maxKg: 10, rateCnyPerKg: 75 },
+  { maxKg: 20, rateCnyPerKg: 68 },
   { maxKg: Infinity, rateCnyPerKg: 62 },
 ];
 
@@ -129,9 +151,9 @@ export function chinaFreightCny(totalWeightG: number): number {
 export function domesticFreightBrl(totalWeightG: number): number {
   const kg = totalWeightG / 1000;
   if (kg <= 0.3) return 18;
-  if (kg <= 1)   return 22;
-  if (kg <= 3)   return 30;
-  if (kg <= 7)   return 40;
+  if (kg <= 1) return 22;
+  if (kg <= 3) return 30;
+  if (kg <= 7) return 40;
   return 55;
 }
 
@@ -156,10 +178,14 @@ export type CartShippingResult = {
   chinaFreightBrl: number;
   domesticBrl: number;
   keepBoxSurchargeBrl: number;
+  /** Complemento para atingir `MIN_FREIGHT_ESTIMATE_TOTAL_BRL` quando a soma dos trechos fica abaixo. */
+  freightFloorSupplementBrl: number;
   totalBrl: number;
 };
 
-export function calcCartShipping(items: CartShippingItem[]): CartShippingResult {
+export function calcCartShipping(
+  items: CartShippingItem[],
+): CartShippingResult {
   let totalWeightG = 0;
   let keepBoxExtra = 0;
 
@@ -177,13 +203,40 @@ export function calcCartShipping(items: CartShippingItem[]): CartShippingResult 
   const dBrl = domesticFreightBrl(totalWeightG);
   const keepBoxSurchargeBrl = keepBoxExtra * 0.001 * CNY_TO_BRL * 95; // volumetric surcharge
 
+  const chinaFreightBrlRounded = Math.round(cFreightBrl * 100) / 100;
+  const domesticBrlRounded = Math.round(dBrl * 100) / 100;
+  const keepBoxSurchargeBrlRounded =
+    Math.round(keepBoxSurchargeBrl * 100) / 100;
+
+  const rawTotalBrl =
+    Math.round(
+      (chinaFreightBrlRounded +
+        domesticBrlRounded +
+        keepBoxSurchargeBrlRounded) *
+        100,
+    ) / 100;
+
+  let freightFloorSupplementBrl = 0;
+  if (
+    items.length > 0 &&
+    rawTotalBrl > 0 &&
+    rawTotalBrl < MIN_FREIGHT_ESTIMATE_TOTAL_BRL
+  ) {
+    freightFloorSupplementBrl =
+      Math.round((MIN_FREIGHT_ESTIMATE_TOTAL_BRL - rawTotalBrl) * 100) / 100;
+  }
+
+  const totalBrl =
+    Math.round((rawTotalBrl + freightFloorSupplementBrl) * 100) / 100;
+
   return {
     totalWeightG,
     chinaFreightCny: Math.round(cFreightCny * 100) / 100,
-    chinaFreightBrl: Math.round(cFreightBrl * 100) / 100,
-    domesticBrl: Math.round(dBrl * 100) / 100,
-    keepBoxSurchargeBrl: Math.round(keepBoxSurchargeBrl * 100) / 100,
-    totalBrl: Math.round((cFreightBrl + dBrl + keepBoxSurchargeBrl) * 100) / 100,
+    chinaFreightBrl: chinaFreightBrlRounded,
+    domesticBrl: domesticBrlRounded,
+    keepBoxSurchargeBrl: keepBoxSurchargeBrlRounded,
+    freightFloorSupplementBrl,
+    totalBrl,
   };
 }
 
@@ -199,7 +252,9 @@ export const FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL = 200;
 /** Cupom que ativa o benefício de frete (comparado após normalização) */
 export const FRETE_PROMO_COUPON_CODE = "COMPRASCHINA";
 
-export function normalizeFreightCouponCode(raw: string | null | undefined): string {
+export function normalizeFreightCouponCode(
+  raw: string | null | undefined,
+): string {
   return (raw ?? "").trim().toUpperCase().replace(/\s+/g, "");
 }
 
@@ -231,7 +286,11 @@ export function applyFreightPromo(
   const raw = Math.round(rawFreightBrl * 100) / 100;
   const couponOk = isFreightPromoCouponCode(couponCode);
 
-  if (couponOk && productSubtotalBrl > 0 && productSubtotalBrl < FRETE_PROMO_SUBTOTAL_MIN_BRL) {
+  if (
+    couponOk &&
+    productSubtotalBrl > 0 &&
+    productSubtotalBrl < FRETE_PROMO_SUBTOTAL_MIN_BRL
+  ) {
     return {
       qualifies: false,
       rawFreightBrl: raw,
@@ -315,9 +374,7 @@ export function splitRedditTenPercentProductLines(
 ): { lineNetBrls: number[]; discountBrl: number; netTotalBrl: number } {
   if (!active || lineGrossBrls.length === 0) {
     const lineNetBrls = lineGrossBrls.map((g) => roundMoneyBrl(g));
-    const netTotalBrl = roundMoneyBrl(
-      lineNetBrls.reduce((a, b) => a + b, 0),
-    );
+    const netTotalBrl = roundMoneyBrl(lineNetBrls.reduce((a, b) => a + b, 0));
     return { lineNetBrls, discountBrl: 0, netTotalBrl };
   }
   const gross = roundMoneyBrl(lineGrossBrls.reduce((a, b) => a + b, 0));

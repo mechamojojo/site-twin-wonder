@@ -23,6 +23,10 @@ import {
 import { SupplierTag } from "@/components/SupplierTag";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import {
+  compareExplorarDefaultOrder,
+  getExplorarOrderDaySeed,
+} from "@/lib/explorarDailyOrder";
+import {
   ShoppingBag,
   Search,
   Loader2,
@@ -191,7 +195,7 @@ const Explorar = () => {
       .then((r) => r.json())
       .then((data) => {
         const list = data.products ?? [];
-        setApiProducts(Array.isArray(list) ? list : []); // ordem = exatamente a do admin (sortOrder 0,1,2...)
+        setApiProducts(Array.isArray(list) ? list : []); // ordem no Explorar: rotação diária no modo padrão
       })
       .catch(() => setApiProducts([]))
       .finally(() => setLoading(false));
@@ -279,8 +283,13 @@ const Explorar = () => {
           p.supplierName?.toLowerCase().includes(q),
       );
     }
-    // Sort
-    if (sort === "price-asc") {
+    // Ordem padrão: rota diária (determinística; muda a cada dia, não a cada refresh)
+    if (sort === "default") {
+      const daySeed = getExplorarOrderDaySeed();
+      list = [...list].sort((a, b) =>
+        compareExplorarDefaultOrder(a, b, daySeed),
+      );
+    } else if (sort === "price-asc") {
       list = [...list].sort((a, b) => {
         const pa =
           getDisplayPriceBrl(a.priceCny, a.priceBrl) ?? a.priceCny ?? Infinity;
@@ -534,6 +543,12 @@ const Explorar = () => {
             <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
               <p className="text-sm text-muted-foreground">
                 {total} produto(s)
+                {sort === "default" && total > 1 && (
+                  <span className="text-muted-foreground/90">
+                    {" "}
+                    · ordem renovada todo dia
+                  </span>
+                )}
                 {totalPages > 1 &&
                   ` · página ${Math.min(pageParam, totalPages)} de ${totalPages}`}
               </p>
@@ -545,7 +560,7 @@ const Explorar = () => {
                 }}
                 className="text-xs border border-border rounded-full px-3 py-1.5 bg-background text-foreground outline-none focus:border-foreground/30"
               >
-                <option value="default">Ordem do catálogo</option>
+                <option value="default">Sugestão do dia</option>
                 <option value="price-asc">Menor preço</option>
                 <option value="price-desc">Maior preço</option>
               </select>

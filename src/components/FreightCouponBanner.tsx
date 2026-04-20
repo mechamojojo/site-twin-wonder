@@ -20,7 +20,9 @@ export default function FreightCouponBanner() {
         </span>
         <p className="text-sm text-foreground leading-snug">
           Use o cupom{" "}
-          <strong className="font-semibold font-mono">{FRETE_PROMO_COUPON_CODE}</strong>{" "}
+          <strong className="font-semibold font-mono">
+            {FRETE_PROMO_COUPON_CODE}
+          </strong>{" "}
           no Checkout para ganhar frete grátis em pedidos acima de R${" "}
           {FRETE_PROMO_SUBTOTAL_MIN_BRL.toLocaleString("pt-BR")}.{" "}
           <Link

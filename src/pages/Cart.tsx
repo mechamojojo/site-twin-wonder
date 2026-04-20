@@ -248,6 +248,12 @@ const Cart = () => {
                     <span>R$ {shipping.keepBoxSurchargeBrl.toFixed(2)}</span>
                   </div>
                 )}
+                {shipping.freightFloorSupplementBrl > 0 && (
+                  <div className="flex justify-between">
+                    <span>Piso mínimo de frete (estimativa)</span>
+                    <span>R$ {shipping.freightFloorSupplementBrl.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
               {!freightPromo.qualifies ? (
                 <div className="border-t border-border pt-2 flex justify-between text-sm font-semibold">

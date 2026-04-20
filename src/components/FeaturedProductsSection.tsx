@@ -20,6 +20,10 @@ import {
 } from "@/lib/productDisplayTitle";
 import { SupplierTag } from "@/components/SupplierTag";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
+import {
+  compareExplorarDefaultOrder,
+  getExplorarOrderDaySeed,
+} from "@/lib/explorarDailyOrder";
 import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
 
 /** Número de produtos exibidos antes de "Ver mais" (≈ 8 linhas no desktop com 5 colunas). */
@@ -146,7 +150,7 @@ export default function FeaturedProductsSection() {
       .then((data) => {
         const list = data.products ?? [];
         const fromApi = Array.isArray(list) ? list : [];
-        setApiProducts(fromApi); // ordem = exatamente a do admin (sortOrder 0,1,2...), não reordenar
+        setApiProducts(fromApi); // ordem visual na home: rotação diária (igual ao Explorar)
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -174,6 +178,15 @@ export default function FeaturedProductsSection() {
       return p;
     });
   }, [apiProducts, explorarTitleByKey]);
+
+  /** Mesma lógica do Explorar: ordem fluida que muda a cada dia, estável no mesmo dia. */
+  const homeCatalogProducts = useMemo(() => {
+    const daySeed = getExplorarOrderDaySeed();
+    return [...allProducts].sort((a, b) =>
+      compareExplorarDefaultOrder(a, b, daySeed),
+    );
+  }, [allProducts]);
+
   const categoriesWithProducts = Array.from(
     new Set(allProducts.map((p) => p.category)),
   ).sort((a, b) => {
@@ -195,8 +208,8 @@ export default function FeaturedProductsSection() {
 
   const products =
     selectedCategory === "all"
-      ? allProducts
-      : allProducts.filter((p) => p.category === selectedCategory);
+      ? homeCatalogProducts
+      : homeCatalogProducts.filter((p) => p.category === selectedCategory);
 
   const visibleProducts = expanded
     ? products
@@ -223,6 +236,12 @@ export default function FeaturedProductsSection() {
             </h2>
             <p className="text-muted-foreground mt-2 max-w-xl">
               O que nossos clientes estão trazendo da China.
+              {allProducts.length > 1 && (
+                <span className="text-muted-foreground/90">
+                  {" "}
+                  Ordem renovada todo dia — como no Explorar.
+                </span>
+              )}
             </p>
           </div>
           <Link

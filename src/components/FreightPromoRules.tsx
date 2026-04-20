@@ -31,8 +31,11 @@ export function FreightPromoRulesLink({
         className={`cursor-pointer list-none font-medium text-foreground/90 hover:text-china-red ${textCls} [&::-webkit-details-marker]:hidden flex items-center justify-between gap-2`}
       >
         <span>
-          Cupom <strong className="font-mono text-foreground">{FRETE_PROMO_COUPON_CODE}</strong>:
-          frete grátis em compras acima de R${" "}
+          Cupom{" "}
+          <strong className="font-mono text-foreground">
+            {FRETE_PROMO_COUPON_CODE}
+          </strong>
+          : frete grátis em compras acima de R${" "}
           {FRETE_PROMO_SUBTOTAL_MIN_BRL.toLocaleString("pt-BR")} (até R${" "}
           {FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL} no frete) — ver regras
         </span>
@@ -45,7 +48,9 @@ export function FreightPromoRulesLink({
       >
         <p>
           Aplique o cupom{" "}
-          <strong className="text-foreground font-mono">{FRETE_PROMO_COUPON_CODE}</strong>{" "}
+          <strong className="text-foreground font-mono">
+            {FRETE_PROMO_COUPON_CODE}
+          </strong>{" "}
           no carrinho ou no checkout. Com{" "}
           <strong className="text-foreground">
             produtos acima de R${" "}
@@ -63,10 +68,11 @@ export function FreightPromoRulesLink({
           excedente continua sendo cobrado.
         </p>
         <p>
-          O frete exibido é uma <strong className="text-foreground">estimativa
-          </strong> repassada dos custos de transporte internacional; em casos
-          de valor muito alto, entre em contato com o time — podemos analisar
-          alternativas para reduzir o custo.
+          O frete exibido é uma{" "}
+          <strong className="text-foreground">estimativa</strong> repassada dos
+          custos de transporte internacional; em casos de valor muito alto,
+          entre em contato com o time — podemos analisar alternativas para
+          reduzir o custo.
         </p>
       </div>
     </details>
