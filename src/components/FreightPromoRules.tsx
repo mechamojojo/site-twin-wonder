@@ -13,7 +13,8 @@ type FreightPromoRulesProps = {
 };
 
 /**
- * Texto curto + detalhes expansíveis sobre a promoção de frete (≥ R$ 1.000).
+ * Texto curto + detalhes expansíveis sobre a promoção de frete (mínimo em
+ * `FRETE_PROMO_SUBTOTAL_MIN_BRL`).
  */
 export function FreightPromoRulesLink({
   size = "sm",

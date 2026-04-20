@@ -245,8 +245,11 @@ export function calcCartShipping(
 // (divulgação: “frete grátis” com teto; acima do teto aplica-se desconto parcial)
 // ---------------------------------------------------------------------------
 
-/** Subtotal de produtos (sem frete) mínimo para ativar a promoção */
-export const FRETE_PROMO_SUBTOTAL_MIN_BRL = 1000;
+/**
+ * Piso em R$: o benefício de frete só vale com subtotal de produtos
+ * **estritamente superior** a este valor (mais de R$ 1.500,00).
+ */
+export const FRETE_PROMO_SUBTOTAL_MIN_BRL = 1500;
 /** Máximo de desconto aplicado sobre o frete estimado (em R$) */
 export const FRETE_PROMO_FREIGHT_DISCOUNT_CAP_BRL = 200;
 /** Cupom que ativa o benefício de frete (comparado após normalização) */
@@ -289,7 +292,7 @@ export function applyFreightPromo(
   if (
     couponOk &&
     productSubtotalBrl > 0 &&
-    productSubtotalBrl < FRETE_PROMO_SUBTOTAL_MIN_BRL
+    productSubtotalBrl <= FRETE_PROMO_SUBTOTAL_MIN_BRL
   ) {
     return {
       qualifies: false,
@@ -302,7 +305,7 @@ export function applyFreightPromo(
 
   if (
     !couponOk ||
-    productSubtotalBrl < FRETE_PROMO_SUBTOTAL_MIN_BRL ||
+    productSubtotalBrl <= FRETE_PROMO_SUBTOTAL_MIN_BRL ||
     productSubtotalBrl <= 0 ||
     raw <= 0
   ) {

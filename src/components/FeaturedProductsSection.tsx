@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   EXPLORAR_PRODUCTS,
   CURATED_TITLE_BY_CANONICAL_KEY,
@@ -24,7 +26,16 @@ import {
   compareExplorarDefaultOrder,
   getExplorarOrderDaySeed,
 } from "@/lib/explorarDailyOrder";
-import { ChevronDown, ShoppingBag, Sparkles, ShieldCheck } from "lucide-react";
+import {
+  ChevronDown,
+  ExternalLink,
+  Loader2,
+  ShoppingBag,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
+import { useAdminToken } from "@/hooks/useAdminToken";
 
 /** Número de produtos exibidos antes de "Ver mais" (≈ 8 linhas no desktop com 5 colunas). */
 const INITIAL_VISIBLE = 40;
@@ -50,7 +61,16 @@ type ProductLike = {
   supplierName?: string | null;
 };
 
-function ProductCard({ product }: { product: ProductLike }) {
+function ProductCard({
+  product,
+  adminMode,
+}: {
+  product: ProductLike;
+  adminMode?: {
+    removing: boolean;
+    onRemove: () => void;
+  };
+}) {
   const url = product.originalUrl ?? product.url ?? "";
   const [lazyImage, containerRef] = useLazyProductImage(
     url || undefined,
@@ -75,8 +95,51 @@ function ProductCard({ product }: { product: ProductLike }) {
   );
 
   return (
-    <div ref={containerRef} className="h-full">
-      <Card className="overflow-hidden border-0 shadow-none rounded-none hover:shadow-md transition-shadow h-full flex flex-col bg-transparent">
+    <div ref={containerRef} className="h-full relative">
+      {adminMode && (
+        <div className="absolute top-2 left-2 right-2 z-20 flex flex-wrap items-center justify-end gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-8 px-2.5 text-xs shadow-sm"
+            asChild
+          >
+            <Link
+              to="/admin?tab=catalog"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="w-3.5 h-3.5 mr-1" />
+              Catálogo
+            </Link>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            title="Remover do site (exclui do catálogo)"
+            className="h-8 px-2.5 text-xs shadow-sm gap-1"
+            disabled={adminMode.removing}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              adminMode.onRemove();
+            }}
+          >
+            {adminMode.removing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+            )}
+            Remover
+          </Button>
+        </div>
+      )}
+      <Card
+        className={`overflow-hidden border-0 shadow-none rounded-none hover:shadow-md transition-shadow h-full flex flex-col bg-transparent ${
+          adminMode ? "ring-2 ring-china-red/25 ring-offset-2 ring-offset-muted/30" : ""
+        }`}
+      >
         <Link to={to} className="flex flex-col flex-1 group">
           <div className="aspect-[3/4] bg-muted/50 relative overflow-hidden">
             <img
@@ -141,8 +204,55 @@ function ProductCard({ product }: { product: ProductLike }) {
 }
 
 export default function FeaturedProductsSection() {
+  const adminToken = useAdminToken();
   const [apiProducts, setApiProducts] = useState<ProductLike[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const handleRemoveFromSite = useCallback(
+    async (product: ProductLike) => {
+      if (!adminToken) return;
+      const label = (product.titlePt || product.title || "Produto").slice(
+        0,
+        120,
+      );
+      if (
+        !window.confirm(
+          `Remover "${label}" do catálogo? O produto some da home, Explorar e de todo o site.`,
+        )
+      )
+        return;
+      setRemovingId(product.id);
+      try {
+        const res = await fetch(
+          apiUrl(`/api/admin/products/${encodeURIComponent(product.id)}`),
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${adminToken}` },
+          },
+        );
+        if (res.ok) {
+          toast.success("Produto removido do site");
+          setApiProducts((prev) => prev.filter((p) => p.id !== product.id));
+        } else if (res.status === 401) {
+          toast.error("Sessão expirada — faça login em Admin novamente.");
+          localStorage.removeItem("compraschina-admin-token");
+        } else {
+          const data = await res.json().catch(() => ({}));
+          toast.error(
+            typeof data.error === "string"
+              ? data.error
+              : "Não foi possível remover o produto",
+          );
+        }
+      } catch {
+        toast.error("Erro de rede ao remover");
+      } finally {
+        setRemovingId(null);
+      }
+    },
+    [adminToken],
+  );
 
   useEffect(() => {
     fetch(apiUrl("/api/products?limit=500"))
@@ -243,6 +353,15 @@ export default function FeaturedProductsSection() {
                 </span>
               )}
             </p>
+            {adminToken && (
+              <p className="mt-3 text-sm rounded-lg border border-china-red/30 bg-china-red/5 text-foreground px-3 py-2 max-w-xl">
+                <span className="font-semibold text-china-red">
+                  Modo administrador:
+                </span>{" "}
+                nos cards abaixo use <strong>Remover</strong> para excluir do
+                site ou <strong>Catálogo</strong> para editar no painel.
+              </p>
+            )}
           </div>
           <Link
             to="/explorar"
@@ -299,7 +418,20 @@ export default function FeaturedProductsSection() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
               {visibleProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  adminMode={
+                    adminToken
+                      ? {
+                          removing: removingId === product.id,
+                          onRemove: () => {
+                            handleRemoveFromSite(product);
+                          },
+                        }
+                      : undefined
+                  }
+                />
               ))}
             </div>
             {hasMore && (

@@ -10,6 +10,7 @@ import {
   detectCategory,
   itemWeightG,
   splitRedditTenPercentProductLines,
+  FRETE_PROMO_SUBTOTAL_MIN_BRL,
   type FreightPromoResult,
 } from "@/lib/shipping";
 import { FreightPromoRulesLink } from "@/components/FreightPromoRules";
@@ -337,8 +338,9 @@ function OrderSummaryPanel({
         <p
           className={`text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 rounded-lg px-2 py-1.5 border border-amber-200/60 dark:border-amber-800/50 ${dense ? "text-[10px]" : "text-[11px]"}`}
         >
-          Cupom ativo: ao passar de R$ 1.000 em produtos, o frete estimado
-          entra na promoção (até R$ 200 de desconto).
+          Cupom ativo: ao passar de R${" "}
+          {FRETE_PROMO_SUBTOTAL_MIN_BRL.toLocaleString("pt-BR")} em produtos, o
+          frete estimado entra na promoção (até R$ 200 de desconto).
         </p>
       )}
       <div

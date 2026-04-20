@@ -6,7 +6,7 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl, publicUploadUrl } from "@/lib/api";
@@ -321,6 +321,7 @@ function parseBulkCatalogLines(
 }
 
 const Admin = () => {
+  const [searchParams] = useSearchParams();
   const [token, setToken] = useState<string | null>(() =>
     typeof localStorage !== "undefined"
       ? localStorage.getItem(ADMIN_TOKEN_KEY)
@@ -333,6 +334,13 @@ const Admin = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"pedidos" | "catálogo">("pedidos");
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "catalog" || tab === "catalogo" || tab === "catálogo") {
+      setActiveTab("catálogo");
+    }
+  }, [searchParams]);
   const [addUrl, setAddUrl] = useState("");
   const [addCategory, setAddCategory] = useState<string>("outros");
   /** Nome exibido no Explorar após " - " (ex.: Original, nome da loja) */

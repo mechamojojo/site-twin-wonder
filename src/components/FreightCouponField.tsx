@@ -91,9 +91,9 @@ export function FreightCouponField({
           <p className="text-xs font-medium text-green-800 dark:text-green-300">
             <span className="font-mono">{freightCouponCode}</span> aplicado
             {productSubtotalBrl > 0 &&
-              productSubtotalBrl < FRETE_PROMO_SUBTOTAL_MIN_BRL && (
+              productSubtotalBrl <= FRETE_PROMO_SUBTOTAL_MIN_BRL && (
                 <span className="block font-normal text-green-700/90 dark:text-green-400/90 mt-0.5">
-                  Frete grátis ao atingir R${" "}
+                  Frete grátis com compra acima de R${" "}
                   {FRETE_PROMO_SUBTOTAL_MIN_BRL.toLocaleString("pt-BR")} em
                   produtos.
                 </span>
