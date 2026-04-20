@@ -69,6 +69,10 @@ function ProductCard({
   adminMode?: {
     removing: boolean;
     onRemove: () => void;
+    titleValue: string;
+    onTitleChange: (value: string) => void;
+    onTitleBlur: (value: string) => void;
+    savingTitle: boolean;
   };
 }) {
   const url = product.originalUrl ?? product.url ?? "";
@@ -92,6 +96,72 @@ function ProductCard({
     product.title,
     product.supplierName,
     "Produto",
+  );
+
+  const tagRow =
+    (product.isChineseBrand ||
+      product.brand ||
+      product.storeName ||
+      product.supplierName?.trim()) && (
+      <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+        {product.isChineseBrand && (
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+            <ShieldCheck className="w-2.5 h-2.5" /> Marca chinesa
+          </span>
+        )}
+        {product.brand && (
+          <span
+            className="text-[10px] font-medium text-muted-foreground truncate"
+            title={product.brand}
+          >
+            {product.brand}
+          </span>
+        )}
+        {product.storeName && (
+          <span
+            className="text-[10px] text-muted-foreground truncate"
+            title={product.storeName}
+          >
+            {product.storeName}
+          </span>
+        )}
+        {product.supplierName?.trim() && (
+          <SupplierTag supplierName={product.supplierName} />
+        )}
+      </div>
+    );
+
+  const priceRow = (insideLink: boolean) => (
+    <div className="mt-auto pt-2 flex items-center justify-between">
+      <span className="text-base font-bold text-china-red">{priceStr}</span>
+      {insideLink ? (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground group-hover:text-china-red transition-colors">
+          Pedir <ShoppingBag className="w-3.5 h-3.5" />
+        </span>
+      ) : (
+        <Link
+          to={to}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-china-red transition-colors"
+        >
+          Pedir <ShoppingBag className="w-3.5 h-3.5" />
+        </Link>
+      )}
+    </div>
+  );
+
+  const imageBlock = (
+    <div className="aspect-[3/4] bg-muted/50 relative overflow-hidden">
+      <img
+        src={imgSrc}
+        alt={imgAlt}
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        referrerPolicy={referrerPolicyForImage(imgSrc)}
+        loading="lazy"
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+        }}
+      />
+    </div>
   );
 
   return (
@@ -140,64 +210,50 @@ function ProductCard({
           adminMode ? "ring-2 ring-china-red/25 ring-offset-2 ring-offset-muted/30" : ""
         }`}
       >
-        <Link to={to} className="flex flex-col flex-1 group">
-          <div className="aspect-[3/4] bg-muted/50 relative overflow-hidden">
-            <img
-              src={imgSrc}
-              alt={imgAlt}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              referrerPolicy={referrerPolicyForImage(imgSrc)}
-              loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
-              }}
-            />
-          </div>
-          <CardContent className="p-3 flex-1 flex flex-col">
-            {(product.isChineseBrand ||
-              product.brand ||
-              product.storeName ||
-              product.supplierName?.trim()) && (
-              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                {product.isChineseBrand && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
-                    <ShieldCheck className="w-2.5 h-2.5" /> Marca chinesa
-                  </span>
-                )}
-                {product.brand && (
-                  <span
-                    className="text-[10px] font-medium text-muted-foreground truncate"
-                    title={product.brand}
-                  >
-                    {product.brand}
-                  </span>
-                )}
-                {product.storeName && (
-                  <span
-                    className="text-[10px] text-muted-foreground truncate"
-                    title={product.storeName}
-                  >
-                    {product.storeName}
-                  </span>
-                )}
-                {product.supplierName?.trim() && (
-                  <SupplierTag supplierName={product.supplierName} />
-                )}
-              </div>
-            )}
-            <h3 className="font-medium text-foreground text-sm line-clamp-2">
-              {headline}
-            </h3>
-            <div className="mt-auto pt-2 flex items-center justify-between">
-              <span className="text-base font-bold text-china-red">
-                {priceStr}
-              </span>
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground group-hover:text-china-red transition-colors">
-                Pedir <ShoppingBag className="w-3.5 h-3.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Link>
+        {adminMode ? (
+          <>
+            <Link to={to} className="block group">
+              {imageBlock}
+            </Link>
+            <CardContent className="p-3 flex-1 flex flex-col">
+              {tagRow}
+              <label
+                htmlFor={`home-catalog-title-${product.id}`}
+                className="sr-only"
+              >
+                Nome no site
+              </label>
+              <textarea
+                id={`home-catalog-title-${product.id}`}
+                rows={2}
+                disabled={adminMode.savingTitle}
+                className="w-full text-sm font-medium text-foreground bg-background border border-border rounded-md px-2 py-1.5 resize-y min-h-[2.75rem] leading-snug focus:outline-none focus:ring-2 focus:ring-china-red/30 disabled:opacity-60 mb-0"
+                value={adminMode.titleValue}
+                onChange={(e) => adminMode.onTitleChange(e.target.value)}
+                onBlur={(e) => adminMode.onTitleBlur(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    (e.currentTarget as HTMLTextAreaElement).blur();
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+              {priceRow(false)}
+            </CardContent>
+          </>
+        ) : (
+          <Link to={to} className="flex flex-col flex-1 group">
+            {imageBlock}
+            <CardContent className="p-3 flex-1 flex flex-col">
+              {tagRow}
+              <h3 className="font-medium text-foreground text-sm line-clamp-2">
+                {headline}
+              </h3>
+              {priceRow(true)}
+            </CardContent>
+          </Link>
+        )}
       </Card>
     </div>
   );
@@ -208,6 +264,78 @@ export default function FeaturedProductsSection() {
   const [apiProducts, setApiProducts] = useState<ProductLike[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [inlineTitleDrafts, setInlineTitleDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [savingTitleId, setSavingTitleId] = useState<string | null>(null);
+
+  const saveInlineTitle = useCallback(
+    async (p: ProductLike, value: string) => {
+      if (!adminToken) return;
+      const next = value.trim();
+      const prev = (p.titlePt || p.title || "").trim();
+      if (next === prev) {
+        setInlineTitleDrafts((d) => {
+          if (!(p.id in d)) return d;
+          const { [p.id]: _, ...rest } = d;
+          return rest;
+        });
+        return;
+      }
+      if (!next) {
+        toast.error("O nome não pode ficar vazio.");
+        setInlineTitleDrafts((d) => ({
+          ...d,
+          [p.id]: prev || p.title || "",
+        }));
+        return;
+      }
+      setSavingTitleId(p.id);
+      try {
+        const res = await fetch(
+          apiUrl(`/api/admin/products/${encodeURIComponent(p.id)}`),
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${adminToken}`,
+            },
+            body: JSON.stringify({ title: next, titlePt: next }),
+          },
+        );
+        if (res.status === 401) {
+          toast.error("Sessão expirada — faça login em Admin novamente.");
+          localStorage.removeItem("compraschina-admin-token");
+          return;
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          toast.error(
+            typeof data.error === "string"
+              ? data.error
+              : "Erro ao salvar o nome",
+          );
+          return;
+        }
+        await res.json().catch(() => null);
+        setApiProducts((list) =>
+          list.map((x) =>
+            x.id === p.id ? { ...x, title: next, titlePt: next } : x,
+          ),
+        );
+        setInlineTitleDrafts((d) => {
+          const { [p.id]: _, ...rest } = d;
+          return rest;
+        });
+        toast.success("Nome atualizado");
+      } catch {
+        toast.error("Erro de conexão");
+      } finally {
+        setSavingTitleId(null);
+      }
+    },
+    [adminToken],
+  );
 
   const handleRemoveFromSite = useCallback(
     async (product: ProductLike) => {
@@ -358,8 +486,9 @@ export default function FeaturedProductsSection() {
                 <span className="font-semibold text-china-red">
                   Modo administrador:
                 </span>{" "}
-                nos cards abaixo use <strong>Remover</strong> para excluir do
-                site ou <strong>Catálogo</strong> para editar no painel.
+                edite o <strong>nome</strong> no próprio card (salva ao sair do
+                campo), use <strong>Remover</strong> para excluir ou{" "}
+                <strong>Catálogo</strong> para o painel completo.
               </p>
             )}
           </div>
@@ -428,6 +557,19 @@ export default function FeaturedProductsSection() {
                           onRemove: () => {
                             handleRemoveFromSite(product);
                           },
+                          titleValue:
+                            inlineTitleDrafts[product.id] ??
+                            (product.titlePt || product.title || ""),
+                          onTitleChange: (v) => {
+                            setInlineTitleDrafts((d) => ({
+                              ...d,
+                              [product.id]: v,
+                            }));
+                          },
+                          onTitleBlur: (value) => {
+                            void saveInlineTitle(product, value);
+                          },
+                          savingTitle: savingTitleId === product.id,
                         }
                       : undefined
                   }
