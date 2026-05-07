@@ -919,19 +919,6 @@ const Order = () => {
                 </div>
               ) : (
                 <>
-                  {/* Título do produto — como em qualquer e-commerce */}
-                  {(productPreview?.titlePt || productPreview?.title) && (
-                    <h1 className="font-heading font-bold text-foreground text-xl leading-snug">
-                      {productPreview.titlePt || productPreview.title}
-                    </h1>
-                  )}
-                  {!(productPreview?.titlePt || productPreview?.title) &&
-                    productPreview && (
-                      <h1 className="font-heading font-bold text-foreground text-xl leading-snug">
-                        Produto
-                      </h1>
-                    )}
-
                   {/* Preço direto em reais — alinhado ao Explorar quando o link está no catálogo */}
                   <div className="pb-4 border-b border-border">
                     {displayProductBrl != null ? (
