@@ -6,6 +6,8 @@ const WEIGHT_G_BY_1688_OFFER_ID: Record<string, number> = {
   "927500085524": 150,
   /** https://detail.1688.com/offer/752172662690.html */
   "752172662690": 50,
+  /** https://www.cssbuy.com/item-1688-923982155016.html — 200 kg por unidade (pedido / frete) */
+  "923982155016": 200_000,
 };
 
 function extract1688OfferId(url: string): string | null {

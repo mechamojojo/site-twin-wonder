@@ -4,10 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { apiUrl } from "@/lib/api";
 import { getDisplayPriceBrl } from "@/lib/pricing";
-import {
-  catalogCardTitle,
-  catalogCardHeadline,
-} from "@/lib/productDisplayTitle";
+import { catalogCardTitle } from "@/lib/productDisplayTitle";
 import { SupplierTag } from "@/components/SupplierTag";
 import { useCart } from "@/context/CartContext";
 import { ShoppingCart } from "lucide-react";
@@ -102,12 +99,6 @@ const Produto = () => {
     );
   }
 
-  const headline = catalogCardHeadline(
-    product.titlePt,
-    product.title,
-    product.supplierName,
-    "Produto",
-  );
   const displayBrl = getDisplayPriceBrl(product.priceCny, product.priceBrl);
   const priceStr =
     displayBrl != null ? `R$ ${displayBrl.toFixed(2)}` : "Consultar";
@@ -129,20 +120,17 @@ const Produto = () => {
             />
           </div>
           <div>
-            <p className="text-xs font-semibold text-china-red uppercase tracking-wider">
-              {product.source}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-china-red uppercase tracking-wider">
+                {product.source}
+              </p>
+              {slug && <SaveProductHeart slug={slug} variant="inline" />}
+            </div>
             {product.supplierName?.trim() && (
               <div className="mt-2">
                 <SupplierTag supplierName={product.supplierName} />
               </div>
             )}
-            <div className="flex items-start gap-2 mt-2">
-              <h1 className="text-2xl font-heading font-bold text-foreground flex-1">
-                {headline}
-              </h1>
-              {slug && <SaveProductHeart slug={slug} variant="inline" />}
-            </div>
             <p className="text-2xl font-bold text-china-red mt-4">{priceStr}</p>
             <p className="text-sm text-muted-foreground mt-2">
               Preço em reais · Entrega no Brasil · Você paga aqui
