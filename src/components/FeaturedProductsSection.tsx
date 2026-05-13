@@ -23,10 +23,6 @@ import {
 import { SupplierTag } from "@/components/SupplierTag";
 import { useLazyProductImage } from "@/hooks/useLazyProductImage";
 import {
-  compareExplorarDefaultOrder,
-  getExplorarOrderDaySeed,
-} from "@/lib/explorarDailyOrder";
-import {
   ChevronDown,
   ExternalLink,
   Loader2,
@@ -388,7 +384,7 @@ export default function FeaturedProductsSection() {
       .then((data) => {
         const list = data.products ?? [];
         const fromApi = Array.isArray(list) ? list : [];
-        setApiProducts(fromApi); // ordem visual na home: rotação diária (igual ao Explorar)
+        setApiProducts(fromApi); // mesma ordem do admin (sortOrder na API)
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -417,14 +413,6 @@ export default function FeaturedProductsSection() {
     });
   }, [apiProducts, explorarTitleByKey]);
 
-  /** Mesma lógica do Explorar: ordem fluida que muda a cada dia, estável no mesmo dia. */
-  const homeCatalogProducts = useMemo(() => {
-    const daySeed = getExplorarOrderDaySeed();
-    return [...allProducts].sort((a, b) =>
-      compareExplorarDefaultOrder(a, b, daySeed),
-    );
-  }, [allProducts]);
-
   const categoriesWithProducts = Array.from(
     new Set(allProducts.map((p) => p.category)),
   ).sort((a, b) => {
@@ -446,8 +434,8 @@ export default function FeaturedProductsSection() {
 
   const products =
     selectedCategory === "all"
-      ? homeCatalogProducts
-      : homeCatalogProducts.filter((p) => p.category === selectedCategory);
+      ? allProducts
+      : allProducts.filter((p) => p.category === selectedCategory);
 
   const visibleProducts = expanded
     ? products
@@ -477,7 +465,7 @@ export default function FeaturedProductsSection() {
               {allProducts.length > 1 && (
                 <span className="text-muted-foreground/90">
                   {" "}
-                  Ordem renovada todo dia — como no Explorar.
+                  Mesma ordem definida no admin (catálogo).
                 </span>
               )}
             </p>
