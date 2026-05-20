@@ -6,10 +6,7 @@
 import type { ProductPreviewResult, OptionGroup } from "./productPreview";
 import { translateToPortuguese } from "./translate";
 import { normalizeProductTitle } from "./normalizeProductTitle";
-import {
-  buildSelectionPriceByKey,
-  mergeSkuPricesIntoOptionGroups,
-} from "./skuPricing";
+import { applyVariantPricingFromSkus, parseSkuPriceCny } from "./skuPricing";
 
 /** Taobao via CSSBuy — um único blob em "Color Classification" (RAM DDR3/DDR4). Só este ID. */
 const CSSBUY_RAM_TAOBAO_ITEM_ID = "899498747944";
@@ -409,6 +406,8 @@ export async function getCssbuyProductPreview(
           inventory: number;
           priceLabel: string;
         }[];
+        /** Preço exibido no CSSBuy por opção (estilo/cor com $ ou ￥). */
+        cssbuyVariantPriceRows: { label: string; priceLabel: string }[];
       } = {
         title: null,
         priceCny: null,
@@ -420,6 +419,7 @@ export async function getCssbuyProductPreview(
         optionGroups: [],
         specs: [],
         cssbuySkuRows: [],
+        cssbuyVariantPriceRows: [],
       };
 
       function tryFromWindow(): boolean {
@@ -1259,6 +1259,47 @@ export async function getCssbuyProductPreview(
       }
       extractCssbuyOfficialSizeRows();
 
+      /** Linhas de SKU no CSSBuy: nome da variante + preço ($ ou ￥) — comum em 1688 com miniaturas. */
+      function extractCssbuyVariantPriceRows() {
+        const rows: { label: string; priceLabel: string }[] = [];
+        const containers = [
+          document.querySelector("#sku_box"),
+          document.querySelector("[id*='sku_box']"),
+          document.querySelector("[class*='sku-box']"),
+          document.querySelector("[class*='SkuBox']"),
+        ].filter(Boolean) as Element[];
+        const seen = new Set<string>();
+        const scanEl = (el: Element) => {
+          const text = (el as HTMLElement).innerText?.replace(/\s+/g, " ").trim() || "";
+          if (text.length < 3 || text.length > 400) return;
+          const usd = text.match(/\$\s*([\d]+(?:\.\d+)?)/);
+          const cny = text.match(/(?:￥|¥)\s*([\d]+(?:\.\d+)?)/);
+          if (!usd && !cny) return;
+          const priceLabel = usd
+            ? `$ ${usd[1]}`
+            : `￥ ${cny![1]}`;
+          let label = text
+            .replace(/\$\s*[\d.]+/g, "")
+            .replace(/(?:￥|¥)\s*[\d.]+/g, "")
+            .replace(/Inventory:\s*\d+/gi, "")
+            .replace(/库存[：:]\s*\d+/g, "")
+            .trim();
+          const invIdx = label.search(/Inventory|库存/i);
+          if (invIdx > 0) label = label.slice(0, invIdx).trim();
+          if (label.length < 2 || label.length > 120) return;
+          const key = `${label}|${priceLabel}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          rows.push({ label, priceLabel });
+        };
+        for (const root of containers) {
+          root.querySelectorAll("li, [class*='sku'], [class*='prop'], div").forEach(scanEl);
+          if (rows.length > 0) break;
+        }
+        if (rows.length > 0) result.cssbuyVariantPriceRows = rows;
+      }
+      extractCssbuyVariantPriceRows();
+
       return result;
     });
 
@@ -1894,18 +1935,8 @@ export async function getCssbuyProductPreview(
       };
       const priceByValue: Record<string, number> = {};
       for (const sku of skuList) {
-        const priceRaw =
-          (sku as Record<string, unknown>).price ??
-          (sku as Record<string, unknown>).salePrice ??
-          (sku as Record<string, unknown>).item_price ??
-          (sku as Record<string, unknown>).priceMoney;
-        const price =
-          typeof priceRaw === "number" && priceRaw > 0
-            ? priceRaw
-            : typeof priceRaw === "string"
-              ? parseFloat(priceRaw)
-              : null;
-        if (price == null || !Number.isFinite(price)) continue;
+        const price = parseSkuPriceCny(sku as Record<string, unknown>);
+        if (price == null) continue;
         const props = String(
           sku.properties ??
             (sku as Record<string, unknown>).propertiesStr ??
@@ -2197,11 +2228,7 @@ export async function getCssbuyProductPreview(
         const propsStr = String(
           (sku as { properties?: string }).properties ?? "",
         ).trim();
-        const priceRaw =
-          (sku as { price?: number }).price ??
-          (sku as { orginal_price?: number }).orginal_price;
-        const price =
-          typeof priceRaw === "number" && priceRaw > 0 ? priceRaw : null;
+        const price = parseSkuPriceCny(sku as Record<string, unknown>);
         if (!propsStr || price == null) continue;
         const parts = propsStr
           .split(/[;，,]/)
@@ -2349,25 +2376,6 @@ export async function getCssbuyProductPreview(
     if (!hasSizeInOptionGroups && sizeGroup.values.length > 0)
       optionGroups = [...optionGroups, sizeGroup];
 
-    let selectionPriceByKey: Record<string, number> = {};
-    // Preços por variante: sempre aplicar a partir da lista de SKUs (independente de DOM/API ter sido a fonte dos nomes)
-    if (
-      propsList &&
-      typeof propsList === "object" &&
-      skuList.length > 0 &&
-      Object.keys(propKeyToGroupAndValue).length > 0
-    ) {
-      mergeSkuPricesIntoOptionGroups(
-        optionGroups,
-        skuList as Array<Record<string, unknown>>,
-        propKeyToGroupAndValue,
-      );
-      selectionPriceByKey = buildSelectionPriceByKey(
-        skuList as Array<Record<string, unknown>>,
-        propKeyToGroupAndValue,
-      );
-    }
-
     // Incluir "Quality grade" quando existir na API ou DOM mas não estiver nos grupos escolhidos (ex.: escolhemos props_list que não tem qualidade)
     const hasQualityGroup = optionGroups.some((g) =>
       isQualityGradeGroup(g.name),
@@ -2503,6 +2511,32 @@ export async function getCssbuyProductPreview(
           displayAsImages: false,
         });
       }
+    }
+
+    // Preços por variante: DEPOIS de montar/splitar grupos (senão valores e nomes não batem)
+    const cssbuyVariantPriceRows = data.cssbuyVariantPriceRows;
+    const hasPricingSource =
+      skuList.length > 0 ||
+      (cssbuySkuRows?.length ?? 0) > 0 ||
+      (cssbuyVariantPriceRows?.length ?? 0) > 0;
+    let selectionPriceByKey: Record<string, number> = {};
+    if (hasPricingSource) {
+      selectionPriceByKey = applyVariantPricingFromSkus(
+        optionGroups,
+        skuList as Array<Record<string, unknown>>,
+        propKeyToGroupAndValue,
+        propsList && typeof propsList === "object"
+          ? (propsList as Record<string, unknown>)
+          : null,
+        cssbuySkuRows?.map((r) => ({
+          label: r.label,
+          priceLabel: r.priceLabel,
+        })),
+        cssbuyVariantPriceRows?.map((r) => ({
+          label: r.label,
+          priceLabel: r.priceLabel,
+        })),
+      );
     }
 
     // Traduzir valores das opções (chinês/inglês → português)

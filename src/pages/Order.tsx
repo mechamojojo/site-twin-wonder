@@ -437,8 +437,9 @@ const Order = () => {
     if (!url || effectivePriceCny == null || productPreviewLoading) return;
     let cancelled = false;
     const priceParam =
-      baselineCnyForPriceApi != null &&
-      Math.abs(effectivePriceCny - baselineCnyForPriceApi) > 1e-6
+      variantPricingActive ||
+      (baselineCnyForPriceApi != null &&
+        Math.abs(effectivePriceCny - baselineCnyForPriceApi) > 1e-6)
         ? `&priceCny=${effectivePriceCny}`
         : "";
     fetch(
@@ -459,7 +460,13 @@ const Order = () => {
     return () => {
       cancelled = true;
     };
-  }, [url, effectivePriceCny, baselineCnyForPriceApi, productPreviewLoading]);
+  }, [
+    url,
+    effectivePriceCny,
+    baselineCnyForPriceApi,
+    variantPricingActive,
+    productPreviewLoading,
+  ]);
 
   /** Preço em R$ alinhado ao Explorar: API /price/preview, senão catálogo, senão CNY efetivo. */
   const displayProductBrl = useMemo(() => {
