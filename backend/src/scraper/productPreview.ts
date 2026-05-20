@@ -35,6 +35,11 @@ export interface ProductPreviewResult {
   specs: { key: string; value: string }[];
   description: string | null;
   rawUrl: string;
+  /**
+   * Preço CNY por combinação de opções (chave: "Grupo=valor|Tamanho=M", ordenada).
+   * Usado na página /pedido para preço exato da variante selecionada.
+   */
+  selectionPriceByKey?: Record<string, number>;
 }
 
 const SCRAPE_TIMEOUT_MS = 45000;

@@ -763,7 +763,7 @@ const Checkout = () => {
           notes: form.notes || item.notes || null,
           importDeclarationText: form.importDeclarationText.trim(),
           customerName: form.customerName.trim(),
-          customerEmail: form.customerEmail.trim(),
+          customerEmail: form.customerEmail.trim().toLowerCase(),
           customerWhatsapp: form.customerWhatsapp.replace(/\D/g, ""),
           customerCpf:
             deliveryInBrazil ? cpf : cpf.length === 11 ? cpf : null,

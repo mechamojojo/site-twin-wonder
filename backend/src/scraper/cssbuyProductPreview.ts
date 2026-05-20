@@ -6,6 +6,10 @@
 import type { ProductPreviewResult, OptionGroup } from "./productPreview";
 import { translateToPortuguese } from "./translate";
 import { normalizeProductTitle } from "./normalizeProductTitle";
+import {
+  buildSelectionPriceByKey,
+  mergeSkuPricesIntoOptionGroups,
+} from "./skuPricing";
 
 /** Taobao via CSSBuy — um único blob em "Color Classification" (RAM DDR3/DDR4). Só este ID. */
 const CSSBUY_RAM_TAOBAO_ITEM_ID = "899498747944";
@@ -2051,7 +2055,7 @@ export async function getCssbuyProductPreview(
     // Se props_list da API tiver mais entradas que skuProps (ex.: 6 estilos), montar grupos (estilo + tamanho) a partir dele
     const optionGroupsFromPropsList: OptionGroup[] = [];
     /** Map prop key to group name and display value — used to assign priceByValue per group (including Quality grade). */
-    const propKeyToGroupAndValue: Record<
+    let propKeyToGroupAndValue: Record<
       string,
       { groupName: string; value: string }
     > = {};
@@ -2345,6 +2349,25 @@ export async function getCssbuyProductPreview(
     if (!hasSizeInOptionGroups && sizeGroup.values.length > 0)
       optionGroups = [...optionGroups, sizeGroup];
 
+    let selectionPriceByKey: Record<string, number> = {};
+    // Preços por variante: sempre aplicar a partir da lista de SKUs (independente de DOM/API ter sido a fonte dos nomes)
+    if (
+      propsList &&
+      typeof propsList === "object" &&
+      skuList.length > 0 &&
+      Object.keys(propKeyToGroupAndValue).length > 0
+    ) {
+      mergeSkuPricesIntoOptionGroups(
+        optionGroups,
+        skuList as Array<Record<string, unknown>>,
+        propKeyToGroupAndValue,
+      );
+      selectionPriceByKey = buildSelectionPriceByKey(
+        skuList as Array<Record<string, unknown>>,
+        propKeyToGroupAndValue,
+      );
+    }
+
     // Incluir "Quality grade" quando existir na API ou DOM mas não estiver nos grupos escolhidos (ex.: escolhemos props_list que não tem qualidade)
     const hasQualityGroup = optionGroups.some((g) =>
       isQualityGradeGroup(g.name),
@@ -2509,7 +2532,25 @@ export async function getCssbuyProductPreview(
         return (valueToPt[v.trim()] || v) as string;
       });
     }
-    // Re-key priceByValue e inventários para usar valores traduzidos
+    // Re-key priceByValue, selectionPriceByKey e inventários para usar valores traduzidos
+    if (Object.keys(selectionPriceByKey).length > 0) {
+      const nextSel: Record<string, number> = {};
+      for (const [key, price] of Object.entries(selectionPriceByKey)) {
+        const newKey = key
+          .split("|")
+          .map((segment) => {
+            const eq = segment.indexOf("=");
+            if (eq < 0) return segment;
+            const gn = segment.slice(0, eq);
+            const val = segment.slice(eq + 1);
+            return `${gn}=${valueToPt[val.trim()] || val}`;
+          })
+          .sort()
+          .join("|");
+        nextSel[newKey] = price;
+      }
+      selectionPriceByKey = nextSel;
+    }
     for (const g of optionGroups) {
       if (g.priceByValue && typeof g.priceByValue === "object") {
         const next: Record<string, number> = {};
@@ -2625,6 +2666,9 @@ export async function getCssbuyProductPreview(
       specs: data.specs || [],
       description: null,
       rawUrl: cssbuyUrl,
+      ...(Object.keys(selectionPriceByKey).length > 0
+        ? { selectionPriceByKey }
+        : {}),
     };
   } catch (err) {
     console.error("[cssbuy-scraper] error:", err);

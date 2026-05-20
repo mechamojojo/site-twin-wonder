@@ -22,6 +22,10 @@ import { MAX_LINE_QUANTITY } from "@/lib/quantityLimits";
 import { getProductWeightOverrideG } from "@/lib/productWeightOverrides";
 import { applyCssbuyRam899498747944PreviewOverride } from "@/lib/cssbuyVariantOverrides";
 import { getDisplayPriceBrl, priceCnyToBrl } from "@/lib/pricing";
+import {
+  hasVariantPricing,
+  resolveVariantPriceCny,
+} from "@/lib/resolveVariantPriceCny";
 import { toast } from "sonner";
 
 const getQueryParam = (search: string, key: string) => {
@@ -182,6 +186,7 @@ const Order = () => {
     }[];
     specs: { key: string; value: string }[];
     description: string | null;
+    selectionPriceByKey?: Record<string, number>;
   } | null>(null);
   const [selectedOptionByGroup, setSelectedOptionByGroup] = useState<
     Record<string, string>
@@ -276,6 +281,11 @@ const Order = () => {
           optionGroups: ramPatched.optionGroups,
           specs: Array.isArray(data.specs) ? data.specs : [],
           description: data.description ?? null,
+          selectionPriceByKey:
+            data.selectionPriceByKey &&
+            typeof data.selectionPriceByKey === "object"
+              ? data.selectionPriceByKey
+              : undefined,
         });
         setSelectedImageIndex(0);
         setSelectedOptionByGroup({});
@@ -331,6 +341,24 @@ const Order = () => {
     };
   }, [url]);
 
+  /** Pré-seleciona a primeira opção de estilo/cor para o preço bater com o CSSBuy ao abrir a página. */
+  useEffect(() => {
+    const groups = productPreview?.optionGroups;
+    if (!groups?.length) return;
+    setSelectedOptionByGroup((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const g of groups) {
+        if (isSizeGroup(g.name, g.values) || isQualityGradeGroup(g.name)) continue;
+        const first = g.values[0]?.trim();
+        if (!first || next[g.name]?.trim()) continue;
+        next[g.name] = first;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [productPreview?.optionGroups]);
+
   useEffect(() => {
     const fetchPreview = async () => {
       if (!url) return;
@@ -374,35 +402,35 @@ const Order = () => {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [productPreview?.priceCny]);
 
-  // Base em CNY: catálogo (Explorar) tem prioridade sobre o scrape quando o link coincide.
-  // Preço efetivo: variante (priceByValue) por grupo; senão a base acima.
-  const effectivePriceCny = useMemo(() => {
-    const base = catalogBaseCny ?? scrapedBaseCny;
-    if (base == null) return null;
-    const groups = productPreview?.optionGroups;
-    if (!groups?.length) return base;
-    const groupsWithPrice = groups.filter((g) => {
-      const selected = selectedOptionByGroup[g.name];
-      return selected && g.priceByValue?.[selected] != null;
-    });
-    const qualityGroup = groupsWithPrice.find((g) =>
-      isQualityGradeGroup(g.name),
-    );
-    const groupWithPrice = qualityGroup ?? groupsWithPrice[0];
-    if (groupWithPrice) {
-      const selected = selectedOptionByGroup[groupWithPrice.name];
-      if (selected && groupWithPrice.priceByValue?.[selected] != null)
-        return groupWithPrice.priceByValue[selected];
-    }
-    return base;
-  }, [
-    catalogBaseCny,
-    scrapedBaseCny,
-    productPreview?.optionGroups,
-    selectedOptionByGroup,
-  ]);
+  const variantPricingActive = useMemo(
+    () =>
+      hasVariantPricing(
+        productPreview?.optionGroups,
+        productPreview?.selectionPriceByKey,
+      ),
+    [productPreview?.optionGroups, productPreview?.selectionPriceByKey],
+  );
 
-  const baselineCnyForPriceApi = catalogBaseCny ?? scrapedBaseCny;
+  const effectivePriceCny = useMemo(
+    () =>
+      resolveVariantPriceCny({
+        scrapedBaseCny,
+        catalogBaseCny: variantPricingActive ? null : catalogBaseCny,
+        optionGroups: productPreview?.optionGroups,
+        selectedOptionByGroup,
+        selectionPriceByKey: productPreview?.selectionPriceByKey,
+      }),
+    [
+      scrapedBaseCny,
+      catalogBaseCny,
+      variantPricingActive,
+      productPreview?.optionGroups,
+      productPreview?.selectionPriceByKey,
+      selectedOptionByGroup,
+    ],
+  );
+
+  const baselineCnyForPriceApi = scrapedBaseCny ?? catalogBaseCny;
 
   // Quando o product preview ou a variante selecionada mudar, atualiza o preço em reais (usa preço da variante quando existir)
   useEffect(() => {
@@ -441,11 +469,13 @@ const Order = () => {
     ) {
       return preview.totalProductBrl;
     }
-    const fromCatalog = getDisplayPriceBrl(
-      catalogMatch?.priceCny,
-      catalogMatch?.priceBrl,
-    );
-    if (fromCatalog != null) return fromCatalog;
+    if (!variantPricingActive) {
+      const fromCatalog = getDisplayPriceBrl(
+        catalogMatch?.priceCny,
+        catalogMatch?.priceBrl,
+      );
+      if (fromCatalog != null) return fromCatalog;
+    }
     if (effectivePriceCny != null && effectivePriceCny > 0) {
       return priceCnyToBrl(effectivePriceCny);
     }

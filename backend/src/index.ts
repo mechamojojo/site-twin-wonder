@@ -34,6 +34,10 @@ import {
   requireUser,
   optionalUser,
 } from "./auth";
+import {
+  linkGuestOrdersToUser,
+  normalizeCustomerEmail,
+} from "./linkGuestOrders";
 import cors from "cors";
 import { json } from "body-parser";
 import {
@@ -436,6 +440,8 @@ app.post("/api/auth/register", authRateLimiter, async (req, res) => {
 
     await sendVerificationEmail(user.email, user.name, verificationToken);
 
+    await linkGuestOrdersToUser(prisma, user.id, user.email);
+
     const token = signToken({ userId: user.id });
     res.status(201).json({
       token,
@@ -477,6 +483,13 @@ app.post("/api/auth/login", authRateLimiter, async (req, res) => {
     });
     if (!user || !verifyPassword(String(password), user.password)) {
       return res.status(401).json({ error: "E-mail ou senha incorretos" });
+    }
+
+    const linked = await linkGuestOrdersToUser(prisma, user.id, user.email);
+    if (linked > 0) {
+      console.log(
+        `[auth/login] ${linked} pedido(s) vinculado(s) a ${user.email}`,
+      );
     }
 
     const token = signToken({ userId: user.id });
@@ -610,6 +623,8 @@ app.post("/api/auth/verify-email", async (req, res) => {
         emailVerificationTokenExpires: null,
       },
     });
+
+    await linkGuestOrdersToUser(prisma, user.id, user.email);
 
     const jwt = signToken({ userId: user.id });
     res.json({
@@ -797,6 +812,16 @@ app.patch("/api/auth/me", requireUser, async (req, res) => {
 app.get("/api/auth/me/orders", requireUser, async (req, res) => {
   try {
     const userId = (req as express.Request & { userId: string }).userId;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user) {
+      return res.status(401).json({ error: "Conta não encontrada" });
+    }
+
+    await linkGuestOrdersToUser(prisma, userId, user.email);
+
     const orders = await prisma.order.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
@@ -2895,7 +2920,7 @@ app.post("/api/admin/products", requireAdmin, async (req, res) => {
 app.post("/api/orders", optionalUser, async (req, res) => {
   try {
     const reqWithUser = req as express.Request & { userId?: string };
-    const authUserId = reqWithUser.userId;
+    let resolvedUserId = reqWithUser.userId ?? null;
 
     const {
       originalUrl,
@@ -2947,6 +2972,16 @@ app.post("/api/orders", optionalUser, async (req, res) => {
       return res
         .status(400)
         .json({ error: "Nome e e-mail do cliente são obrigatórios." });
+    }
+
+    const customerEmailNorm = normalizeCustomerEmail(String(customerEmail));
+
+    if (!resolvedUserId) {
+      const account = await prisma.user.findUnique({
+        where: { email: customerEmailNorm },
+        select: { id: true },
+      });
+      if (account) resolvedUserId = account.id;
     }
 
     const waDigits =
@@ -3116,9 +3151,9 @@ app.post("/api/orders", optionalUser, async (req, res) => {
         // Sempre expresso padrão (mesma base da estimativa no front). EMS/marítimo só pelo admin.
         shippingMethod: ShippingMethod.FJ_BR_EXP,
         notes: notes ?? null,
-        userId: authUserId ?? null,
+        userId: resolvedUserId,
         customerName: String(customerName).trim(),
-        customerEmail: String(customerEmail).trim(),
+        customerEmail: customerEmailNorm,
         customerWhatsapp: waDigits,
         customerCpf: cpfFinal,
         addressStreet: street,

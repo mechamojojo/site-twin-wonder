@@ -5,20 +5,11 @@ import Footer from "@/components/Footer";
 import { useAuth } from "@/context/AuthContext";
 import { apiUrl } from "@/lib/api";
 import { getAuthToken } from "@/context/AuthContext";
-import { Package, ArrowRight } from "lucide-react";
-
-const STATUS_LABELS: Record<string, string> = {
-  AGUARDANDO_COTACAO: "Aguardando cotação",
-  AGUARDANDO_PAGAMENTO: "Aguardando pagamento",
-  PAGO: "Pago",
-  ENVIADO_PARA_CSSBUY: "Enviado p/ CSSBuy",
-  COMPRADO: "Comprado",
-  NO_ESTOQUE: "No estoque",
-  AGUARDANDO_ENVIO: "Aguardando envio",
-  EM_ENVIO: "Em envio",
-  CONCLUIDO: "Concluído",
-  CANCELADO: "Cancelado",
-};
+import {
+  orderStatusBadgeClass,
+  orderStatusLabel,
+} from "@/lib/orderStatus";
+import { Package, ArrowRight, AlertCircle } from "lucide-react";
 
 type Order = {
   id: string;
@@ -32,9 +23,10 @@ type Order = {
 
 const MeusPedidos = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -48,14 +40,40 @@ const MeusPedidos = () => {
     const token = getAuthToken();
     if (!token) return;
 
+    setLoading(true);
+    setLoadError(null);
+
     fetch(apiUrl("/api/auth/me/orders"), {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => setOrders(Array.isArray(data) ? data : []))
-      .catch(() => setOrders([]))
+      .then(async (r) => {
+        if (r.status === 401) {
+          logout();
+          navigate("/entrar", { replace: true });
+          return null;
+        }
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(
+            typeof data.error === "string"
+              ? data.error
+              : "Não foi possível carregar seus pedidos.",
+          );
+        }
+        return data;
+      })
+      .then((data) => {
+        if (data == null) return;
+        setOrders(Array.isArray(data) ? data : []);
+      })
+      .catch((err: unknown) => {
+        setOrders([]);
+        setLoadError(
+          err instanceof Error ? err.message : "Erro ao carregar pedidos.",
+        );
+      })
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, logout, navigate]);
 
   if (authLoading) {
     return (
@@ -75,22 +93,41 @@ const MeusPedidos = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container mx-auto px-4 py-12 max-w-2xl">
-        <h1 className="text-xl font-heading font-bold text-foreground mb-2">Meus pedidos</h1>
+        <h1 className="text-xl font-heading font-bold text-foreground mb-2">
+          Meus pedidos
+        </h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Olá, {user.name.split(" ")[0]}! Aqui estão seus pedidos.
+          Olá, {user.name.split(" ")[0]}! Acompanhe o status das suas compras.
+          Pedidos feitos com o e-mail{" "}
+          <strong className="text-foreground">{user.email}</strong> aparecem
+          aqui.
         </p>
+
+        {loadError && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 p-4 flex gap-3 text-sm text-red-800 dark:text-red-300">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p>{loadError}</p>
+          </div>
+        )}
 
         {loading ? (
           <p className="text-muted-foreground">Carregando pedidos...</p>
-        ) : orders.length === 0 ? (
+        ) : orders.length === 0 && !loadError ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
             <Package className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-            <p className="text-muted-foreground mb-4">Você ainda não tem pedidos.</p>
+            <p className="text-muted-foreground mb-2">
+              Nenhum pedido encontrado nesta conta.
+            </p>
+            <p className="text-xs text-muted-foreground mb-4 max-w-sm mx-auto">
+              Se você já comprou, use o mesmo e-mail do checkout nesta conta.
+              Ao abrir esta página, pedidos anteriores com esse e-mail são
+              vinculados automaticamente.
+            </p>
             <Link
               to="/"
               className="inline-flex items-center gap-2 bg-china-red text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-china-red/90"
             >
-              Fazer primeira compra
+              Fazer compra
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -104,29 +141,37 @@ const MeusPedidos = () => {
                 >
                   <div className="flex justify-between items-start gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-foreground truncate">
+                      <p className="font-medium text-foreground line-clamp-2">
                         {o.productTitle || o.productDescription}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Pedido em {new Date(o.createdAt).toLocaleDateString("pt-BR")}
-                        {o.quote && ` · R$ ${Number(o.quote.totalBrl).toFixed(2)}`}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Pedido #{o.id.slice(-8).toUpperCase()} ·{" "}
+                        {new Date(o.createdAt).toLocaleDateString("pt-BR", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                        {o.quote &&
+                          ` · R$ ${Number(o.quote.totalBrl).toFixed(2)}`}
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${
-                        o.status === "PAGO" || o.status === "CONCLUIDO"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                          : o.status === "CANCELADO"
-                          ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                          : "bg-muted text-muted-foreground"
-                      }`}
+                      className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium ${orderStatusBadgeClass(o.status)}`}
                     >
-                      {STATUS_LABELS[o.status] || o.status}
+                      {orderStatusLabel(o.status)}
                     </span>
                   </div>
-                  {o.shipment?.trackingCode && (
+                  {o.status === "AGUARDANDO_PAGAMENTO" && o.quote && (
                     <p className="text-xs text-china-red mt-2 font-medium">
-                      Rastreio: {o.shipment.trackingCode}
+                      Toque para pagar ou ver detalhes →
+                    </p>
+                  )}
+                  {o.shipment?.trackingCode && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Rastreio:{" "}
+                      <span className="font-medium text-foreground">
+                        {o.shipment.trackingCode}
+                      </span>
                     </p>
                   )}
                 </Link>

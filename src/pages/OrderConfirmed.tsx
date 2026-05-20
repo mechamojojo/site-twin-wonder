@@ -4,6 +4,10 @@ import { apiUrl, publicUploadUrl } from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import MercadoPagoBadge from "@/components/MercadoPagoBadge";
+import {
+  orderStatusBadgeClass,
+  orderStatusLabel,
+} from "@/lib/orderStatus";
 
 type OrderResponse = {
   id: string;
@@ -88,10 +92,28 @@ const OrderConfirmed = () => {
               <h1 className="text-xl font-heading font-bold text-foreground">
                 Pedido recebido!
               </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <span
+                  className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${orderStatusBadgeClass(order.status)}`}
+                >
+                  {orderStatusLabel(order.status)}
+                </span>
+              </div>
               <p className="text-sm text-muted-foreground">
                 {order.status === "AGUARDANDO_PAGAMENTO" && order.quote
                   ? "Pague agora com PIX ou cartão. O valor inclui produto, frete e taxa."
                   : "Recebemos seu pedido. Se o valor estiver pronto, pague abaixo. Caso contrário, entraremos em contato."}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Com login no mesmo e-mail do checkout, acompanhe tudo em{" "}
+                <Link
+                  to="/meus-pedidos"
+                  className="text-china-red font-medium hover:underline"
+                >
+                  Meus pedidos
+                </Link>
+                .
               </p>
             </div>
 
