@@ -1,4 +1,4 @@
-import { Mail, Clock, Users, MessagesSquare, Send } from "lucide-react";
+import { Mail, Users, MessagesSquare, Send } from "lucide-react";
 import { CONTACT_EMAIL, TELEGRAM_URL, TELEGRAM_DISPLAY } from "@/data/siteConfig";
 
 function openSupportChat() {
@@ -87,24 +87,18 @@ const MobileAppSection = () => (
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
-          {[
-            { icon: Clock, value: "< 2h", label: "Tempo médio de resposta" },
-            { icon: Users, value: "100%", label: "Atendimento em português" },
-          ].map((s, i) => (
-            <div
-              key={i}
-              className="bg-background border border-border rounded-2xl p-5 text-center shadow-card"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-china-red/10 to-gold/10 flex items-center justify-center mx-auto mb-2">
-                <s.icon className="w-5 h-5 text-china-red" />
-              </div>
-              <p className="font-heading font-extrabold text-xl text-foreground">
-                {s.value}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+        <div className="max-w-xs mx-auto">
+          <div className="bg-background border border-border rounded-2xl p-5 text-center shadow-card">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-china-red/10 to-gold/10 flex items-center justify-center mx-auto mb-2">
+              <Users className="w-5 h-5 text-china-red" />
             </div>
-          ))}
+            <p className="font-heading font-extrabold text-xl text-foreground">
+              100%
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Atendimento em português
+            </p>
+          </div>
         </div>
       </div>
     </div>
