@@ -81,6 +81,16 @@ function priceFromOptionGroups(
   return pick(groupsWithSelection[0]);
 }
 
+function clampVariantPriceCny(
+  resolved: number | null,
+  baseCny: number | null,
+): number | null {
+  if (resolved == null) return null;
+  if (baseCny == null || baseCny <= 0) return resolved;
+  if (resolved >= baseCny * 0.2) return resolved;
+  return baseCny;
+}
+
 export function resolveVariantPriceCny(params: {
   scrapedBaseCny: number | null;
   catalogBaseCny: number | null;
@@ -106,7 +116,8 @@ export function resolveVariantPriceCny(params: {
     const key = buildSelectionKey(optionGroups, selectedOptionByGroup);
     if (key) {
       const fromSku = findBestPartialSelectionPrice(selectionPriceByKey, key);
-      if (fromSku != null) return fromSku;
+      const clamped = clampVariantPriceCny(fromSku, scrapedBaseCny);
+      if (clamped != null) return clamped;
     }
   }
 
@@ -115,7 +126,8 @@ export function resolveVariantPriceCny(params: {
       optionGroups,
       selectedOptionByGroup,
     );
-    if (fromGroup != null) return fromGroup;
+    const clamped = clampVariantPriceCny(fromGroup, scrapedBaseCny);
+    if (clamped != null) return clamped;
   }
 
   // Sem variante escolhida: scrape; com variante, evitar preço fixo do catálogo que ignora o modelo

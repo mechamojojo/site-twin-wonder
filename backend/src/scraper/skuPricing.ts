@@ -20,8 +20,50 @@ function displayValueFromPropsListEntry(
   return colonIdx >= 0 ? s.slice(colonIdx + 1).trim() : s;
 }
 
+/** CSSBuy EN: USD → CNY (taxa fixa alinhada ao site). */
+export const USD_TO_CNY = 7.25;
+
+export function parseUsdToCny(usd: number): number {
+  if (!Number.isFinite(usd) || usd <= 0) return 0;
+  return Math.round(usd * USD_TO_CNY * 100) / 100;
+}
+
+/**
+ * Resolve preços inteiros ambíguos da API (yuan vs fen/centavos).
+ * Com hint da página (ex.: $100 → ¥725), escolhe a interpretação mais próxima.
+ */
+export function normalizePriceCny(
+  raw: number,
+  hintCny?: number | null,
+): number {
+  if (!Number.isFinite(raw) || raw <= 0) return raw;
+  if (!Number.isInteger(raw)) return raw;
+
+  // Fen explícito: 10000+ quase sempre centavos (¥100.00 = 10000)
+  if (raw >= 10000) return raw / 100;
+
+  const asFen = raw / 100;
+
+  if (hintCny != null && hintCny > 0) {
+    const errYuan = Math.abs(raw - hintCny) / hintCny;
+    const errFen = Math.abs(asFen - hintCny) / hintCny;
+    return errFen < errYuan ? asFen : raw;
+  }
+
+  // Sem hint: ¥500–¥9999 são yuan válidos (não dividir — evita ¥1000 virar ¥10)
+  if (raw >= 500) return raw;
+
+  // Inteiros menores: fen comum da 1688 (2640 → ¥26.40)
+  if (raw >= 100) return asFen;
+
+  return raw;
+}
+
 /** 1688: preço às vezes vem em centavos (ex.: 2640 = ¥26.40). */
-export function parseSkuPriceCny(sku: Record<string, unknown>): number | null {
+export function parseSkuPriceCny(
+  sku: Record<string, unknown>,
+  hintCny?: number | null,
+): number | null {
   let raw: number | null = null;
   for (const key of [
     "price",
@@ -43,8 +85,7 @@ export function parseSkuPriceCny(sku: Record<string, unknown>): number | null {
     }
   }
   if (raw == null) return null;
-  if (raw >= 500 && raw === Math.floor(raw)) return raw / 100;
-  return raw;
+  return normalizePriceCny(raw, hintCny);
 }
 
 export function buildSelectionKey(
@@ -110,6 +151,7 @@ export function mergeSkuPricesIntoOptionGroups(
   optionGroups: OptionGroup[],
   skuList: Array<Record<string, unknown>>,
   propKeyToGroupAndValue: Record<string, PropKeyEntry>,
+  hintCny?: number | null,
 ): void {
   if (!skuList.length || !Object.keys(propKeyToGroupAndValue).length) return;
 
@@ -117,7 +159,7 @@ export function mergeSkuPricesIntoOptionGroups(
   const priceByGroup: Record<string, Record<string, number>> = {};
 
   for (const sku of skuList) {
-    const price = parseSkuPriceCny(sku);
+    const price = parseSkuPriceCny(sku, hintCny);
     if (price == null) continue;
     const propsStr = String(sku.properties ?? sku.prop ?? "").trim();
     if (!propsStr) continue;
@@ -150,6 +192,7 @@ export function buildSelectionPriceByKey(
   skuList: Array<Record<string, unknown>>,
   propKeyToGroupAndValue: Record<string, PropKeyEntry>,
   optionGroups: OptionGroup[],
+  hintCny?: number | null,
 ): Record<string, number> {
   const out: Record<string, number> = {};
   if (!skuList.length || !Object.keys(propKeyToGroupAndValue).length)
@@ -158,7 +201,7 @@ export function buildSelectionPriceByKey(
   const aligned = alignPropKeyToFinalGroups(propKeyToGroupAndValue, optionGroups);
 
   for (const sku of skuList) {
-    const price = parseSkuPriceCny(sku);
+    const price = parseSkuPriceCny(sku, hintCny);
     if (price == null) continue;
     const propsStr = String(sku.properties ?? sku.prop ?? "").trim();
     if (!propsStr) continue;
@@ -182,10 +225,11 @@ export function buildSelectionPriceByKey(
   return out;
 }
 
-/** CSSBuy EN: "$ 26.40" por linha de tamanho — converte USD→CNY (taxa fixa alinhada ao site). */
-const USD_TO_CNY = 7.25;
-
-function priceCnyFromCssbuyLabel(priceLabel: string): number | null {
+/** CSSBuy EN: "$ 26.40" por linha — converte USD→CNY. */
+function priceCnyFromCssbuyLabel(
+  priceLabel: string,
+  hintCny?: number | null,
+): number | null {
   const usdM = priceLabel.match(/\$\s*([\d.]+)/);
   if (usdM) {
     const usd = parseFloat(usdM[1]);
@@ -196,8 +240,7 @@ function priceCnyFromCssbuyLabel(priceLabel: string): number | null {
   if (cnyM) {
     const raw = parseFloat(cnyM[1]);
     if (!Number.isFinite(raw) || raw <= 0) return null;
-    if (raw >= 500 && raw === Math.floor(raw)) return raw / 100;
-    return raw;
+    return normalizePriceCny(raw, hintCny);
   }
   return null;
 }
@@ -224,12 +267,13 @@ function labelMatchesOptionValue(label: string, value: string): boolean {
 export function applyCssbuyVariantPriceRowsToOptionGroups(
   optionGroups: OptionGroup[],
   rows: { label: string; priceLabel: string }[],
+  hintCny?: number | null,
 ): void {
   if (!rows.length) return;
   for (const row of rows) {
     const label = row.label.trim();
     if (!label) continue;
-    const cny = priceCnyFromCssbuyLabel(row.priceLabel);
+    const cny = priceCnyFromCssbuyLabel(row.priceLabel, hintCny);
     if (cny == null) continue;
 
     for (const g of optionGroups) {
@@ -263,6 +307,7 @@ export function buildSelectionPriceByKeyFromGroups(
 export function applyCssbuyRowPricesToOptionGroups(
   optionGroups: OptionGroup[],
   rows: { label: string; priceLabel: string }[],
+  hintCny?: number | null,
 ): void {
   if (!rows.length) return;
   const sizeGroup = optionGroups.find((g) => SIZE_GROUP_NAME_RE.test(g.name));
@@ -279,12 +324,39 @@ export function applyCssbuyRowPricesToOptionGroups(
     const label = row.label.trim();
     if (!label) continue;
     sourcePriceLabelByValue[label] = row.priceLabel;
-    const cny = priceCnyFromCssbuyLabel(row.priceLabel);
+    const cny = priceCnyFromCssbuyLabel(row.priceLabel, hintCny);
     if (cny != null) priceByValue[label] = cny;
   }
   if (Object.keys(priceByValue).length > 0) sizeGroup.priceByValue = priceByValue;
   if (Object.keys(sourcePriceLabelByValue).length > 0)
     sizeGroup.sourcePriceLabelByValue = sourcePriceLabelByValue;
+}
+
+/** Remove preços de variante absurdamente abaixo do preço base (ex.: $1.38 → ¥10 num item de $100). */
+export function filterImplausibleVariantPrices(
+  baseCny: number | null | undefined,
+  optionGroups: OptionGroup[],
+  selectionPriceByKey: Record<string, number>,
+): Record<string, number> {
+  const floor =
+    baseCny != null && baseCny > 0 ? Math.max(baseCny * 0.15, 1) : null;
+
+  if (floor != null) {
+    for (const g of optionGroups) {
+      if (!g.priceByValue) continue;
+      for (const [val, price] of Object.entries(g.priceByValue)) {
+        if (price < floor) delete g.priceByValue[val];
+      }
+      if (Object.keys(g.priceByValue).length === 0) delete g.priceByValue;
+    }
+  }
+
+  const nextSel: Record<string, number> = {};
+  for (const [key, price] of Object.entries(selectionPriceByKey)) {
+    if (floor != null && price < floor) continue;
+    nextSel[key] = price;
+  }
+  return nextSel;
 }
 
 /** Aplica preços SKU após todos os grupos de opções estarem finalizados. */
@@ -295,6 +367,7 @@ export function applyVariantPricingFromSkus(
   propsList: Record<string, unknown> | null | undefined,
   cssbuySkuRows?: { label: string; priceLabel: string }[],
   cssbuyVariantPriceRows?: { label: string; priceLabel: string }[],
+  hintCny?: number | null,
 ): Record<string, number> {
   let selectionPriceByKey: Record<string, number> = {};
   if (skuList.length > 0) {
@@ -304,16 +377,24 @@ export function applyVariantPricingFromSkus(
       propKeyToGroupAndValue,
     );
     map = alignPropKeyToFinalGroups(map, optionGroups);
-    mergeSkuPricesIntoOptionGroups(optionGroups, skuList, map);
-    selectionPriceByKey = buildSelectionPriceByKey(skuList, map, optionGroups);
+    mergeSkuPricesIntoOptionGroups(optionGroups, skuList, map, hintCny);
+    selectionPriceByKey = buildSelectionPriceByKey(
+      skuList,
+      map,
+      optionGroups,
+      hintCny,
+    );
   }
   if (cssbuySkuRows?.length)
-    applyCssbuyRowPricesToOptionGroups(optionGroups, cssbuySkuRows);
+    applyCssbuyRowPricesToOptionGroups(optionGroups, cssbuySkuRows, hintCny);
   if (cssbuyVariantPriceRows?.length)
     applyCssbuyVariantPriceRowsToOptionGroups(
       optionGroups,
       cssbuyVariantPriceRows,
+      hintCny,
     );
   const fromGroups = buildSelectionPriceByKeyFromGroups(optionGroups);
-  return { ...fromGroups, ...selectionPriceByKey };
+  // Preços do DOM/CSSBuy têm prioridade sobre SKUs da API (menos ambíguos)
+  const merged = { ...selectionPriceByKey, ...fromGroups };
+  return filterImplausibleVariantPrices(hintCny, optionGroups, merged);
 }

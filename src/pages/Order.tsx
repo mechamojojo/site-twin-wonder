@@ -437,9 +437,9 @@ const Order = () => {
     if (!url || effectivePriceCny == null || productPreviewLoading) return;
     let cancelled = false;
     const priceParam =
-      variantPricingActive ||
-      (baselineCnyForPriceApi != null &&
-        Math.abs(effectivePriceCny - baselineCnyForPriceApi) > 1e-6)
+      effectivePriceCny != null &&
+      baselineCnyForPriceApi != null &&
+      Math.abs(effectivePriceCny - baselineCnyForPriceApi) > 1e-6
         ? `&priceCny=${effectivePriceCny}`
         : "";
     fetch(
@@ -464,7 +464,6 @@ const Order = () => {
     url,
     effectivePriceCny,
     baselineCnyForPriceApi,
-    variantPricingActive,
     productPreviewLoading,
   ]);
 

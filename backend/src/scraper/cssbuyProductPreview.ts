@@ -6,7 +6,7 @@
 import type { ProductPreviewResult, OptionGroup } from "./productPreview";
 import { translateToPortuguese } from "./translate";
 import { normalizeProductTitle } from "./normalizeProductTitle";
-import { applyVariantPricingFromSkus, parseSkuPriceCny } from "./skuPricing";
+import { applyVariantPricingFromSkus, normalizePriceCny, parseSkuPriceCny } from "./skuPricing";
 
 /** Taobao via CSSBuy — um único blob em "Color Classification" (RAM DDR3/DDR4). Só este ID. */
 const CSSBUY_RAM_TAOBAO_ITEM_ID = "899498747944";
@@ -782,10 +782,52 @@ export async function getCssbuyProductPreview(
         if (og) result.title = (og as HTMLMetaElement).content?.trim() || null;
       }
 
-      // Preço: procurar ￥ ou CNY
-      const bodyText = document.body?.innerText || "";
-      const cnyMatch = bodyText.match(/(?:￥|¥|CNY)\s*(\d+\.?\d*)/);
-      if (cnyMatch) result.priceCny = parseFloat(cnyMatch[1]);
+      // Preço principal: CSSBuy EN usa $ — pegar o maior $ no topo da página ou seletores de preço
+      function extractMainProductPriceCny(): number | null {
+        const USD_TO_CNY = 7.25;
+        const priceSelectors = [
+          '[class*="goods-price"]',
+          '[class*="product-price"]',
+          '[class*="item-price"]',
+          '[class*="Price"]',
+          ".price",
+          "#price",
+        ];
+        for (const sel of priceSelectors) {
+          for (const el of document.querySelectorAll(sel)) {
+            const t = (el as HTMLElement).innerText?.replace(/\s+/g, " ") || "";
+            const usd = t.match(/\$\s*([\d]+(?:\.\d{1,2})?)/);
+            if (usd) {
+              const n = parseFloat(usd[1]);
+              if (n > 0) return Math.round(n * USD_TO_CNY * 100) / 100;
+            }
+            const cny = t.match(/(?:￥|¥)\s*([\d]+(?:\.\d{1,2})?)/);
+            if (cny) {
+              const n = parseFloat(cny[1]);
+              if (n > 0) return n;
+            }
+          }
+        }
+        const top = (document.body?.innerText || "").slice(0, 12000);
+        const usds = [...top.matchAll(/\$\s*([\d]+(?:\.\d{1,2})?)/g)]
+          .map((m) => parseFloat(m[1]))
+          .filter((n) => Number.isFinite(n) && n >= 3);
+        if (usds.length > 0) {
+          const maxUsd = Math.max(...usds);
+          return Math.round(maxUsd * USD_TO_CNY * 100) / 100;
+        }
+        return null;
+      }
+
+      const mainPrice = extractMainProductPriceCny();
+      if (mainPrice != null) result.priceCny = mainPrice;
+
+      // Fallback: ￥ ou CNY no corpo (só se ainda não achou preço principal)
+      if (result.priceCny == null) {
+        const bodyText = document.body?.innerText || "";
+        const cnyMatch = bodyText.match(/(?:￥|¥|CNY)\s*(\d+\.?\d*)/);
+        if (cnyMatch) result.priceCny = parseFloat(cnyMatch[1]);
+      }
 
       // Imagens principais: galeria do produto
       const gallerySelectors = [
@@ -1259,7 +1301,7 @@ export async function getCssbuyProductPreview(
       }
       extractCssbuyOfficialSizeRows();
 
-      /** Linhas de SKU no CSSBuy: nome da variante + preço ($ ou ￥) — comum em 1688 com miniaturas. */
+      /** Linhas de SKU no CSSBuy: nome da variante + preço ($ ou ￥) — só folhas, não divs pai. */
       function extractCssbuyVariantPriceRows() {
         const rows: { label: string; priceLabel: string }[] = [];
         const containers = [
@@ -1270,14 +1312,14 @@ export async function getCssbuyProductPreview(
         ].filter(Boolean) as Element[];
         const seen = new Set<string>();
         const scanEl = (el: Element) => {
+          const childPrices = el.querySelectorAll("li, [class*='sku'], [class*='prop']");
+          if (childPrices.length > 0) return;
           const text = (el as HTMLElement).innerText?.replace(/\s+/g, " ").trim() || "";
-          if (text.length < 3 || text.length > 400) return;
+          if (text.length < 3 || text.length > 200) return;
           const usd = text.match(/\$\s*([\d]+(?:\.\d+)?)/);
           const cny = text.match(/(?:￥|¥)\s*([\d]+(?:\.\d+)?)/);
           if (!usd && !cny) return;
-          const priceLabel = usd
-            ? `$ ${usd[1]}`
-            : `￥ ${cny![1]}`;
+          const priceLabel = usd ? `$ ${usd[1]}` : `￥ ${cny![1]}`;
           let label = text
             .replace(/\$\s*[\d.]+/g, "")
             .replace(/(?:￥|¥)\s*[\d.]+/g, "")
@@ -1293,7 +1335,7 @@ export async function getCssbuyProductPreview(
           rows.push({ label, priceLabel });
         };
         for (const root of containers) {
-          root.querySelectorAll("li, [class*='sku'], [class*='prop'], div").forEach(scanEl);
+          root.querySelectorAll("li, [class*='sku-item'], [class*='prop-item']").forEach(scanEl);
           if (rows.length > 0) break;
         }
         if (rows.length > 0) result.cssbuyVariantPriceRows = rows;
@@ -1493,8 +1535,11 @@ export async function getCssbuyProductPreview(
       }
       return null;
     })();
-    if (apiPrice != null && (data.priceCny == null || data.priceCny <= 0))
-      data.priceCny = apiPrice;
+    if (apiPrice != null) {
+      const normalized = normalizePriceCny(apiPrice, data.priceCny);
+      if (data.priceCny == null || data.priceCny <= 0) data.priceCny = normalized;
+      else if (normalized > data.priceCny * 0.5) data.priceCny = Math.max(data.priceCny, normalized);
+    }
 
     const apiImages = (() => {
       for (const api of capturedApiResponses) {
@@ -1935,7 +1980,7 @@ export async function getCssbuyProductPreview(
       };
       const priceByValue: Record<string, number> = {};
       for (const sku of skuList) {
-        const price = parseSkuPriceCny(sku as Record<string, unknown>);
+        const price = parseSkuPriceCny(sku as Record<string, unknown>, data.priceCny);
         if (price == null) continue;
         const props = String(
           sku.properties ??
@@ -2228,7 +2273,7 @@ export async function getCssbuyProductPreview(
         const propsStr = String(
           (sku as { properties?: string }).properties ?? "",
         ).trim();
-        const price = parseSkuPriceCny(sku as Record<string, unknown>);
+        const price = parseSkuPriceCny(sku as Record<string, unknown>, data.priceCny);
         if (!propsStr || price == null) continue;
         const parts = propsStr
           .split(/[;，,]/)
@@ -2536,7 +2581,20 @@ export async function getCssbuyProductPreview(
           label: r.label,
           priceLabel: r.priceLabel,
         })),
+        data.priceCny,
       );
+      const variantPrices = optionGroups.flatMap((g) =>
+        Object.values(g.priceByValue ?? {}),
+      );
+      const allVariant = [
+        ...variantPrices,
+        ...Object.values(selectionPriceByKey),
+      ].filter((p) => p > 0);
+      if (allVariant.length > 0) {
+        const maxVar = Math.max(...allVariant);
+        if (data.priceCny == null || data.priceCny < maxVar * 0.5)
+          data.priceCny = maxVar;
+      }
     }
 
     // Traduzir valores das opções (chinês/inglês → português)
